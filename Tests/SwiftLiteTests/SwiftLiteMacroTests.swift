@@ -1,0 +1,88 @@
+import SwiftSyntax
+import SwiftSyntaxBuilder
+import SwiftSyntaxMacros
+import SwiftSyntaxMacrosTestSupport
+import XCTest
+
+// Macro implementations build for the host, so the corresponding module is not available when cross-compiling. Cross-compiled tests may still make use of the macro itself in end-to-end tests.
+#if canImport(SwiftLiteMacros)
+import SwiftLiteMacros
+
+let testMacros: [String: Macro.Type] = [
+    "stringify": StringifyMacro.self,
+    "Model": ModelMacro.self,
+]
+#endif
+
+final class SwiftLiteTests: XCTestCase {
+    func testMacro() throws {
+#if canImport(SwiftLiteMacros)
+        assertMacroExpansion(
+            """
+            #stringify(a + b)
+            """,
+            expandedSource: """
+            (a + b, "a + b")
+            """,
+            macros: testMacros
+        )
+#else
+        throw XCTSkip("macros are only supported when running tests for the host platform")
+#endif
+    }
+    
+    func testMacroWithStringLiteral() throws {
+#if canImport(SwiftLiteMacros)
+        assertMacroExpansion(
+            #"""
+            #stringify("Hello, \(name)")
+            """#,
+            expandedSource: #"""
+            ("Hello, \(name)", #""Hello, \(name)""#)
+            """#,
+            macros: testMacros
+        )
+#else
+        throw XCTSkip("macros are only supported when running tests for the host platform")
+#endif
+    }
+    
+    func testModelMacro() throws {
+#if canImport(SwiftLiteMacros)
+        assertMacroExpansion(
+            """
+            class Test {
+                @Model class Car {}
+                @Model class 车 {}
+                @Model class Մեքենա {}
+            }
+            """,
+            expandedSource: """
+            class Test {
+                class Car {
+
+                    static let table = "test__car"
+
+                    static let fields = []
+            }
+                class 车 {
+
+                    static let table = "test__u8f66"
+
+                    static let fields = []
+            }
+                class Մեքենա {
+
+                    static let table = "test__u574u565u584u565u576u561"
+
+                    static let fields = []
+            }
+            }
+            """,
+            macros: testMacros
+        )
+#else
+        throw XCTSkip("macros are only supported when running tests for the host platform")
+#endif
+    }
+}

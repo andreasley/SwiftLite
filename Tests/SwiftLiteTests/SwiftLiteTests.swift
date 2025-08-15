@@ -1,48 +1,6 @@
-import SwiftSyntax
-import SwiftSyntaxBuilder
-import SwiftSyntaxMacros
-import SwiftSyntaxMacrosTestSupport
-import XCTest
+import Testing
+@testable import SwiftLite
 
-// Macro implementations build for the host, so the corresponding module is not available when cross-compiling. Cross-compiled tests may still make use of the macro itself in end-to-end tests.
-#if canImport(SwiftLiteMacros)
-import SwiftLiteMacros
-
-let testMacros: [String: Macro.Type] = [
-    "stringify": StringifyMacro.self,
-]
-#endif
-
-final class SwiftLiteTests: XCTestCase {
-    func testMacro() throws {
-        #if canImport(SwiftLiteMacros)
-        assertMacroExpansion(
-            """
-            #stringify(a + b)
-            """,
-            expandedSource: """
-            (a + b, "a + b")
-            """,
-            macros: testMacros
-        )
-        #else
-        throw XCTSkip("macros are only supported when running tests for the host platform")
-        #endif
-    }
-
-    func testMacroWithStringLiteral() throws {
-        #if canImport(SwiftLiteMacros)
-        assertMacroExpansion(
-            #"""
-            #stringify("Hello, \(name)")
-            """#,
-            expandedSource: #"""
-            ("Hello, \(name)", #""Hello, \(name)""#)
-            """#,
-            macros: testMacros
-        )
-        #else
-        throw XCTSkip("macros are only supported when running tests for the host platform")
-        #endif
-    }
+@Test func example() async throws {
+    // Write your test here and use APIs like `#expect(...)` to check expected conditions.
 }
