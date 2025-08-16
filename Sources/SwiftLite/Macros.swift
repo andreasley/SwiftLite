@@ -6,3 +6,6 @@
 /// produces a tuple `(x + y, "x + y")`.
 @freestanding(expression)
 public macro stringify<T>(_ value: T) -> (T, String) = #externalMacro(module: "SwiftLiteMacros", type: "StringifyMacro")
+
+@attached(member, names: arbitrary) // TODO: Limit names to actually used ones
+public macro Model() = #externalMacro(module: "SwiftLiteMacros", type: "ModelMacro")

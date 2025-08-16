@@ -44,6 +44,7 @@ let package = Package(
             name: "SwiftLiteTests",
             dependencies: [
                 "SwiftLiteMacros",
+                "SwiftLite",
                 .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax"),
             ]
         ),

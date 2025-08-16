@@ -1,24 +1,21 @@
 import SwiftLite
 import Foundation
 
-class Test
+@Model class Car
 {
-    @Model class Car
+//    @Attribute(.readOnly, .unique)
+    var publicId: UUID = UUID()
+    
+    var name: String
+    
+    var year: Int
+    
+    var manufacturer: Manufacturer?
+    
+    init(name: String, year: Int)
     {
-//        @Attribute(.readOnly, .unique)
-        var publicId: UUID = UUID()
-        
-        var name: String
-        
-        var year: Int
-        
-        var manufacturer: Manufacturer?
-        
-        init(name: String, year: Int)
-        {
-            self.name = name
-            self.year = year
-        }
+        self.name = name
+        self.year = year
     }
 }
 
