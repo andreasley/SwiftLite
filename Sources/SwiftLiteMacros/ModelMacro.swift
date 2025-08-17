@@ -27,40 +27,55 @@ public struct ModelMacro: MemberMacro
             }
         }
         
-        let arrayElements = propertyNames
-            .map { "\"\($0)\"" }
-            .joined(separator: ", ")
-        
-        let fieldsDecl: DeclSyntax =
-        """
-        static let fields = [\(raw: arrayElements)]
-        """
-
         guard let classDecl = declaration.as(ClassDeclSyntax.self) else {
             throw Error.notAClass
         }
-        
-//        let tablePath = qualifiedName(of: declaration)
-//
-//        let tableName = classNameToTableName(classDecl.name.text)
-//        let tableDecl: DeclSyntax = """
-//        static let table = "\(raw: tablePath)"
-//        """
-        
 
-//        guard let inner = nominalName(of: declaration) else { return [] }
-//
-//        let outers = allEnclosingNominalNames(startingAt: Syntax(declaration))
-//        let allParts = (outers + [inner]).map { $0.lowercased() }
-//        let tableName = allParts.joined(separator: "__")
+        // MARK: id
+
+        let idDecl: DeclSyntax =
+        """
+        let id: UUID = UUID()
+        """
+
+
+        // MARK: Fields (later: Entity)
+        // TODO: Generate Entity
+
+        let fieldsArrayExpression = ArrayExprSyntax {
+            for propertyName in propertyNames {
+                ArrayElementSyntax(expression: StringLiteralExprSyntax(content: propertyName))
+            }
+        }
+
+        let fieldsDecl: DeclSyntax =
+        """
+        static let fields = \(fieldsArrayExpression)
+        private static let entity = Schema.Entity(properties: [
+            Schema.Entity.Property(name: "publicId", type: "UUID", isPrimaryKey: false, isUnique: true, isIndexed: false),
+            Schema.Entity.Property(name: "name", type: "String", isPrimaryKey: false, isUnique: false, isIndexed: false),
+            Schema.Entity.Property(name: "year", type: "Int", isPrimaryKey: false, isUnique: false, isIndexed: false),
+        ])
+        """
+
+        // MARK: table name
 
         let tableName = try createTableNameFromQualifiedName(of: classDecl, in: context)
-        let member: DeclSyntax =
+        let memberDecl: DeclSyntax =
         """
         static let table = "\(raw: tableName)"
         """
 
-        return [member, fieldsDecl]
+        // MARK: Entity registration
+
+        let entityRegistrationDecl: DeclSyntax =
+        """
+        private static let __schemaRegistration: Void = {
+            Schema.default.register(entity)
+        }()
+        """
+
+        return [idDecl, entityRegistrationDecl, memberDecl, fieldsDecl]
     }
 
     static func createTableNameFromQualifiedName(of declaration: ClassDeclSyntax, in context: MacroExpansionContext) throws -> String

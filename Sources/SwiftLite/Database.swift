@@ -9,12 +9,15 @@ public struct Database
     }
     
     enum Error: Swift.Error, CustomStringConvertible, Sendable, Equatable {
+        case queryFailed(String, SQLiteStatus)
         case failedToOpen(SQLiteStatus)
         case failedToClose(SQLiteStatus)
         case notAFileUrl(URL)
 
         var description: String {
             return switch self {
+            case .queryFailed(let query, let status):
+                "Query `\(query)` failed: \(status.description))"
             case .failedToOpen(let status):
                 "Failed to open database: \(status.description))"
             case .failedToClose(let status):
@@ -26,6 +29,14 @@ public struct Database
     }
     
     internal let connectionHandle: OpaquePointer
+    
+    func execute(_ query: String) throws
+    {
+        let result = sqlite3_exec(self.connectionHandle, query, nil, nil, nil)
+        guard result == SQLiteStatus.ok else {
+            throw Error.queryFailed(query, SQLiteStatus(result))
+        }
+    }
     
     public init(storage: StorageType) throws
     {
@@ -45,13 +56,18 @@ public struct Database
             print("Opening database in memory")
         }
         
-        let result = sqlite3_open_v2(filename, &pointer, flags.reduce(0, |), nil)
+        let openStatus = sqlite3_open_v2(filename, &pointer, flags.reduce(0, |), nil)
         
-        guard let pointer, result == SQLiteStatus.ok else {
-            throw Error.failedToOpen(SQLiteStatus(result))
+        guard let pointer, openStatus == SQLiteStatus.ok else {
+            throw Error.failedToOpen(SQLiteStatus(openStatus))
         }
         
         self.connectionHandle = pointer
+
+        try execute("PRAGMA foreign_keys = ON")
+        try execute("PRAGMA journal_mode = WAL")
+        
+        // TODO: Compare schema and migrate if necessary
     }
     
     public func close() throws

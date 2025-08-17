@@ -7,7 +7,7 @@ class SampleModels
     @Model class Car
     {
         //        @Attribute(.readOnly, .unique)
-        var publicId: UUID = UUID()
+        let publicId: UUID = UUID()
         
         var name: String
         

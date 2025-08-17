@@ -1,0 +1,1 @@
+- Compare performance and database size for typical datasets without `WITHOUT ROWID`
