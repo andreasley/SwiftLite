@@ -8,6 +8,11 @@ public struct Database
         case inMemory
     }
     
+    public enum CacheSize {
+        case megabytes(Int)
+        case pages(Int)
+    }
+
     enum Error: Swift.Error, CustomStringConvertible, Sendable, Equatable {
         case queryFailed(String, SQLiteStatus)
         case failedToOpen(SQLiteStatus)
@@ -38,7 +43,7 @@ public struct Database
         }
     }
     
-    public init(storage: StorageType) throws
+    public init(storage: StorageType, cacheSizeLimit: CacheSize? = nil) throws
     {
         var pointer: OpaquePointer?
         var flags = [SQLITE_OPEN_READWRITE, SQLITE_OPEN_CREATE]
@@ -63,6 +68,14 @@ public struct Database
         }
         
         self.connectionHandle = pointer
+        
+        if let cacheSizeLimit {
+            let limit = switch cacheSizeLimit {
+            case .megabytes(let value): -value * 1024
+            case .pages(let value): value
+            }
+            try execute("PRAGMA cache_size = \(limit)")
+        }
 
         try execute("PRAGMA foreign_keys = ON")
         try execute("PRAGMA journal_mode = WAL")
