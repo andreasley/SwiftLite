@@ -3,24 +3,23 @@ import Foundation
 
 @Model class Car
 {
-//    static let nameYearIndex: IndexGroup
+    //    static let nameYearIndex: IndexGroup
     
-//    @Attribute(.readOnly, .unique, index: .single)
-//    @Indexed
-    let publicId: UUID = UUID() // `let` creates a read-only property
+    //    @Indexed @ReadOnly @Unique
+    let publicId: UUID
     
-//    @Indexed(index: nameYearIndex)
-    var name: String
+    //    @Indexed(index: nameYearIndex)
+    var name: String 
     
-//    @Indexed(index: nameYearIndex)
+    //    @Indexed(index: nameYearIndex) @DefaultValue(2025)
     var year: Int
     
     var manufacturer: Manufacturer?
     
-    init(name: String, year: Int)
+    convenience init(name: String)
     {
+        self.init(name: name, year: 2025)
         self.name = name
-        self.year = year
     }
 }
 
@@ -37,6 +36,9 @@ class MacroExtendedCar
     var year: Int = 0
     var manufacturer: Manufacturer?
     
+    
+    // MARK: generated
+
     private static let entity = Schema.Entity(properties: [
         Schema.Entity.Property(name: "publicId", type: "UUID", isPrimaryKey: false, isUnique: true, isIndexed: false),
         Schema.Entity.Property(name: "name", type: "String", isPrimaryKey: false, isUnique: false, isIndexed: false),
@@ -46,6 +48,13 @@ class MacroExtendedCar
     private static let __schemaRegistration: Void = {
         Schema.default.register(entity)
     }()
+    
+    required init()
+    {
+        // for manual creation of new objects
+        id = UUID()
+        publicId = UUID()
+    }
     
     init(row: SQLiteQueryResult)
     {

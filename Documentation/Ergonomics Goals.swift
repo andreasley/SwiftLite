@@ -69,6 +69,12 @@ struct Application
     }
 }
 
+@Partial(Car.self) struct CarPreview
+{
+    var name
+    var year
+}
+
 @Model class Manufacturer
 {
     @Property(defaultValue: "New Manufacturer", indexed: true)
