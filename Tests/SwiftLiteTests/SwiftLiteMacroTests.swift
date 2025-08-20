@@ -15,9 +15,18 @@ let testMacros: [String: Macro.Type] = [
 ]
 #endif
 
-final class SwiftLiteTests: XCTestCase {
-    func testMacro() throws {
-#if canImport(SwiftLiteMacros)
+final class SwiftLiteTests: XCTestCase
+{
+    func checkMacroAvailability() throws
+    {
+        #if !canImport(SwiftLiteMacros)
+            throw XCTSkip("macros are only supported when running tests for the host platform")
+        #endif
+    }
+    
+    func testMacro() throws
+    {
+        try checkMacroAvailability()
         assertMacroExpansion(
             """
             #stringify(a + b)
@@ -27,13 +36,11 @@ final class SwiftLiteTests: XCTestCase {
             """,
             macros: testMacros
         )
-#else
-        throw XCTSkip("macros are only supported when running tests for the host platform")
-#endif
     }
     
-    func testMacroWithStringLiteral() throws {
-#if canImport(SwiftLiteMacros)
+    func testMacroWithStringLiteral() throws
+    {
+        try checkMacroAvailability()
         assertMacroExpansion(
             #"""
             #stringify("Hello, \(name)")
@@ -43,13 +50,13 @@ final class SwiftLiteTests: XCTestCase {
             """#,
             macros: testMacros
         )
-#else
-        throw XCTSkip("macros are only supported when running tests for the host platform")
-#endif
     }
     
-    func testModelMacro() throws {
-#if canImport(SwiftLiteMacros)
+    func testModelMacro() throws
+    {
+        try checkMacroAvailability()
+
+        // TODO: Update
         assertMacroExpansion(
             """
             class Test {
@@ -82,8 +89,5 @@ final class SwiftLiteTests: XCTestCase {
             """,
             macros: testMacros
         )
-#else
-        throw XCTSkip("macros are only supported when running tests for the host platform")
-#endif
     }
 }

@@ -4,7 +4,7 @@ import Foundation
 @Model class Manufacturer
 {
 //    @Attribute(.readOnly, .unique)
-    var publicId: UUID = UUID()
+    var publicId: UUID
     
     var name: String
 }

@@ -1,1 +1,2 @@
 - Compare performance and database size for typical datasets without `WITHOUT ROWID`
+- Make models auto-conform to `Codable`?

@@ -4,19 +4,22 @@ public final class Schema: @unchecked Sendable // TODO: Implement proper Sendabl
 {
     public static let `default` = Schema()
     
-    var entities = Array<Entity>()
+    var entities = Array<AnyEntity>()
     
     public init() {}
     
-    public func register(_ entity: Entity)
+    public func register(_ entity: AnyEntity)
     {
         self.entities.append(entity)
     }
 }
 
+
 extension Schema
 {
-    public struct Entity: Sendable
+    public protocol AnyEntity {}
+    
+    public struct Entity<T>: Sendable, AnyEntity
     {
         let properties: [Property]
 
@@ -27,16 +30,21 @@ extension Schema
 
         public struct Property: Sendable
         {
+            // TODO: Is all that really needed? KeyPath too?
             let name: String
-            let type: String // TODO: Find best way to reference a type for this
+            let type: Any.Type
+            let column: String
+            let sqliteType: SQLiteStorageClass
             let isPrimaryKey: Bool
             let isUnique: Bool
             let isIndexed: Bool
             
-            public init(name: String, type: String, isPrimaryKey: Bool, isUnique: Bool, isIndexed: Bool)
+            public init(name: String, column: String, isPrimaryKey: Bool, isUnique: Bool, isIndexed: Bool)
             {
                 self.name = name
-                self.type = type
+                self.type = String.self // TODO
+                self.column = column
+                self.sqliteType = .text // TODO
                 self.isPrimaryKey = isPrimaryKey
                 self.isUnique = isUnique
                 self.isIndexed = isIndexed

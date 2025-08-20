@@ -8,7 +8,7 @@ struct SQLiteHelpers
 
     static let allowedCharactersForTableNames = Set("abcdefghijklmnopqrstuvwxyz0123456789_")
 
-    static func generateTableName(_ segments: [String]) throws -> String
+    static func generateIdentifierName(_ segments: [String]) throws -> String
     {
         enum Error: Swift.Error, CustomStringConvertible {
             case nameIsEmpty

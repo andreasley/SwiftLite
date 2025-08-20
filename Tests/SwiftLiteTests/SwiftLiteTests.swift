@@ -6,33 +6,23 @@ class SampleModels
 {
     @Model class Car
     {
-        //        @Attribute(.readOnly, .unique)
-        let publicId: UUID = UUID()
-        
+        // @Unique
+        let publicId: UUID
         var name: String
-        
         var year: Int
-        
         var manufacturer: Manufacturer?
         
-        init(name: String, year: Int)
+        convenience init(name: String, year: Int)
         {
-            self.name = name
-            self.year = year
+            self.init(publicId: UUID(), name: name, year: year)
         }
     }
     
     @Model class Manufacturer
     {
-    //    @Attribute(.readOnly, .unique)
-        var publicId: UUID = UUID()
-        
+        // @Unique
+        let publicId: UUID
         var name: String
-        
-        init(name: String)
-        {
-            self.name = name
-        }
     }
 }
 

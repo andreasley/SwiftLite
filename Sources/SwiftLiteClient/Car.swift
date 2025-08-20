@@ -9,47 +9,47 @@ import Foundation
     let publicId: UUID
     
     //    @Indexed(index: nameYearIndex)
-    var name: String 
+    var name: String
     
     //    @Indexed(index: nameYearIndex) @DefaultValue(2025)
     var year: Int
     
     var manufacturer: Manufacturer?
-    
-    convenience init(name: String)
+
+    var réböt: String
+
+    convenience init(name: String, year: Int)
     {
-        self.init(name: name, year: 2025)
-        self.name = name
+        self.init(publicId: UUID(), name: name, year: year, réböt: "bla")
     }
 }
 
 class MacroExtendedCar
 {
-    static let table = "macro_extended_car"
-    
-    // @PrimaryKey
     let id: UUID
-    
     let publicId: UUID
-
+    
     var name: String = ""
     var year: Int = 0
     var manufacturer: Manufacturer?
     
     
     // MARK: generated
-
+    
+    static let tableName = "macro_extended_car"
+    
     private static let entity = Schema.Entity(properties: [
-        Schema.Entity.Property(name: "publicId", type: "UUID", isPrimaryKey: false, isUnique: true, isIndexed: false),
-        Schema.Entity.Property(name: "name", type: "String", isPrimaryKey: false, isUnique: false, isIndexed: false),
-        Schema.Entity.Property(name: "year", type: "Int", isPrimaryKey: false, isUnique: false, isIndexed: false),
+        .init(name: "id", type: "UUID", isPrimaryKey: true, isUnique: false, isIndexed: false),
+        .init(name: "publicId", type: "UUID", isPrimaryKey: false, isUnique: true, isIndexed: false),
+        .init(name: "name", type: "String", isPrimaryKey: false, isUnique: false, isIndexed: false),
+        .init(name: "year", type: "Int", isPrimaryKey: false, isUnique: false, isIndexed: false),
     ])
     
     private static let __schemaRegistration: Void = {
         Schema.default.register(entity)
     }()
     
-    required init()
+    init()
     {
         // for manual creation of new objects
         id = UUID()
@@ -64,18 +64,21 @@ class MacroExtendedCar
         self.name = ""
         self.year = 0
     }
+    
+    static let createTableStatement: String =
+    """
+    CREATE TABLE IF NOT EXISTS car (
+        id TEXT PRIMARY KEY,
+        publicId TEXT UNIQUE,
+        name TEXT,
+        year INTEGER,
+        manufacturer TEXT REFERENCES manufacturer DEFERRABLE INITIALLY DEFERRED,
+    ) STRICT WITHOUT ROWID;
+    """
+    
+    static let selectStatementFlat: String = "SELECT id, publicId, year, manufacturer FROM car"
+    static let selectStatementFlatLimited: String = "SELECT id, publicId, year, manufacturer FROM car LIMIT ? OFFSET ?"
 }
 
 /*
-CREATE TABLE IF NOT EXISTS car (
-    id TEXT PRIMARY KEY,
-    uuid TEXT UNIQUE,
-    username TEXT,
-    email TEXT,
-    manufacturer TEXT REFERENCES manufacturer DEFERRABLE INITIALLY DEFERRED,
-) STRICT WITHOUT ROWID;
- */
-
-/*
-SELECT id, uuid, username FROM car
  */
