@@ -5,22 +5,20 @@ import Foundation
 {
     static let nameYearIndex = "nameYearIndex"
     
-    @Indexed @Unique
+    @Indexed @Unique @DefaultValue(UUID())
     let publicId: UUID
     
     @Indexed(index: nameYearIndex)
     var name: String
     
-    @Indexed(index: nameYearIndex) // @DefaultValue(2025)
+    @Indexed(index: nameYearIndex)
     var year: Int
     
     var manufacturer: Manufacturer?
 
-    var réböt: String
-
-    convenience init(name: String, year: Int)
+    convenience init(name: String)
     {
-        self.init(publicId: UUID(), name: name, year: year, réböt: "bla")
+        self.init(name: name, year: 2025)
     }
 }
 

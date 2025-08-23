@@ -60,7 +60,11 @@ final class SwiftLiteTests: XCTestCase
         assertMacroExpansion(
             """
             class Test {
-                @Model class Car {}
+                @Model class Car {
+                    @DefaultValue("asd")
+                    var year: Int
+                    var réböt: String
+                }
                 @Model class 车 {}
                 @Model class Մեքենա {}
             }

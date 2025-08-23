@@ -102,59 +102,8 @@ public struct ModelMacro: MemberMacro
         generatedDeclarations.append(idDecl)
 
 
-        // MARK: Initializer
-        
         // TODO: Iterate properties only once
-        // TOOD: Add default values for properties annotated with `@Default()`
-        
-        // Check if there's already an initializer. If so, throw (because it's necessary to generate the required initializers to properly handle read-only fields and the `id` property.
-        if let initMember = declaration.memberBlock.members.first(where: { member in
-            guard let initDecl = member.decl.as(InitializerDeclSyntax.self) else { return false }
-            return !initDecl.modifiers.contains(where: { $0.name.text == "convenience" })
-        }) {
-            let diag = Diagnostic(node: initMember.decl, message: ErrorMessage.duplicateInitializer)
-            diagnostics.append(diag)
-        }
 
-        // Generate initializer
-        let parameters: [FunctionParameterSyntax] = declaration.memberBlock.members.compactMap { member in
-            guard let variable = member.decl.as(VariableDeclSyntax.self),
-                  let binding = variable.bindings.first,
-                  let identifier = binding.pattern.as(IdentifierPatternSyntax.self),
-                  !variable.isStatic
-            else { return nil }
-            
-            let name = identifier.identifier.text
-            let type = binding.typeAnnotation?.type.description.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Any"
-            let isOptional = type.hasSuffix("?")
-            
-            return FunctionParameterSyntax(
-                firstName: .identifier(name),
-                colon: .colonToken(trailingTrivia: .space),
-                type: TypeSyntax(stringLiteral: type),
-                defaultValue: isOptional ? InitializerClauseSyntax(value: ExprSyntax("nil")) : nil
-            )
-        }
-        
-        let parameterList = FunctionParameterClauseSyntax { parameters }
-        
-        let idAssignment = CodeBlockItemSyntax(item: .expr("self.id = UUID()"))
-        var assignments: [CodeBlockItemSyntax] = [idAssignment]
-
-        for parameter in parameters {
-            let name = parameter.firstName.text
-            let assignment = CodeBlockItemSyntax(item: .expr("self.\(raw: name) = \(raw: name)"))
-            assignments.append(assignment)
-        }
-        
-        let initDecl = InitializerDeclSyntax(
-            modifiers: [DeclModifierSyntax(name: .keyword(.public))],
-            signature: FunctionSignatureSyntax(parameterClause: parameterList),
-            body: CodeBlockSyntax(statements: CodeBlockItemListSyntax(assignments))
-        )
-        
-        generatedDeclarations.append(DeclSyntax(initDecl))
-        
 
         // MARK: Entity
         // The entity details are required in the compiled app to check the schema and execute migrations if necessary.
@@ -162,7 +111,7 @@ public struct ModelMacro: MemberMacro
         var propertyNames: [String] = []
         var properties = [Entity.Property]()
         
-        properties.append(Entity.Property(name: "id", columnName: "id", sqliteType: .text, isPrimaryKey: true, isUnique: false, isIndexed: false))
+        properties.append(Entity.Property(name: "id", columnName: "id", sqliteType: .text, isPrimaryKey: true, isUnique: false, isIndexed: false, defaultValue: nil))
         
         for member in declaration.memberBlock.members {
             
@@ -191,21 +140,34 @@ public struct ModelMacro: MemberMacro
 
             propertyNames.append(name)
             do {
-                let isUnique = varDecl.attributes.contains { attr in
-                    if let attrId = attr.as(AttributeSyntax.self)?.attributeName.as(IdentifierTypeSyntax.self) {
-                        return attrId.name.text == "Unique"
+                var isUnique = false
+                var isIndexed = false
+                var defaultValue: ExprSyntax?
+                
+                for attribute in varDecl.attributes {
+                    guard let attrId = attribute.as(AttributeSyntax.self)?.attributeName.as(IdentifierTypeSyntax.self) else { continue }
+                    switch attrId.name.text {
+                        case "Unique":
+                        isUnique = true
+                    case "Indexed":
+                        isIndexed = true
+                    case "DefaultValue":
+                        if case let .attribute(attr) = attribute, let arguments = attr.arguments, case let .argumentList(argList) = arguments, let expressionOfFirstArgument = argList.first?.expression {
+                            let defaultValuePropertyName = "__defaultValue_\(name)"
+                            let defaultValueDecl: DeclSyntax =
+                            """
+                            private static let \(raw: defaultValuePropertyName): \(firstBinding.typeAnnotation?.type) = \(expressionOfFirstArgument)
+                            """
+                            generatedDeclarations.append(defaultValueDecl)
+                            defaultValue = .init(stringLiteral: defaultValuePropertyName)
+                        }
+                    default:
+                        break
                     }
-                    return false
                 }
-                let isIndexed = varDecl.attributes.contains { attr in
-                    // TODO: process custom index specification
-                    if let attrId = attr.as(AttributeSyntax.self)?.attributeName.as(IdentifierTypeSyntax.self) {
-                        return attrId.name.text == "Indexed"
-                    }
-                    return false
-                }
+
                 let columnName = try SQLiteHelpers.generateIdentifierName([name])
-                properties.append(.init(name: name, columnName: columnName, sqliteType: .integer, isPrimaryKey: false, isUnique: isUnique, isIndexed: isIndexed))
+                properties.append(.init(name: name, columnName: columnName, sqliteType: .integer, isPrimaryKey: false, isUnique: isUnique, isIndexed: isIndexed, defaultValue: defaultValue))
             } catch {
                 // TODO: Differentiate the errors if there are multiple `try`
                 let diag = Diagnostic(node: varDecl, message: ErrorMessage.failedToGenerateColumnName)
@@ -231,11 +193,6 @@ public struct ModelMacro: MemberMacro
             }
         }
 
-//        let fieldsArrayExpression = ArrayExprSyntax {
-//            for propertyName in propertyNames {
-//                ArrayElementSyntax(expression: StringLiteralExprSyntax(content: propertyName))
-//            }
-//        }
 
         var hasEntity = false
         if let classDecl, let tableName {
@@ -279,6 +236,66 @@ public struct ModelMacro: MemberMacro
             }
         }
         
+        // MARK: Initializer
+        
+        // Check if there's already an initializer. If so, throw (because it's necessary to generate the required initializers to properly handle read-only fields and the `id` property.
+        if let initMember = declaration.memberBlock.members.first(where: { member in
+            guard let initDecl = member.decl.as(InitializerDeclSyntax.self) else { return false }
+            return !initDecl.modifiers.contains(where: { $0.name.text == "convenience" })
+        }) {
+            let diag = Diagnostic(node: initMember.decl, message: ErrorMessage.duplicateInitializer)
+            diagnostics.append(diag)
+        }
+
+        // Generate initializer
+        let parameters: [FunctionParameterSyntax] = declaration.memberBlock.members.compactMap { member in
+            guard let variable = member.decl.as(VariableDeclSyntax.self),
+                  let binding = variable.bindings.first,
+                  let identifier = binding.pattern.as(IdentifierPatternSyntax.self),
+                  !variable.isStatic
+            else { return nil }
+            
+            let name = identifier.identifier.text
+            let type = binding.typeAnnotation?.type.description.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Any"
+            let isOptional = type.hasSuffix("?")
+            
+            let defaultValue: InitializerClauseSyntax?
+            if let defaultValueFromAttribute = properties.first(where: { $0.name == name })?.defaultValue {
+                defaultValue = InitializerClauseSyntax(value: defaultValueFromAttribute)
+            } else if isOptional {
+                defaultValue = InitializerClauseSyntax(value: ExprSyntax("nil"))
+            } else {
+                defaultValue = nil
+            }
+            
+            return FunctionParameterSyntax(
+                firstName: .identifier(name),
+                colon: .colonToken(trailingTrivia: .space),
+                type: TypeSyntax(stringLiteral: type),
+                defaultValue: defaultValue
+            )
+        }
+        
+        let parameterList = FunctionParameterClauseSyntax { parameters }
+        
+        let idAssignment = CodeBlockItemSyntax(item: .expr("self.id = UUID()"))
+        var assignments: [CodeBlockItemSyntax] = [idAssignment]
+
+        for parameter in parameters {
+            let name = parameter.firstName.text
+            let assignment = CodeBlockItemSyntax(item: .expr("self.\(raw: name) = \(raw: name)"))
+            assignments.append(assignment)
+        }
+        
+        let initDecl = InitializerDeclSyntax(
+            modifiers: [DeclModifierSyntax(name: .keyword(.public))],
+            signature: FunctionSignatureSyntax(parameterClause: parameterList),
+            body: CodeBlockSyntax(statements: CodeBlockItemListSyntax(assignments))
+        )
+        
+        generatedDeclarations.append(DeclSyntax(initDecl))
+
+
         return generatedDeclarations
     }
 

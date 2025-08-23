@@ -16,3 +16,6 @@ public macro Unique() = #externalMacro(module: "SwiftLiteMacros", type: "UniqueM
 
 @attached(peer)
 public macro Indexed(index: String? = nil) = #externalMacro(module: "SwiftLiteMacros", type: "IndexedMacro")
+
+@attached(peer)
+public macro DefaultValue<T>(_ value: T) = #externalMacro(module: "SwiftLiteMacros", type: "DefaultValueMacro")

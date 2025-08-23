@@ -7,6 +7,7 @@ struct SwiftLitePlugin: CompilerPlugin {
         StringifyMacro.self,
         ModelMacro.self,
         UniqueMacro.self,
-        IndexedMacro.self
+        IndexedMacro.self,
+        DefaultValueMacro.self,
     ]
 }

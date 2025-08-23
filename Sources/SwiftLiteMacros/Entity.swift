@@ -1,3 +1,4 @@
+import SwiftSyntax
 
 public struct Entity: Sendable
 {
@@ -16,5 +17,6 @@ public struct Entity: Sendable
         let isPrimaryKey: Bool
         let isUnique: Bool
         let isIndexed: Bool
+        let defaultValue: ExprSyntax?
     }
 }
