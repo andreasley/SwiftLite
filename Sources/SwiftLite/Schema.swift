@@ -21,10 +21,14 @@ extension Schema
     
     public struct Entity<T>: Sendable, AnyEntity
     {
+        let name: String
+        let tableName: String
         let properties: [Property]
 
-        public init(properties: [Property])
+        public init(name: String, tableName: String, properties: [Property])
         {
+            self.name = name
+            self.tableName = tableName
             self.properties = properties
         }
 
@@ -32,19 +36,17 @@ extension Schema
         {
             // TODO: Is all that really needed? KeyPath too?
             let name: String
-            let type: Any.Type
-            let column: String
+            let columnName: String
             let sqliteType: SQLiteStorageClass
             let isPrimaryKey: Bool
             let isUnique: Bool
             let isIndexed: Bool
             
-            public init(name: String, column: String, isPrimaryKey: Bool, isUnique: Bool, isIndexed: Bool)
+            public init(name: String, columnName: String, sqliteType: SQLiteStorageClass, isPrimaryKey: Bool, isUnique: Bool, isIndexed: Bool)
             {
                 self.name = name
-                self.type = String.self // TODO
-                self.column = column
-                self.sqliteType = .text // TODO
+                self.columnName = columnName
+                self.sqliteType = sqliteType
                 self.isPrimaryKey = isPrimaryKey
                 self.isUnique = isUnique
                 self.isIndexed = isIndexed

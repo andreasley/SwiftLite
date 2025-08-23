@@ -24,7 +24,10 @@ public struct ModelMacro: MemberMacro
         case duplicateInitializer
         case notAClass
         case unexpectedPropertyDefaultValue
+        case unexpectedMultipleBindings
+        case unexpectedBindingPattern
         case failedToGenerateTableName
+        case failedToGenerateColumnName
 
         var message: String {
             switch self {
@@ -34,8 +37,14 @@ public struct ModelMacro: MemberMacro
                 "SwiftLite Model must be a class."
             case .unexpectedPropertyDefaultValue:
                 "Properties in a SwiftLite Model must not have a default value. Annotate the property with `@Default()` or use a convenience initializer."
+            case .unexpectedMultipleBindings:
+                "Properties in a SwiftLite Model must not have multiple bindings."
+            case .unexpectedBindingPattern:
+                "Properties in a SwiftLite Model must define the name of a single variable."
             case .failedToGenerateTableName:
                 "Failed to generate table name from class name."
+            case .failedToGenerateColumnName:
+                "Failed to generate column name from property name."
             }
         }
         
@@ -111,9 +120,9 @@ public struct ModelMacro: MemberMacro
         let parameters: [FunctionParameterSyntax] = declaration.memberBlock.members.compactMap { member in
             guard let variable = member.decl.as(VariableDeclSyntax.self),
                   let binding = variable.bindings.first,
-                  let identifier = binding.pattern.as(IdentifierPatternSyntax.self) else {
-                return nil
-            }
+                  let identifier = binding.pattern.as(IdentifierPatternSyntax.self),
+                  !variable.isStatic
+            else { return nil }
             
             let name = identifier.identifier.text
             let type = binding.typeAnnotation?.type.description.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Any"
@@ -151,68 +160,123 @@ public struct ModelMacro: MemberMacro
         // The entity details are required in the compiled app to check the schema and execute migrations if necessary.
 
         var propertyNames: [String] = []
+        var properties = [Entity.Property]()
+        
+        properties.append(Entity.Property(name: "id", columnName: "id", sqliteType: .text, isPrimaryKey: true, isUnique: false, isIndexed: false))
         
         for member in declaration.memberBlock.members {
+            
+            // only the first variable binding is relevant here
             guard let varDecl = member.decl.as(VariableDeclSyntax.self) else { continue }
-            guard varDecl.bindings.count == 1, varDecl.bindings.first?.accessorBlock == nil else { continue }
-            if let name = varDecl.bindings.first?.pattern.as(IdentifierPatternSyntax.self)?.identifier.text {
-                propertyNames.append(name)
-            }
-            for binding in varDecl.bindings {
-                // Initial values for properties aren't supported in SwiftLite, because they make it impossible to set the value for `let` properties in the initializer (which is what is required when initializing a model from database results)
-                // Check if the binding has an initializer and show an error if so, because default initializers aren't supported in SwiftLite
-                if let initializer = binding.initializer {
-                    // TODO: Change FixIt to move the value to a @Default() Macro instead of just deleting the initializer
-                    let fixIt = FixIt(
-                        message: ModelFixItMessage.removeDefaultValue,
-                        changes: [
-                            FixIt.Change.replace(
-                                oldNode: Syntax(initializer),
-                                newNode: Syntax(TokenSyntax(stringLiteral: ""))
-                            )
-                        ]
-                    )
+            guard let firstBinding = varDecl.bindings.first else { continue }
+            
+            // static properties are ignored
+            guard !varDecl.isStatic else { continue }
 
-                    let diag = Diagnostic(node: varDecl, message: ErrorMessage.unexpectedPropertyDefaultValue, fixIt: fixIt)
-                    diagnostics.append(diag)
+            // currently, only a single binding is supported
+            guard varDecl.bindings.count == 1 else {
+                let diag = Diagnostic(node: varDecl, message: ErrorMessage.unexpectedMultipleBindings)
+                diagnostics.append(diag)
+                continue
+            }
+
+            // only identifier patterns are supported (e.g. no tuple patterns)
+            guard let identifierPattern = firstBinding.pattern.as(IdentifierPatternSyntax.self) else {
+                let diag = Diagnostic(node: varDecl, message: ErrorMessage.unexpectedBindingPattern)
+                diagnostics.append(diag)
+                continue
+            }
+            
+            let name = identifierPattern.identifier.text
+
+            propertyNames.append(name)
+            do {
+                let isUnique = varDecl.attributes.contains { attr in
+                    if let attrId = attr.as(AttributeSyntax.self)?.attributeName.as(IdentifierTypeSyntax.self) {
+                        return attrId.name.text == "Unique"
+                    }
+                    return false
                 }
+                let isIndexed = varDecl.attributes.contains { attr in
+                    // TODO: process custom index specification
+                    if let attrId = attr.as(AttributeSyntax.self)?.attributeName.as(IdentifierTypeSyntax.self) {
+                        return attrId.name.text == "Indexed"
+                    }
+                    return false
+                }
+                let columnName = try SQLiteHelpers.generateIdentifierName([name])
+                properties.append(.init(name: name, columnName: columnName, sqliteType: .integer, isPrimaryKey: false, isUnique: isUnique, isIndexed: isIndexed))
+            } catch {
+                // TODO: Differentiate the errors if there are multiple `try`
+                let diag = Diagnostic(node: varDecl, message: ErrorMessage.failedToGenerateColumnName)
+                diagnostics.append(diag)
+            }
+
+            // Initial values for properties aren't supported in SwiftLite, because they make it impossible to set the value for `let` properties in the initializer (which is what is required when initializing a model from database results)
+            // Check if the binding has an initializer and show an error if so, because default initializers aren't supported in SwiftLite
+            if let initializer = firstBinding.initializer {
+                // TODO: Change FixIt to move the value to a @Default() Macro instead of just deleting the initializer
+                let fixIt = FixIt(
+                    message: ModelFixItMessage.removeDefaultValue,
+                    changes: [
+                        FixIt.Change.replace(
+                            oldNode: Syntax(initializer),
+                            newNode: Syntax(TokenSyntax(stringLiteral: ""))
+                        )
+                    ]
+                )
+
+                let diag = Diagnostic(node: varDecl, message: ErrorMessage.unexpectedPropertyDefaultValue, fixIt: fixIt)
+                diagnostics.append(diag)
             }
         }
 
-        let fieldsArrayExpression = ArrayExprSyntax {
-            for propertyName in propertyNames {
-                ArrayElementSyntax(expression: StringLiteralExprSyntax(content: propertyName))
-            }
-        }
+//        let fieldsArrayExpression = ArrayExprSyntax {
+//            for propertyName in propertyNames {
+//                ArrayElementSyntax(expression: StringLiteralExprSyntax(content: propertyName))
+//            }
+//        }
 
-        if let classDecl {
+        var hasEntity = false
+        if let classDecl, let tableName {
+            // Build the property initializers dynamically
+            let propertyDecls: [String] = properties.map { p in
+                """
+                .init(name: "\(p.name)", columnName: "\(p.columnName)", sqliteType: .\(p.sqliteType.rawValue), isPrimaryKey: \(p.isPrimaryKey), isUnique: \(p.isUnique), isIndexed: \(p.isIndexed))
+                """
+            }
+
+            // Join them with commas/newlines
+            let propertiesBlock = propertyDecls.joined(separator: ",\n")
+
+            // Build the final DeclSyntax
             let entityDecl: DeclSyntax =
             """
-            private static let entity = Schema.Entity<\(classDecl.name)>(properties: [
-                .init(name: "id", type: "UUID", isPrimaryKey: true, isUnique: false, isIndexed: false),
-                .init(name: "publicId", type: "UUID", isPrimaryKey: false, isUnique: true, isIndexed: false),
-                .init(name: "name", type: "String", isPrimaryKey: false, isUnique: false, isIndexed: false),
-                .init(name: "year", type: "Int", isPrimaryKey: false, isUnique: false, isIndexed: false),
+            private static let entity = Schema.Entity<\(raw: classDecl.name)>(name: "\(classDecl.name)", tableName: "\(raw: tableName)", properties: [
+                \(raw: propertiesBlock)
             ])
             """
             generatedDeclarations.append(entityDecl)
+            hasEntity = true
         }
 
 
         // MARK: Entity registration
 
-        let entityRegistrationDecl: DeclSyntax =
-        """
-        private static let __schemaRegistration: Void = {
-            Schema.default.register(entity)
-        }()
-        """
-        generatedDeclarations.append(entityRegistrationDecl)
-
-        // MARK: Throw errors if there were some
-
-        if diagnostics.count > 0 {
-            throw DiagnosticsError(diagnostics: diagnostics)
+        if hasEntity {
+            let entityRegistrationDecl: DeclSyntax =
+            """
+            private static let __schemaRegistration: Void = {
+                Schema.default.register(entity)
+            }()
+            """
+            generatedDeclarations.append(entityRegistrationDecl)
+            
+            // MARK: Throw errors if there were some
+            
+            if diagnostics.count > 0 {
+                throw DiagnosticsError(diagnostics: diagnostics)
+            }
         }
         
         return generatedDeclarations

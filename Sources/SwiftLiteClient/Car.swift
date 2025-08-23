@@ -3,15 +3,15 @@ import Foundation
 
 @Model class Car
 {
-    //    static let nameYearIndex: IndexGroup
+    static let nameYearIndex = "nameYearIndex"
     
-    //    @Indexed @ReadOnly @Unique
+    @Indexed @Unique
     let publicId: UUID
     
-    //    @Indexed(index: nameYearIndex)
+    @Indexed(index: nameYearIndex)
     var name: String
     
-    //    @Indexed(index: nameYearIndex) @DefaultValue(2025)
+    @Indexed(index: nameYearIndex) // @DefaultValue(2025)
     var year: Int
     
     var manufacturer: Manufacturer?
@@ -27,6 +27,7 @@ import Foundation
 class MacroExtendedCar
 {
     let id: UUID
+    
     let publicId: UUID
     
     var name: String = ""
@@ -38,13 +39,15 @@ class MacroExtendedCar
     
     static let tableName = "macro_extended_car"
     
-    private static let entity = Schema.Entity(properties: [
-        .init(name: "id", type: "UUID", isPrimaryKey: true, isUnique: false, isIndexed: false),
-        .init(name: "publicId", type: "UUID", isPrimaryKey: false, isUnique: true, isIndexed: false),
-        .init(name: "name", type: "String", isPrimaryKey: false, isUnique: false, isIndexed: false),
-        .init(name: "year", type: "Int", isPrimaryKey: false, isUnique: false, isIndexed: false),
-    ])
-    
+    private static let entity = Schema.Entity<Car>(name: "Car", tableName: "car", properties: [
+        .init(name: "id", columnName: "id", sqliteType: .text, isPrimaryKey: true, isUnique: false, isIndexed: false),
+            .init(name: "publicId", columnName: "public_id", sqliteType: .integer, isPrimaryKey: false, isUnique: false, isIndexed: false),
+            .init(name: "name", columnName: "name", sqliteType: .integer, isPrimaryKey: false, isUnique: false, isIndexed: false),
+            .init(name: "year", columnName: "year", sqliteType: .integer, isPrimaryKey: false, isUnique: false, isIndexed: false),
+            .init(name: "manufacturer", columnName: "manufacturer", sqliteType: .integer, isPrimaryKey: false, isUnique: false, isIndexed: false),
+            .init(name: "réböt", columnName: "rue9buf6t", sqliteType: .integer, isPrimaryKey: false, isUnique: false, isIndexed: false)
+        ])
+
     private static let __schemaRegistration: Void = {
         Schema.default.register(entity)
     }()

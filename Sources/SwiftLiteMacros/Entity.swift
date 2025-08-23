@@ -10,9 +10,7 @@ public struct Entity: Sendable
 
     public struct Property: Sendable
     {
-        // TODO: Is all that really needed? KeyPath too?
-        let propertyName: String
-        let type: Any.Type
+        let name: String
         let columnName: String
         let sqliteType: SQLiteStorageClass
         let isPrimaryKey: Bool

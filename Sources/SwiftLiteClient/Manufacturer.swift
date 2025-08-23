@@ -3,8 +3,8 @@ import Foundation
 
 @Model class Manufacturer
 {
-//    @Attribute(.readOnly, .unique)
-    var publicId: UUID
+    @Unique
+    let publicId: UUID
     
     var name: String
 }
