@@ -1,7 +1,7 @@
 import SwiftLite
 import Foundation
 
-@Model class Manufacturer
+@Model final class Manufacturer
 {
     @Unique
     let publicId: UUID

@@ -5,4 +5,5 @@ public enum SQLiteStorageClass: String, Equatable, Sendable {
     case integer
     case real
     case blob
+    case any
 }

@@ -1,7 +1,7 @@
 import SwiftLite
 import Foundation
 
-@Model class Car
+@Model final class Car
 {
     static let nameYearIndex = "nameYearIndex"
     
@@ -37,12 +37,12 @@ class MacroExtendedCar
     
     static let tableName = "macro_extended_car"
     
-    private static let entity = Schema.Entity<Car>(name: "Car", tableName: "car", properties: [
+    static let entity = Schema.Entity<Car>(name: "Car", tableName: "car", properties: [
         .init(name: "id", columnName: "id", sqliteType: .text, isPrimaryKey: true, isUnique: false, isIndexed: false),
             .init(name: "publicId", columnName: "public_id", sqliteType: .integer, isPrimaryKey: false, isUnique: false, isIndexed: false),
             .init(name: "name", columnName: "name", sqliteType: .integer, isPrimaryKey: false, isUnique: false, isIndexed: false),
             .init(name: "year", columnName: "year", sqliteType: .integer, isPrimaryKey: false, isUnique: false, isIndexed: false),
-            .init(name: "manufacturer", columnName: "manufacturer", sqliteType: .integer, isPrimaryKey: false, isUnique: false, isIndexed: false),
+            .init(name: "manufacturer", columnName: "manufacturer", sqliteType: .text, isPrimaryKey: false, isUnique: false, isIndexed: false),
             .init(name: "réböt", columnName: "rue9buf6t", sqliteType: .integer, isPrimaryKey: false, isUnique: false, isIndexed: false)
         ])
 

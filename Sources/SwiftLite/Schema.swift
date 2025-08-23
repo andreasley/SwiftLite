@@ -14,16 +14,20 @@ public final class Schema: @unchecked Sendable // TODO: Implement proper Sendabl
     }
 }
 
-
 extension Schema
 {
-    public protocol AnyEntity {}
+    public protocol AnyEntity
+    {
+        var name: String { get }
+        var tableName: String { get }
+        var properties: [Property] { get }
+    }
     
     public struct Entity<T>: Sendable, AnyEntity
     {
-        let name: String
-        let tableName: String
-        let properties: [Property]
+        public let name: String
+        public let tableName: String
+        public let properties: [Property]
 
         public init(name: String, tableName: String, properties: [Property])
         {
@@ -31,26 +35,29 @@ extension Schema
             self.tableName = tableName
             self.properties = properties
         }
+    }
+}
 
-        public struct Property: Sendable
+extension Schema
+{
+    public struct Property: Sendable
+    {
+        // TODO: Is all that really needed? KeyPath too?
+        public let name: String
+        public let columnName: String
+        public let sqliteType: SQLiteStorageClass
+        public let isPrimaryKey: Bool
+        public let isUnique: Bool
+        public let isIndexed: Bool
+        
+        public init(name: String, columnName: String, sqliteType: SQLiteStorageClass, isPrimaryKey: Bool, isUnique: Bool, isIndexed: Bool)
         {
-            // TODO: Is all that really needed? KeyPath too?
-            let name: String
-            let columnName: String
-            let sqliteType: SQLiteStorageClass
-            let isPrimaryKey: Bool
-            let isUnique: Bool
-            let isIndexed: Bool
-            
-            public init(name: String, columnName: String, sqliteType: SQLiteStorageClass, isPrimaryKey: Bool, isUnique: Bool, isIndexed: Bool)
-            {
-                self.name = name
-                self.columnName = columnName
-                self.sqliteType = sqliteType
-                self.isPrimaryKey = isPrimaryKey
-                self.isUnique = isUnique
-                self.isIndexed = isIndexed
-            }
+            self.name = name
+            self.columnName = columnName
+            self.sqliteType = sqliteType
+            self.isPrimaryKey = isPrimaryKey
+            self.isUnique = isUnique
+            self.isIndexed = isIndexed
         }
     }
 }
