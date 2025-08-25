@@ -45,19 +45,21 @@ extension Schema
         // TODO: Is all that really needed? KeyPath too?
         public let name: String
         public let columnName: String
-        public let sqliteType: SQLiteStorageClass
+        public let storageClass: StorageClass
         public let isPrimaryKey: Bool
         public let isUnique: Bool
         public let isIndexed: Bool
-        
-        public init(name: String, columnName: String, sqliteType: SQLiteStorageClass, isPrimaryKey: Bool, isUnique: Bool, isIndexed: Bool)
+        public let isNullable: Bool
+
+        public init<P>(name: String, columnName: String, type: P.Type, isPrimaryKey: Bool, isUnique: Bool, isIndexed: Bool, isNullable: Bool)
         {
             self.name = name
             self.columnName = columnName
-            self.sqliteType = sqliteType
+            self.storageClass = StorageClass(for: type)
             self.isPrimaryKey = isPrimaryKey
             self.isUnique = isUnique
             self.isIndexed = isIndexed
+            self.isNullable = isNullable
         }
     }
 }

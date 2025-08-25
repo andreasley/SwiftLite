@@ -44,6 +44,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
         case unexpectedPropertyDefaultValue
         case unexpectedMultipleBindings
         case unexpectedBindingPattern
+        case failedToFindType
         case failedToGenerateTableName
         case failedToGenerateColumnName
 
@@ -59,6 +60,8 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
                 "Properties in a SwiftLite Model must not have multiple bindings."
             case .unexpectedBindingPattern:
                 "Properties in a SwiftLite Model must define the name of a single variable."
+            case .failedToFindType:
+                "Properties in a SwiftLite Model must have a type specified."
             case .failedToGenerateTableName:
                 "Failed to generate table name from class name."
             case .failedToGenerateColumnName:
@@ -129,9 +132,9 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
         // The entity details are required in the compiled app to check the schema and execute migrations if necessary.
 
         var propertyNames: [String] = []
-        var properties = [Entity.Property]()
+        var properties = [ModelConfiguration.Property]()
         
-        properties.append(Entity.Property(name: "id", columnName: "id", sqliteType: .text, isPrimaryKey: true, isUnique: false, isIndexed: false, defaultValue: nil))
+        properties.append(ModelConfiguration.Property(name: "id", columnName: "id", type: "UUID", isPrimaryKey: true, isUnique: false, isIndexed: false, defaultValue: nil))
         
         for member in declaration.memberBlock.members {
             
@@ -156,6 +159,13 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
                 continue
             }
             
+            guard let type = firstBinding.typeAnnotation?.type else {
+                let diag = Diagnostic(node: varDecl, message: ErrorMessage.failedToFindType)
+                diagnostics.append(diag)
+                continue
+            }
+
+            
             let name = identifierPattern.identifier.text
 
             propertyNames.append(name)
@@ -163,7 +173,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
                 var isUnique = false
                 var isIndexed = false
                 var defaultValue: ExprSyntax?
-                
+
                 for attribute in varDecl.attributes {
                     guard let attrId = attribute.as(AttributeSyntax.self)?.attributeName.as(IdentifierTypeSyntax.self) else { continue }
                     switch attrId.name.text {
@@ -187,7 +197,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
                 }
 
                 let columnName = try SQLiteHelpers.generateIdentifierName([name])
-                properties.append(.init(name: name, columnName: columnName, sqliteType: .integer, isPrimaryKey: false, isUnique: isUnique, isIndexed: isIndexed, defaultValue: defaultValue))
+                properties.append(.init(name: name, columnName: columnName, type: type, isPrimaryKey: false, isUnique: isUnique, isIndexed: isIndexed, defaultValue: defaultValue))
             } catch {
                 // TODO: Differentiate the errors if there are multiple `try`
                 let diag = Diagnostic(node: varDecl, message: ErrorMessage.failedToGenerateColumnName)
@@ -219,7 +229,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
             // Build the property initializers dynamically
             let propertyDecls: [String] = properties.map { p in
                 """
-                .init(name: "\(p.name)", columnName: "\(p.columnName)", sqliteType: .\(p.sqliteType.rawValue), isPrimaryKey: \(p.isPrimaryKey), isUnique: \(p.isUnique), isIndexed: \(p.isIndexed))
+                .init(name: "\(p.name)", columnName: "\(p.columnName)", type: \(p.type).self, isPrimaryKey: \(p.isPrimaryKey), isUnique: \(p.isUnique), isIndexed: \(p.isIndexed), isNullable: \(p.typeIsOptional))
                 """
             }
 

@@ -38,12 +38,11 @@ class MacroExtendedCar
     static let tableName = "macro_extended_car"
     
     static let entity = Schema.Entity<Car>(name: "Car", tableName: "car", properties: [
-        .init(name: "id", columnName: "id", sqliteType: .text, isPrimaryKey: true, isUnique: false, isIndexed: false),
-            .init(name: "publicId", columnName: "public_id", sqliteType: .integer, isPrimaryKey: false, isUnique: false, isIndexed: false),
-            .init(name: "name", columnName: "name", sqliteType: .integer, isPrimaryKey: false, isUnique: false, isIndexed: false),
-            .init(name: "year", columnName: "year", sqliteType: .integer, isPrimaryKey: false, isUnique: false, isIndexed: false),
-            .init(name: "manufacturer", columnName: "manufacturer", sqliteType: .text, isPrimaryKey: false, isUnique: false, isIndexed: false),
-            .init(name: "réböt", columnName: "rue9buf6t", sqliteType: .integer, isPrimaryKey: false, isUnique: false, isIndexed: false)
+        .init(name: "id", columnName: "id", type: UUID.self, isPrimaryKey: true, isUnique: false, isIndexed: false, isNullable: false),
+            .init(name: "publicId", columnName: "public_id", type: UUID.self, isPrimaryKey: false, isUnique: true, isIndexed: true, isNullable: false),
+            .init(name: "name", columnName: "name", type: String.self, isPrimaryKey: false, isUnique: false, isIndexed: true, isNullable: false),
+            .init(name: "year", columnName: "year", type: Int.self, isPrimaryKey: false, isUnique: false, isIndexed: true, isNullable: false),
+            .init(name: "manufacturer", columnName: "manufacturer", type: Manufacturer.self, isPrimaryKey: false, isUnique: false, isIndexed: false, isNullable: true)
         ])
 
     private static let __schemaRegistration: Void = {
