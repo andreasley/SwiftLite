@@ -3,7 +3,8 @@ import Synchronization
 public final class Schema: @unchecked Sendable // TODO: Implement proper Sendable
 {
     public static let `default` = Schema()
-    
+ 
+    // TODO: Is this actually needed or is a reference to the `Database` (which knows the entities) available wherever needed?
     var entities = Array<AnyEntity>()
     
     public init() {}
@@ -23,7 +24,7 @@ extension Schema
         var properties: [Property] { get }
     }
     
-    public struct Entity<T>: Sendable, AnyEntity
+    public struct Entity: Sendable, AnyEntity
     {
         public let name: String
         public let tableName: String

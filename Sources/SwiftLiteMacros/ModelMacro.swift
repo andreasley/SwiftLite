@@ -11,12 +11,19 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
         
         // MARK: FetchableObject
         
-        let proto: TypeSyntax = "SwiftLite.FetchableObject"
+        let fetchableObjectProtocol: TypeSyntax = "SwiftLite.FetchableObject"
 
-        // If the type already claims the conformance, skip emitting another extension
-        if !protocols.contains(where: { $0.trimmedDescription == proto.trimmedDescription }) {
-            if let fetchableExtensionDecl = ExtensionDeclSyntax(DeclSyntax(stringLiteral: "extension \(type): \(proto) {}")) {
+        if !protocols.contains(where: { $0.trimmedDescription == fetchableObjectProtocol.trimmedDescription }) {
+            if let fetchableExtensionDecl = ExtensionDeclSyntax(DeclSyntax(stringLiteral: "extension \(type): \(fetchableObjectProtocol) {}")) {
                 generatedExtensions.append(fetchableExtensionDecl)
+            }
+        }
+
+        let modelProtocol: TypeSyntax = "SwiftLite.Model"
+
+        if !protocols.contains(where: { $0.trimmedDescription == modelProtocol.trimmedDescription }) {
+            if let modelExtensionDecl = ExtensionDeclSyntax(DeclSyntax(stringLiteral: "extension \(type): \(modelProtocol) {}")) {
+                generatedExtensions.append(modelExtensionDecl)
             }
         }
 
@@ -239,7 +246,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
             // Build the final DeclSyntax
             let entityDecl: DeclSyntax =
             """
-            static let entity = Schema.Entity<\(raw: classDecl.name)>(name: "\(classDecl.name)", tableName: "\(raw: tableName)", properties: [
+            static let entity = Schema.Entity(name: "\(classDecl.name)", tableName: "\(raw: tableName)", properties: [
                 \(raw: propertiesBlock)
             ])
             """

@@ -37,7 +37,7 @@ class MacroExtendedCar
     
     static let tableName = "macro_extended_car"
     
-    static let entity = Schema.Entity<Car>(name: "Car", tableName: "car", properties: [
+    static let entity = Schema.Entity(name: "Car", tableName: "car", properties: [
         .init(name: "id", columnName: "id", type: UUID.self, isPrimaryKey: true, isUnique: false, isIndexed: false, isNullable: false),
             .init(name: "publicId", columnName: "public_id", type: UUID.self, isPrimaryKey: false, isUnique: true, isIndexed: true, isNullable: false),
             .init(name: "name", columnName: "name", type: String.self, isPrimaryKey: false, isUnique: false, isIndexed: true, isNullable: false),

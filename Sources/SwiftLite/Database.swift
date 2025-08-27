@@ -83,6 +83,28 @@ public struct Database
         // TODO: Compare schema and migrate if necessary
     }
     
+    public func register(models: any Model.Type...)
+    {
+        self.register(models: models)
+    }
+
+    public func register(models: [any Model.Type])
+    {
+        // TODO:
+        // 1. Check model (not sure what exactly)
+        // 2. Check if table exists already
+        //  if yes:
+        //      1. Compare schema
+        //          if schema matches, continue
+        //          if schema doesn't match, execute migration to new schema
+        //  if no:
+        //      1. create table
+        
+        for model in models {
+            print("Checking table \(model.entity.tableName)")
+        }
+    }
+
     public func close() throws
     {
         let result = sqlite3_close(self.connectionHandle)

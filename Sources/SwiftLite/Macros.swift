@@ -8,7 +8,7 @@
 public macro stringify<T>(_ value: T) -> (T, String) = #externalMacro(module: "SwiftLiteMacros", type: "StringifyMacro")
 
 @attached(member, names: arbitrary) // TODO: Limit names to actually used ones
-@attached(extension, conformances: SwiftLite.FetchableObject)
+@attached(extension, conformances: SwiftLite.FetchableObject, SwiftLite.Model)
 public macro Model(schema: Schema = .default) = #externalMacro(module: "SwiftLiteMacros", type: "ModelMacro")
 
 @attached(peer)
