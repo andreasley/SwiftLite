@@ -35,7 +35,10 @@ It leverages Swift Macros to prepare SQL statements at compile time - great for 
 ## Limitations
 
 - SwiftLite expects SQLite files to have a specific schema (UUID primary keys for example). Files created by other SQLite-based libraries may or may not be compatible.
+- Stored `Decimal` values are clamped to 922'337'203'685'477 and four decimal places.
+- Stored `Date` values are limited to millisecond precision.
+- Manually entered values in the SQLite file may be clamped if they don't match the schema (e.g. a value of `Int64.max` in an `INTEGER` column that is mapped to a property of type `Int32`).
 
 ## Various
 
-Sometimes (very rarely), Swift features align so beautifully that it's almost magical. This was the case here. I'm grateful for the experience.
+Sometimes (very rarely), Swift features align so beautifully that it's almost magical. This was the case here. I'm grateful for the experience and would like to thank everyone who made this possible.

@@ -51,7 +51,7 @@ extension Schema
         public let isIndexed: Bool
         public let isNullable: Bool
 
-        public init<P>(name: String, columnName: String, type: P.Type, isPrimaryKey: Bool, isUnique: Bool, isIndexed: Bool, isNullable: Bool)
+        public init<T>(name: String, columnName: String, type: T.Type, isPrimaryKey: Bool, isUnique: Bool, isIndexed: Bool, isNullable: Bool)
         {
             self.name = name
             self.columnName = columnName

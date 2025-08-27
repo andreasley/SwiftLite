@@ -1,2 +1,5 @@
 - Compare performance and database size for typical datasets without `WITHOUT ROWID`
 - Make models auto-conform to `Codable`?
+- Make roundtrip tests for every datatype.
+- @inline some calls?
+- Decide if `Foundation` is required. If not, use something other than `UUID`. If it is, remove the `canImport` conditionals.
