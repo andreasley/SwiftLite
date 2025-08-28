@@ -1,5 +1,7 @@
 import Foundation
 
+// TODO: Determine if this is actually needed anywhere now
+
 struct SQLiteHelpers
 {
     static let reservedWords = Set([

@@ -91,19 +91,75 @@ public struct Database
     public func register(models: [any Model.Type])
     {
         // TODO:
-        // 1. Check model (not sure what exactly)
-        // 2. Check if table exists already
+        // 1. Build model graph (to find referenced model types and dependencies)
+        // 2. Check if table(s) exists already
         //  if yes:
         //      1. Compare schema
         //          if schema matches, continue
-        //          if schema doesn't match, execute migration to new schema
+        //          if schema doesn't match, execute migration to new schema (traversing the graph upwards)
         //  if no:
-        //      1. create table
+        //      1. create table (traversing the graph upwards)
         
         for model in models {
-            print("Checking table \(model.entity.tableName)")
+            let createTableStatement = createTableStatement(for: model.entity)
+            let createIndexStatements = createIndexStatements(for: model.entity)
+            print(createTableStatement)
+            try? self.execute(createTableStatement)
+            
+            for createIndexStatement in createIndexStatements {
+                print(createIndexStatement)
+                try? self.execute(createIndexStatement)
+            }
         }
     }
+    
+    func createIndexStatements(for entity: Schema.Entity) -> [String]
+    {
+        // TODO: Implement indexes over multiple columns
+        
+        var createIndexStatements = [String]()
+        
+        for property in entity.properties where property.isIndexed {
+            let statement = "CREATE INDEX IF NOT EXISTS idx_\(entity.tableName)_\(property.columnName) ON \(entity.tableName)(\(property.columnName));"
+            createIndexStatements.append(statement)
+        }
+        
+        return createIndexStatements
+    }
+    
+    func createTableStatement(for entity: Schema.Entity) -> String
+    {
+        // TODO: Handle references
+        
+        var columns = [String]()
+
+        for property in entity.properties
+        {
+            var columnDefinition = "\"\(property.columnName)\" \(property.storageClass.rawValue.uppercased())"
+            
+            if property.isPrimaryKey {
+                columnDefinition += " PRIMARY KEY"
+            }
+            if property.isUnique {
+                columnDefinition += " UNIQUE"
+            }
+            if !property.isNullable {
+                columnDefinition += " NOT NULL"
+            }
+            
+            columns.append(columnDefinition)
+        }
+
+        let columnDefinitions = columns.joined(separator: ",\n    ")
+        let createTableStatement = """
+        CREATE TABLE IF NOT EXISTS "\(entity.tableName)" (
+            \(columnDefinitions)
+        ) STRICT, WITHOUT ROWID;
+        """
+        
+        return createTableStatement
+    }
+
 
     public func close() throws
     {

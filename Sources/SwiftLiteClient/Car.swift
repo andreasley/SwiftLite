@@ -16,6 +16,11 @@ import Foundation
     
     var manufacturer: Manufacturer?
 
+    var röt: String?
+    
+    @DefaultValue(0.1)
+    var 😗: Decimal
+
     convenience init(name: String)
     {
         self.init(name: name, year: 2025)
@@ -31,7 +36,6 @@ class MacroExtendedCar
     var name: String = ""
     var year: Int = 0
     var manufacturer: Manufacturer?
-    
     
     // MARK: generated
     
