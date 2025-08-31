@@ -150,11 +150,11 @@ extension UInt64: StorageConvertible.Integer
 extension Int128: StorageConvertible.Blob
 {
     // TODO
-    public var storageValue: OpaquePointer {
+    public var storageValue: UnsafeRawPointer {
         fatalError("Not implemented")
     }
     
-    public init(storageValue: OpaquePointer)
+    public init(storageValue: UnsafeRawPointer)
     {
         fatalError("Not implemented")
     }
@@ -164,11 +164,11 @@ extension Int128: StorageConvertible.Blob
 extension UInt128: StorageConvertible.Blob
 {
     // TODO
-    public var storageValue: OpaquePointer {
+    public var storageValue: UnsafeRawPointer {
         fatalError("Not implemented")
     }
 
-    public init(storageValue: OpaquePointer)
+    public init(storageValue: UnsafeRawPointer)
     {
         fatalError("Not implemented")
     }

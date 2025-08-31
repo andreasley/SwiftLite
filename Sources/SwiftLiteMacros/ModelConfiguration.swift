@@ -11,20 +11,32 @@ public struct ModelConfiguration: Sendable
 
     public struct Property: Sendable
     {
+        var defaultValueInitializer: InitializerClauseSyntax? {
+            return if let defaultValue {
+                InitializerClauseSyntax(value: defaultValue)
+            } else if typeIsOptional {
+                InitializerClauseSyntax(value: ExprSyntax("nil"))
+            } else {
+                nil
+            }
+        }
+        
         let name: String
         let columnName: String
         let type: TypeSyntax
+        let unwrappedType: TypeSyntax
         let typeIsOptional: Bool
         let isPrimaryKey: Bool
         let isUnique: Bool
         let isIndexed: Bool
         let defaultValue: ExprSyntax?
         
-        init(name: String, columnName: String, type: TypeSyntax, isPrimaryKey: Bool, isUnique: Bool, isIndexed: Bool, defaultValue: ExprSyntax?)
+        init(name: String, columnName: String, type: TypeSyntax, isPrimaryKey: Bool = false, isUnique: Bool = false, isIndexed: Bool = false, defaultValue: ExprSyntax? = nil)
         {
-            (self.type, self.typeIsOptional) = type.unwrapOptional()
+            (self.unwrappedType, self.typeIsOptional) = type.unwrapOptional()
 
             self.name = name
+            self.type = type
             self.columnName = columnName
             self.isPrimaryKey = isPrimaryKey
             self.isUnique = isUnique

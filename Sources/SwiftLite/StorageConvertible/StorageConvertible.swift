@@ -1,5 +1,3 @@
-public protocol StorageConvertible2 {}
-
 public enum StorageConvertible
 {
     enum ConversionError: Swift.Error {
@@ -23,8 +21,8 @@ public enum StorageConvertible
     public protocol Blob
     {
         // TODO
-        init(storageValue: OpaquePointer) throws
-        var storageValue: OpaquePointer { get }
+        init(storageValue: UnsafeRawPointer) throws
+        var storageValue: UnsafeRawPointer { get }
     }
 
     public protocol Real

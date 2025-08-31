@@ -1,5 +1,6 @@
+- Tests and more tests
 - Compare performance and database size for typical datasets without `WITHOUT ROWID`
 - Make models auto-conform to `Codable`?
-- Make roundtrip tests for every datatype.
-- @inline some calls?
+- Make roundtrip tests for every datatype with different payloads including some with non-UTF-8 text
+- `@inline(__always)` some calls?
 - Decide if `Foundation` is required. If not, use something other than `UUID`. If it is, remove the `canImport` conditionals.

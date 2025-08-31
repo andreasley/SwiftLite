@@ -35,12 +35,40 @@ public struct Database
     
     internal let connectionHandle: OpaquePointer
     
-    func execute(_ query: String) throws
+    func executeOneStep(_ query: String) throws
     {
         let result = sqlite3_exec(self.connectionHandle, query, nil, nil, nil)
         guard result == SQLiteStatus.ok else {
             throw Error.queryFailed(query, SQLiteStatus(result))
         }
+    }
+    
+    func execute<T: InitializableFromResultRow>(_ query: String, expecting: T.Type = T.self) throws -> [T]
+    {
+        var statement: OpaquePointer?
+        
+        let prepareResult = sqlite3_prepare_v2(self.connectionHandle, query, -1, &statement, nil)
+        defer { sqlite3_finalize(statement) }
+        
+        guard prepareResult == SQLiteStatus.ok else  {
+            let errmsg = String(cString: sqlite3_errmsg(self.connectionHandle))
+            print("Error while fetching table schema: \(errmsg)")
+            throw Error.queryFailed(query, SQLiteStatus(prepareResult))
+        }
+        
+        var results = [T]()
+        
+        // TODO: Log errors returned from `sqlite3_step()`. Also consider retrying for `SQLITE_BUSY` and `SQLITE_LOCKED` (after a delay).
+        
+        while sqlite3_step(statement) == SQLITE_ROW, let statement {
+            let resultRow = SQLiteQueryResult(statement: statement)
+            let object = try T(row: resultRow)
+            results.append(object)
+            
+            // TODO: To throw here means a result can't be fetched if any field of any row can't be converted as expected. The alternative is to skip one row and log the problem. Decide which is better and implement accordingly.
+        }
+        
+        return results
     }
     
     public init(storage: StorageType, cacheSizeLimit: CacheSize? = nil) throws
@@ -74,11 +102,11 @@ public struct Database
             case .megabytes(let value): -value * 1024
             case .pages(let value): value
             }
-            try execute("PRAGMA cache_size = \(limit)")
+            try executeOneStep("PRAGMA cache_size = \(limit)")
         }
 
-        try execute("PRAGMA foreign_keys = ON")
-        try execute("PRAGMA journal_mode = WAL")
+        try executeOneStep("PRAGMA foreign_keys = ON")
+        try executeOneStep("PRAGMA journal_mode = WAL")
         
         // TODO: Compare schema and migrate if necessary
     }
@@ -94,68 +122,103 @@ public struct Database
         // 1. Build model graph (to find referenced model types and dependencies)
         // 2. Check if table(s) exists already
         //  if yes:
-        //      1. Compare schema
+        //      1. Compare schema (positions, names and types should match; not sure about "STRICT" and "WITHOUT ROWID")
         //          if schema matches, continue
         //          if schema doesn't match, execute migration to new schema (traversing the graph upwards)
         //  if no:
         //      1. create table (traversing the graph upwards)
         
+        let existingTables = try? getTables()
+        for existingTable in existingTables ?? [] {
+            print("Existing table: \(existingTable.name)")
+            print(try? getColumns(tableName: existingTable.name))
+            print(try? getIndexes(tableName: existingTable.name))
+        }
+        
         for model in models {
-            let createTableStatement = createTableStatement(for: model.entity)
-            let createIndexStatements = createIndexStatements(for: model.entity)
+            let createTableStatement = createTableStatement(for: model.table)
+            let createIndexStatements = createIndexStatements(for: model.table)
             print(createTableStatement)
-            try? self.execute(createTableStatement)
+            try? self.executeOneStep(createTableStatement)
             
             for createIndexStatement in createIndexStatements {
                 print(createIndexStatement)
-                try? self.execute(createIndexStatement)
+                try? self.executeOneStep(createIndexStatement)
             }
         }
     }
     
-    func createIndexStatements(for entity: Schema.Entity) -> [String]
+    func getTables() throws -> [ExistingSchema.Table]
+    {
+        try execute("PRAGMA table_list;", expecting: ExistingSchema.Table.self)
+    }
+
+    func getColumns(tableName: String) throws -> [ExistingSchema.Column]
+    {
+        try execute("PRAGMA table_info(\(tableName));", expecting: ExistingSchema.Column.self)
+    }
+
+    func getIndexes(tableName: String) throws -> [ExistingSchema.Index]
+    {
+        var indexes = [ExistingSchema.Index]()
+        
+        let indexesWithoutColumns = try execute("PRAGMA index_list(\(tableName));", expecting: ExistingSchema.Index.self)
+        
+        for indexWithoutColumn in indexesWithoutColumns {
+            let columnsInIndex = try execute("PRAGMA index_info(\(indexWithoutColumn.name));", expecting: ExistingSchema.IndexColumn.self)
+            indexes.append(indexWithoutColumn.withColumns(columnsInIndex))
+        }
+        
+        return indexes
+    }
+
+    func createIndexStatements(for table: Schema.Table) -> [String]
     {
         // TODO: Implement indexes over multiple columns
         
         var createIndexStatements = [String]()
         
-        for property in entity.properties where property.isIndexed {
-            let statement = "CREATE INDEX IF NOT EXISTS idx_\(entity.tableName)_\(property.columnName) ON \(entity.tableName)(\(property.columnName));"
+        for index in table.indexes {
+            let statement = "CREATE INDEX \(index.name) ON \(table.name)(\(index.columns.joined(separator: ", ")));"
             createIndexStatements.append(statement)
         }
         
         return createIndexStatements
     }
     
-    func createTableStatement(for entity: Schema.Entity) -> String
+    func createTableStatement(for table: Schema.Table) -> String
     {
         // TODO: Handle references
         
         var columns = [String]()
+        var primaryKeyColumns = [Int32:String]()
 
-        for property in entity.properties
+        for column in table.columns
         {
-            var columnDefinition = "\"\(property.columnName)\" \(property.storageClass.rawValue.uppercased())"
-            
-            if property.isPrimaryKey {
-                columnDefinition += " PRIMARY KEY"
-            }
-            if property.isUnique {
-                columnDefinition += " UNIQUE"
-            }
-            if !property.isNullable {
+            var columnDefinition = "\"\(column.name)\" \(column.storageClass.rawValue.uppercased())"
+
+            if !column.isNullable {
                 columnDefinition += " NOT NULL"
+            }
+
+            if let positionInPrimaryKey = column.positionInPrimaryKey {
+                primaryKeyColumns[positionInPrimaryKey] = column.name
             }
             
             columns.append(columnDefinition)
         }
 
         let columnDefinitions = columns.joined(separator: ",\n    ")
+        let primaryKeyDefinition = primaryKeyColumns.sorted(by: { $0.key < $1.key }).map { $0.value }.joined(separator: ", ")
+
         let createTableStatement = """
-        CREATE TABLE IF NOT EXISTS "\(entity.tableName)" (
+        CREATE TABLE "\(table.name)" (
             \(columnDefinitions)
+            PRIMARY KEY (\(primaryKeyDefinition))
         ) STRICT, WITHOUT ROWID;
         """
+        
+        // TODO: Handle indexes (except primary key)
         
         return createTableStatement
     }

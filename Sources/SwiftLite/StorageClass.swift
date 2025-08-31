@@ -1,11 +1,14 @@
 import Foundation
 
-public enum StorageClass: String, Equatable, Sendable {
+public enum StorageClass: String, Equatable, Sendable, StorageConvertible.Text {
+    public var storageValue: String { rawValue }
+    
     case text
     case integer
     case real
     case blob
     case any
+    case undefined = ""
 
     init(for type: Any.Type)
     {
@@ -21,5 +24,10 @@ public enum StorageClass: String, Equatable, Sendable {
         default:
             self = .any
         }
+    }
+    
+    public init(storageValue: String) throws
+    {
+        self = .init(rawValue: storageValue) ?? .undefined
     }
 }

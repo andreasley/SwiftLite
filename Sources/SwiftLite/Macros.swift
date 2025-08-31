@@ -7,9 +7,11 @@
 @freestanding(expression)
 public macro stringify<T>(_ value: T) -> (T, String) = #externalMacro(module: "SwiftLiteMacros", type: "StringifyMacro")
 
-@attached(member, names: arbitrary) // TODO: Limit names to actually used ones
+// TODO: Limit names to actually used ones
+// TODO: Add parameters for table name and perhaps other table configuration (like `STRICT`)
+@attached(member, names: arbitrary)
 @attached(extension, conformances: SwiftLite.FetchableObject, SwiftLite.Model)
-public macro Model(schema: Schema = .default) = #externalMacro(module: "SwiftLiteMacros", type: "ModelMacro")
+public macro Model() = #externalMacro(module: "SwiftLiteMacros", type: "ModelMacro")
 
 @attached(peer)
 public macro Unique() = #externalMacro(module: "SwiftLiteMacros", type: "UniqueMacro")

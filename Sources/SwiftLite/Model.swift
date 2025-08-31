@@ -1,7 +1,7 @@
 import Foundation
 
-public protocol Model
+public protocol Model: InitializableFromResultRow
 {
     var id: UUID { get }
-    static var entity: Schema.Entity { get }
+    static var table: Schema.Table { get }
 }

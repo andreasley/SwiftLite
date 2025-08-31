@@ -1,66 +1,54 @@
-import Synchronization
-
-public final class Schema: @unchecked Sendable // TODO: Implement proper Sendable
+public enum Schema
 {
-    public static let `default` = Schema()
- 
-    // TODO: Is this actually needed or is a reference to the `Database` (which knows the entities) available wherever needed?
-    var entities = Array<AnyEntity>()
-    
-    public init() {}
-    
-    public func register(_ entity: AnyEntity)
-    {
-        self.entities.append(entity)
-    }
-}
-
-extension Schema
-{
-    public protocol AnyEntity
-    {
-        var name: String { get }
-        var tableName: String { get }
-        var properties: [Property] { get }
-    }
-    
-    public struct Entity: Sendable, AnyEntity
+    public struct Table: Sendable
     {
         public let name: String
-        public let tableName: String
-        public let properties: [Property]
-
-        public init(name: String, tableName: String, properties: [Property])
+        public let columns: [Column]
+        public let indexes: [Index]
+        
+        public init(name: String, columns: [Column], indexes: [Index])
         {
             self.name = name
-            self.tableName = tableName
-            self.properties = properties
+            self.columns = columns
+            self.indexes = indexes
         }
     }
-}
 
-extension Schema
-{
-    public struct Property: Sendable
+    public struct Column: Sendable
     {
-        // TODO: Is all that really needed? KeyPath too?
         public let name: String
-        public let columnName: String
         public let storageClass: StorageClass
-        public let isPrimaryKey: Bool
-        public let isUnique: Bool
-        public let isIndexed: Bool
+        public let positionInPrimaryKey: Int32?
         public let isNullable: Bool
 
-        public init<T>(name: String, columnName: String, type: T.Type, isPrimaryKey: Bool, isUnique: Bool, isIndexed: Bool, isNullable: Bool)
+        public init(name: String, type: Any.Type, positionInPrimaryKey: Int32? = nil, isPrimaryKey: Bool, isNullable: Bool)
         {
             self.name = name
-            self.columnName = columnName
             self.storageClass = StorageClass(for: type)
-            self.isPrimaryKey = isPrimaryKey
-            self.isUnique = isUnique
-            self.isIndexed = isIndexed
+            self.positionInPrimaryKey = positionInPrimaryKey
             self.isNullable = isNullable
+        }
+
+        public init(name: String, storageClass: StorageClass, positionInPrimaryKey: Int32? = nil, isNullable: Bool)
+        {
+            self.name = name
+            self.storageClass = storageClass
+            self.positionInPrimaryKey = positionInPrimaryKey
+            self.isNullable = isNullable
+        }
+    }
+    
+    public struct Index: Sendable
+    {
+        public let name: String
+        public let isUnique: Bool
+        public let columns: [String]
+        
+        public init(name: String, isUnique: Bool, columns: [String])
+        {
+            self.name = name
+            self.isUnique = isUnique
+            self.columns = columns
         }
     }
 }

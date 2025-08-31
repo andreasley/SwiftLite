@@ -16,18 +16,23 @@ It leverages Swift Macros to prepare SQL statements at compile time - great for 
 - Run on all platforms that Swift and SQLite run on
 - Well integrated into SwiftUI 
 - Easy to use, understand and troubleshoot
+- Optimized for simple use-cases (in both performance and ergonomics)
 - No crashes/fatal errors when used correctly
 - As few layers of abstraction as possible between Swift and SQLite
-- Fast enough for typical use-cases
 - Small and lightweight; as few dependencies as possible
 
 ## Non-goals
 
 - Support every function of SQLite
 
+## Features
+
+- Automatic creation of tables
+- Easy to persist custom objects and datatypes 
 
 ## Pending features 
 
+- Automatic migration
 - Custom queries
 - Full Text Search
 - Custom migrations (with support for renaming tables and columns etc.)
@@ -39,6 +44,6 @@ It leverages Swift Macros to prepare SQL statements at compile time - great for 
 - Stored `Date` values are limited to millisecond precision.
 - Manually entered values in the SQLite file may be clamped if they don't match the schema (e.g. a value of `Int64.max` in an `INTEGER` column that is mapped to a property of type `Int32`).
 
-## Various
+## Random thoughts
 
 Sometimes (very rarely), Swift features align so beautifully that it's almost magical. This was the case here. I'm grateful for the experience and would like to thank everyone who made this possible.

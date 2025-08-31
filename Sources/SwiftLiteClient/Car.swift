@@ -27,7 +27,7 @@ import Foundation
     }
 }
 
-class MacroExtendedCar
+class MacroExtendedCar: InitializableFromResultRow
 {
     let id: UUID
     
@@ -41,17 +41,19 @@ class MacroExtendedCar
     
     static let tableName = "macro_extended_car"
     
-    static let entity = Schema.Entity(name: "Car", tableName: "car", properties: [
-        .init(name: "id", columnName: "id", type: UUID.self, isPrimaryKey: true, isUnique: false, isIndexed: false, isNullable: false),
-            .init(name: "publicId", columnName: "public_id", type: UUID.self, isPrimaryKey: false, isUnique: true, isIndexed: true, isNullable: false),
-            .init(name: "name", columnName: "name", type: String.self, isPrimaryKey: false, isUnique: false, isIndexed: true, isNullable: false),
-            .init(name: "year", columnName: "year", type: Int.self, isPrimaryKey: false, isUnique: false, isIndexed: true, isNullable: false),
-            .init(name: "manufacturer", columnName: "manufacturer", type: Manufacturer.self, isPrimaryKey: false, isUnique: false, isIndexed: false, isNullable: true)
-        ])
+    static let table = Schema.Table(name: "Car", columns: [
+        .init(name: "id", type: UUID.self, isPrimaryKey: true, isNullable: false),
+            .init(name: "publicId", type: UUID.self, isPrimaryKey: false, isNullable: false),
+            .init(name: "name", type: String.self, isPrimaryKey: false, isNullable: false),
+            .init(name: "year", type: Int.self, isPrimaryKey: false, isNullable: false),
+            .init(name: "manufacturer", type: Manufacturer.self, isPrimaryKey: false, isNullable: true)
+    ], indexes: [
+        .init(name: "idx_publicId", isUnique: true, columns: ["publicId"])
+    ])
 
-    private static let __schemaRegistration: Void = {
-        Schema.default.register(entity)
-    }()
+//    private static let __schemaRegistration: Void = {
+//        Schema.default.register(entity)
+//    }()
     
     init()
     {
@@ -60,25 +62,13 @@ class MacroExtendedCar
         publicId = UUID()
     }
     
-    init(row: SQLiteQueryResult)
+    required init(row: SQLiteQueryResult) throws
     {
-        // TODO: Read data from result
-        self.id = UUID()
-        self.publicId = UUID()
-        self.name = ""
-        self.year = 0
+        self.id = try row.get(0)
+        self.publicId = try row.get(1)
+        self.name = try row.get(2)
+        self.year = try row.get(3)
     }
-    
-    static let createTableStatement: String =
-    """
-    CREATE TABLE IF NOT EXISTS car (
-        id TEXT PRIMARY KEY,
-        publicId TEXT UNIQUE,
-        name TEXT,
-        year INTEGER,
-        manufacturer TEXT REFERENCES manufacturer DEFERRABLE INITIALLY DEFERRED,
-    ) STRICT WITHOUT ROWID;
-    """
     
     static let selectStatementFlat: String = "SELECT id, publicId, year, manufacturer FROM car"
     static let selectStatementFlatLimited: String = "SELECT id, publicId, year, manufacturer FROM car LIMIT ? OFFSET ?"
