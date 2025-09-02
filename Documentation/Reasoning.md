@@ -2,3 +2,4 @@
 - Create tables `WITHOUT ROWID` to use the UUID as actual primary key
 - Use `STRICT` tables to catch schema mistakes earlier (requires SQLite 3.37+ though and therefore makes the package require macOS 13 or higher)
 - Use `DEFERRABLE INITIALLY DEFERRED` foreign key contraints to allow the library to ignore the order of insertion for nested objects.
+- Implement auto-migration, because typical use-cases (simple projects) mostly require additive changes, which can be handled well by auto-migration.

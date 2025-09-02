@@ -12,8 +12,8 @@ public struct ModelConfiguration: Sendable
     public struct Property: Sendable
     {
         var defaultValueInitializer: InitializerClauseSyntax? {
-            return if let defaultValue {
-                InitializerClauseSyntax(value: defaultValue)
+            return if let defaultValuePropertyName {
+                InitializerClauseSyntax(value: ExprSyntax(stringLiteral: defaultValuePropertyName))
             } else if typeIsOptional {
                 InitializerClauseSyntax(value: ExprSyntax("nil"))
             } else {
@@ -22,16 +22,18 @@ public struct ModelConfiguration: Sendable
         }
         
         let name: String
-        let columnName: String
+        let columnName: ExprSyntax
         let type: TypeSyntax
         let unwrappedType: TypeSyntax
         let typeIsOptional: Bool
         let isPrimaryKey: Bool
         let isUnique: Bool
         let isIndexed: Bool
+        let isRelated: Bool
         let defaultValue: ExprSyntax?
+        let defaultValuePropertyName: String?
         
-        init(name: String, columnName: String, type: TypeSyntax, isPrimaryKey: Bool = false, isUnique: Bool = false, isIndexed: Bool = false, defaultValue: ExprSyntax? = nil)
+        init(name: String, columnName: ExprSyntax, type: TypeSyntax, isPrimaryKey: Bool = false, isUnique: Bool = false, isIndexed: Bool = false, isRelated: Bool = false, defaultValue: ExprSyntax? = nil, defaultValuePropertyName: String? = nil)
         {
             (self.unwrappedType, self.typeIsOptional) = type.unwrapOptional()
 
@@ -41,7 +43,9 @@ public struct ModelConfiguration: Sendable
             self.isPrimaryKey = isPrimaryKey
             self.isUnique = isUnique
             self.isIndexed = isIndexed
+            self.isRelated = isRelated
             self.defaultValue = defaultValue
+            self.defaultValuePropertyName = defaultValuePropertyName
         }
     }
 }

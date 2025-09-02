@@ -3,28 +3,30 @@ import Foundation
 
 @Model final class Car
 {
-    static let nameYearIndex = "nameYearIndex"
-    
-    @Indexed @Unique @DefaultValue(UUID())
+    #Index {
+        CompositeIndex<Car>(columns: ["name": \.name, "year": \.year])
+    }
+        
+    @Stored(defaultValue: UUID(), isUnique: true, isIndexed: true)
     let publicId: UUID
     
-    @Indexed(index: nameYearIndex)
     var name: String
     
-    @Indexed(index: nameYearIndex)
     var year: Int
     
+    @Related
     var manufacturer: Manufacturer?
 
     var röt: String?
     
-    @DefaultValue(0.1)
+    @Stored(defaultValue: 0.1)
     var 😗: Decimal
 
     convenience init(name: String)
     {
         self.init(name: name, year: 2025)
     }
+    
 }
 
 class MacroExtendedCar: InitializableFromResultRow
@@ -64,10 +66,10 @@ class MacroExtendedCar: InitializableFromResultRow
     
     required init(row: SQLiteQueryResult) throws
     {
-        self.id = try row.get(0)
-        self.publicId = try row.get(1)
-        self.name = try row.get(2)
-        self.year = try row.get(3)
+        self.id = try row.getStoredValue(index: 0)
+        self.publicId = try row.getStoredValue(index: 1)
+        self.name = try row.getStoredValue(index: 2)
+        self.year = try row.getStoredValue(index: 3)
     }
     
     static let selectStatementFlat: String = "SELECT id, publicId, year, manufacturer FROM car"

@@ -1,9 +1,21 @@
-## What is it?
+# SwiftLite
 
-SwiftLite is a ORM that provides an easy-to-use Swift API to create and access a SQLite database.
-It leverages Swift Macros to prepare SQL statements at compile time - great for performance and transparency.
+SwiftLite is an ORM that provides an easy-to-use Swift API to create and access a SQLite database.
+It leverages Swift Macros to transform the model code to a partial database schema on compile-time.
 
-## Basics
+### Implemented Features
+
+- Automatic creation of tables
+- Easy to persist custom objects and datatypes 
+
+### Pending features 
+
+- Automatic migration
+- Custom queries
+- Full Text Search
+- Custom migrations (with support for renaming tables and columns etc.)
+
+## How to use it
 
 #### Models
 
@@ -11,7 +23,9 @@ It leverages Swift Macros to prepare SQL statements at compile time - great for 
 - Automatically get the property `id`, a random UUID, as the primary key
 - May contain a `static let tableName = "<your_preferred_name>"` to manually specify the table name to be used (instead of one derived from the name of the class) 
 
-## Goals
+## Concept
+
+### Goals
 
 - Run on all platforms that Swift and SQLite run on
 - Well integrated into SwiftUI 
@@ -21,21 +35,17 @@ It leverages Swift Macros to prepare SQL statements at compile time - great for 
 - As few layers of abstraction as possible between Swift and SQLite
 - Small and lightweight; as few dependencies as possible
 
-## Non-goals
+### Non-goals
 
 - Support every function of SQLite
 
-## Features
+### Strategies
 
-- Automatic creation of tables
-- Easy to persist custom objects and datatypes 
+- Use type-safe ways whenever possible
+- Do as much as possible in the macros
 
-## Pending features 
 
-- Automatic migration
-- Custom queries
-- Full Text Search
-- Custom migrations (with support for renaming tables and columns etc.)
+
 
 ## Limitations
 

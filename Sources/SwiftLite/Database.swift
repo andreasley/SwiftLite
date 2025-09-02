@@ -105,7 +105,9 @@ public struct Database
             try executeOneStep("PRAGMA cache_size = \(limit)")
         }
 
+        // "Foreign key constraints are disabled by default (for backwards compatibility), so must be enabled separately for each database connection" (https://sqlite.org/foreignkeys.html).
         try executeOneStep("PRAGMA foreign_keys = ON")
+        
         try executeOneStep("PRAGMA journal_mode = WAL")
         
         // TODO: Compare schema and migrate if necessary

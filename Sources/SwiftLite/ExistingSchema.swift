@@ -40,12 +40,12 @@ public enum ExistingSchema
              Additional columns will likely be added in future releases.
              */
             
-            self.schema = try row.get(0)
-            self.name = try row.get(1)
-            self.type = try row.get(2)
-            self.numberOfColumns = try row.get(3)
-            self.isWithoutRowId = try row.get(4)
-            self.isStrict = try row.get(5)
+            self.schema = try row.getStoredValue(index: 0)
+            self.name = try row.getStoredValue(index: 1)
+            self.type = try row.getStoredValue(index: 2)
+            self.numberOfColumns = try row.getStoredValue(index: 3)
+            self.isWithoutRowId = try row.getStoredValue(index: 4)
+            self.isStrict = try row.getStoredValue(index: 5)
         }
     }
     
@@ -69,12 +69,12 @@ public enum ExistingSchema
              - "pk": either zero for columns that are not part of the primary key, or the 1-based index of the column within the primary key
              */
             
-            self.columnId = try row.get(0)
-            self.name = try row.get(1)
-            self.storageClass = try row.get(2)
-            self.isNullable = try row.get(3)
-            self.defaultValue = try row.get(4)
-            self.positionInPrimaryKey = try row.get(5)
+            self.columnId = try row.getStoredValue(index: 0)
+            self.name = try row.getStoredValue(index: 1)
+            self.storageClass = try row.getStoredValue(index: 2)
+            self.isNullable = try row.getStoredValue(index: 3)
+            self.defaultValue = try row.getStoredValue(index: 4)
+            self.positionInPrimaryKey = try row.getStoredValue(index: 5)
         }
     }
     
@@ -113,11 +113,11 @@ public enum ExistingSchema
              - "1" if the index is a partial index and "0" if not.
              */
             
-            self.sequence = try row.get(0)
-            self.name = try row.get(1)
-            self.isUnique = try row.get(2)
-            self.origin = try row.get(3)
-            self.isPartial = try row.get(4)
+            self.sequence = try row.getStoredValue(index: 0)
+            self.name = try row.getStoredValue(index: 1)
+            self.isUnique = try row.getStoredValue(index: 2)
+            self.origin = try row.getStoredValue(index: 3)
+            self.isPartial = try row.getStoredValue(index: 4)
             self.columns = []
         }
         
@@ -153,9 +153,9 @@ public enum ExistingSchema
              - The name of the column being indexed. This columns is NULL if the column is the rowid or an expression.
             */
             
-            self.sequence = try row.get(0)
-            self.columnId = try row.get(1)
-            self.name = try row.get(2)
+            self.sequence = try row.getStoredValue(index: 0)
+            self.columnId = try row.getStoredValue(index: 1)
+            self.name = try row.getStoredValue(index: 2)
         }
     }
 }

@@ -3,7 +3,7 @@ import Foundation
 
 @Model final class Manufacturer
 {
-    @Unique
+    @Stored(defaultValue: UUID(), isUnique: true)
     let publicId: UUID
     
     var name: String
