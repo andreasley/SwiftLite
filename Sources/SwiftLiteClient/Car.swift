@@ -3,9 +3,9 @@ import Foundation
 
 @Model final class Car
 {
-    #Index {
+    static let customIndexes = [
         CompositeIndex<Car>(columns: ["name": \.name, "year": \.year])
-    }
+    ]
         
     @Stored(defaultValue: UUID(), isUnique: true, isIndexed: true)
     let publicId: UUID
@@ -26,7 +26,6 @@ import Foundation
     {
         self.init(name: name, year: 2025)
     }
-    
 }
 
 class MacroExtendedCar: InitializableFromResultRow

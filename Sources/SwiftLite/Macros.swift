@@ -25,7 +25,3 @@ public macro Transient() = #externalMacro(module: "SwiftLiteMacros", type: "Tran
 
 @attached(peer)
 public macro File() = #externalMacro(module: "SwiftLiteMacros", type: "FileMacro")
-
-
-@freestanding(declaration, names: named(customIndexes))
-public macro Index(indexes: () -> Void) = #externalMacro(module: "SwiftLiteMacros", type: "IndexMacro")

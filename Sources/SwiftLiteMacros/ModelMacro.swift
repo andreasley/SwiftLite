@@ -285,7 +285,9 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
             .init(name: "idx_\(p.columnName)", isUnique: \(p.isUnique), columns: ["\(p.columnName)"])
             """
         }.joined(separator: ",\n")
-        
+                
+        // TODO: Add indexes from `static let customIndexes`.
+
         let tableDecl: DeclSyntax =
         """
         static let table = Schema.Table(name: "\(raw: tableName)", columns: [

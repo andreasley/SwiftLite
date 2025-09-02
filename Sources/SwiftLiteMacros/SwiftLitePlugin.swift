@@ -10,6 +10,5 @@ struct SwiftLitePlugin: CompilerPlugin {
         RelatedMacro.self,
         FileMacro.self,
         TransientMacro.self,
-        IndexMacro.self,
     ]
 }
