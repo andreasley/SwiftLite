@@ -132,6 +132,7 @@ public struct Database
         
         let existingTables = try? getTables()
         for existingTable in existingTables ?? [] {
+            guard existingTable.isUserDefined else { continue }
             print("Existing table: \(existingTable.name)")
             print(try? getColumns(tableName: existingTable.name))
             print(try? getIndexes(tableName: existingTable.name))
@@ -215,8 +216,8 @@ public struct Database
 
         let createTableStatement = """
         CREATE TABLE "\(table.name)" (
-            \(columnDefinitions)
-            PRIMARY KEY (\(primaryKeyDefinition))
+            \(columnDefinitions),
+            PRIMARY KEY(\(primaryKeyDefinition))
         ) STRICT, WITHOUT ROWID;
         """
         

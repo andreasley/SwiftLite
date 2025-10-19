@@ -26,6 +26,8 @@ public enum ExistingSchema
         public let isWithoutRowId: Bool
         public let isStrict: Bool
         
+        public let isUserDefined: Bool
+        
         public init(row: SQLiteQueryResult) throws
         {
             // See https://sqlite.org/pragma.html#pragma_table_list
@@ -46,6 +48,8 @@ public enum ExistingSchema
             self.numberOfColumns = try row.getStoredValue(index: 3)
             self.isWithoutRowId = try row.getStoredValue(index: 4)
             self.isStrict = try row.getStoredValue(index: 5)
+            
+            self.isUserDefined = (!name.hasPrefix("sqlite_") && schema == "main")
         }
     }
     

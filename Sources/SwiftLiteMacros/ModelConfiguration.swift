@@ -26,21 +26,21 @@ public struct ModelConfiguration: Sendable
         let type: TypeSyntax
         let unwrappedType: TypeSyntax
         let typeIsOptional: Bool
-        let isPrimaryKey: Bool
+        let positionInPrimaryKey: Int?
         let isUnique: Bool
         let isIndexed: Bool
         let isRelated: Bool
         let defaultValue: ExprSyntax?
         let defaultValuePropertyName: String?
         
-        init(name: String, columnName: ExprSyntax, type: TypeSyntax, isPrimaryKey: Bool = false, isUnique: Bool = false, isIndexed: Bool = false, isRelated: Bool = false, defaultValue: ExprSyntax? = nil, defaultValuePropertyName: String? = nil)
+        init(name: String, columnName: ExprSyntax, type: TypeSyntax, positionInPrimaryKey: Int? = nil, isUnique: Bool = false, isIndexed: Bool = false, isRelated: Bool = false, defaultValue: ExprSyntax? = nil, defaultValuePropertyName: String? = nil)
         {
             (self.unwrappedType, self.typeIsOptional) = type.unwrapOptional()
 
             self.name = name
             self.type = type
             self.columnName = columnName
-            self.isPrimaryKey = isPrimaryKey
+            self.positionInPrimaryKey = positionInPrimaryKey
             self.isUnique = isUnique
             self.isIndexed = isIndexed
             self.isRelated = isRelated

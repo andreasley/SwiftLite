@@ -21,7 +21,7 @@ public enum Schema
         public let positionInPrimaryKey: Int32?
         public let isNullable: Bool
 
-        public init(name: String, type: Any.Type, positionInPrimaryKey: Int32? = nil, isPrimaryKey: Bool, isNullable: Bool)
+        public init(name: String, type: Any.Type, positionInPrimaryKey: Int32? = nil, isNullable: Bool)
         {
             self.name = name
             self.storageClass = StorageClass(for: type)
