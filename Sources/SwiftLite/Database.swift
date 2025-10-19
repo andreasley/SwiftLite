@@ -177,8 +177,6 @@ public struct Database
 
     func createIndexStatements(for table: Schema.Table) -> [String]
     {
-        // TODO: Implement indexes over multiple columns
-        
         var createIndexStatements = [String]()
         
         for index in table.indexes {
@@ -220,9 +218,7 @@ public struct Database
             PRIMARY KEY(\(primaryKeyDefinition))
         ) STRICT, WITHOUT ROWID;
         """
-        
-        // TODO: Handle indexes (except primary key)
-        
+                
         return createTableStatement
     }
 
