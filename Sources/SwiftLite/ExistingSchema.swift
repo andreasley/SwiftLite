@@ -2,8 +2,9 @@ import SQLite3
 
 public enum ExistingSchema
 {
-    public struct Table: Sendable, InitializableFromResultRow
+    public struct Table: Sendable, InitializableFromResultRow, Hashable
     {
+        
         public enum TableType: String, Sendable, StorageConvertible.Text {
             public var storageValue: String { rawValue }
             
@@ -163,4 +164,3 @@ public enum ExistingSchema
         }
     }
 }
-
