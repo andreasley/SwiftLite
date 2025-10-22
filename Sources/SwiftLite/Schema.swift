@@ -20,21 +20,24 @@ public enum Schema
         public let storageClass: StorageClass
         public let positionInPrimaryKey: Int32?
         public let isNullable: Bool
+        public let defaultValue: String?
 
-        public init(name: String, type: Any.Type, positionInPrimaryKey: Int32? = nil, isNullable: Bool)
+        public init(name: String, type: Any.Type, positionInPrimaryKey: Int32? = nil, isNullable: Bool, defaultValue: SQLiteDefaultValueConvertible? = nil)
         {
             self.name = name
             self.storageClass = StorageClass(for: type)
             self.positionInPrimaryKey = positionInPrimaryKey
             self.isNullable = isNullable
+            self.defaultValue = defaultValue?.asDefaultValueString
         }
 
-        public init(name: String, storageClass: StorageClass, positionInPrimaryKey: Int32? = nil, isNullable: Bool)
+        public init(name: String, storageClass: StorageClass, positionInPrimaryKey: Int32? = nil, isNullable: Bool, defaultValue: SQLiteDefaultValueConvertible? = nil)
         {
             self.name = name
             self.storageClass = storageClass
             self.positionInPrimaryKey = positionInPrimaryKey
             self.isNullable = isNullable
+            self.defaultValue = defaultValue?.asDefaultValueString
         }
     }
     

@@ -8,7 +8,7 @@ let fileUrl = temporaryDirectory.appending(component: "test.sqlite", directoryHi
 try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
 
 let db = try Database(storage: .file(fileUrl))
-db.register(models: Car.self)
+try db.register(models: Car.self)
 let car = Car(name: "test")
 
 //try FileManager.default.removeItem(at: temporaryDirectory)

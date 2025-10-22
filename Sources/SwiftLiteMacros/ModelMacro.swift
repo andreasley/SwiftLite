@@ -278,7 +278,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
     {
         let columnInitializers: String = properties.map { p in
             """
-            .init(name: "\(p.columnName)", type: \(p.unwrappedType).self, positionInPrimaryKey: \(p.positionInPrimaryKey?.description ?? "nil"), isNullable: \(p.typeIsOptional))
+            .init(name: "\(p.columnName)", type: \(p.unwrappedType).self, positionInPrimaryKey: \(p.positionInPrimaryKey?.description ?? "nil"), isNullable: \(p.typeIsOptional), defaultValue: \(p.defaultValuePropertyName ?? "nil"))
             """
         }.joined(separator: ",\n")
         
