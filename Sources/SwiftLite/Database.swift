@@ -163,15 +163,19 @@ public struct Database
 
     func updateTableIfNecessary(existingTable: ExistingSchema.Table, model: Model.Type) throws
     {
-        // Compare columns
-        let existingColumns = try getColumns(tableName: existingTable.name)
-
-        for existingColumn in existingColumns {
-            
-        }
         
-        // Compare indexes
-        let existingIndexes = try getIndexes(tableName: existingTable.name)
+        // TODO: Implement
+
+//        // Compare columns
+//        let existingColumns = try getColumns(tableName: existingTable.name)
+//
+//        
+//        for existingColumn in existingColumns {
+//
+//        }
+//        
+//        // Compare indexes
+//        let existingIndexes = try getIndexes(tableName: existingTable.name)
     }
     
     func createTable(model: Model.Type) throws
