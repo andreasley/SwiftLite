@@ -21,6 +21,14 @@ public struct ModelConfiguration: Sendable
             }
         }
         
+        var typeForConstantInSnapshot: TypeSyntax {
+            if self.isRelated {
+                return TypeSyntax(SnapshotTypeRewriter().visit(self.type))
+            } else {
+                return self.type
+            }
+        }
+        
         let name: String
         let columnName: ExprSyntax
         let type: TypeSyntax
