@@ -11,4 +11,7 @@ let db = try Database(storage: .file(fileUrl))
 try db.register(models: Car.self)
 let car = Car(name: "test")
 
+let cars = try db.snapshots(for: Car.self)
+
+print(cars)
 //try FileManager.default.removeItem(at: temporaryDirectory)

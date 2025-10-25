@@ -89,6 +89,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
         var diagnostics: [Diagnostic] = []
         var generatedDeclarations: [DeclSyntax] = []
         
+        
         // MARK: Check object type
         // Check if the annotated object is a `class` (which is the only supported nominal type)
         
@@ -103,6 +104,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
         let tableName = createTableNameFromQualifiedName(of: classDecl, in: context)
 //        let tableName = classDecl?.name.text
         
+
         // MARK: ID
         // TODO: Check if there's already a property `id`; warn if so
         
@@ -123,8 +125,14 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
         if let tableName {
             let tableDeclaration = getSchemaTable(tableName: tableName, properties: properties)
             generatedDeclarations.append(tableDeclaration)
+
+            let defaultSelectStatement: DeclSyntax =
+            """
+            static let __defaultSelectStatement: String = "SELECT \(raw: properties.filter({ !$0.isRelated }).map({ $0.columnName.description }).joined(separator: ",")) FROM \(raw: tableName)"
+            """
+            generatedDeclarations.append(defaultSelectStatement)
         }
-        
+
         
         // MARK: Initializers
         
@@ -149,16 +157,29 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
         
         // MARK: Read-only structs
         
+        let snapshotTypealiasDecl: DeclSyntax =
+        """
+        typealias Snapshot = ReadOnlySnapshot
+        """
+        generatedDeclarations.append(snapshotTypealiasDecl)
+        
         generatedDeclarations.append(getFlatDecl(properties: properties))
+
+        let flatSnapshotTypealiasDecl: DeclSyntax =
+        """
+        typealias FlatSnapshot = ReadOnlyFlatSnapshot
+        """
+        generatedDeclarations.append(flatSnapshotTypealiasDecl)
+
         generatedDeclarations.append(getSnapshotDecl(properties: properties))
 
-        
         return generatedDeclarations
     }
     
     static func getFlatDecl(properties: [ModelConfiguration.Property]) -> DeclSyntax
     {
-        let structName = "Flat"
+        let structName = "ReadOnlyFlatSnapshot"
+        let initDecl = initializerForObjectFromDatabase(properties: properties, skipRelations: true)
         let memberDeclList = MemberBlockItemListSyntax {
             for property in properties.filter({ $0.isRelated == false }) {
                 MemberBlockItemSyntax(
@@ -178,6 +199,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
                     )
                 )
             }
+            initDecl
         }
 
         let inheritanceClause = InheritanceClauseSyntax(
@@ -188,6 +210,9 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
                 )
                 InheritedTypeSyntax(
                     type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Codable")))
+                )
+                InheritedTypeSyntax(
+                    type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("InitializableFromResultRow")))
                 )
             }
         )
@@ -207,7 +232,8 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
 
     static func getSnapshotDecl(properties: [ModelConfiguration.Property]) -> DeclSyntax
     {
-        let structName = "Snapshot"
+        let structName = "ReadOnlySnapshot"
+        let initDecl = initializerForObjectFromDatabase(properties: properties)
         let memberDeclList = MemberBlockItemListSyntax {
             for property in properties {
                 MemberBlockItemSyntax(
@@ -227,6 +253,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
                     )
                 )
             }
+            initDecl
         }
 
         let inheritanceClause = InheritanceClauseSyntax(
@@ -237,6 +264,9 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
                 )
                 InheritedTypeSyntax(
                     type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Codable")))
+                )
+                InheritedTypeSyntax(
+                    type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("InitializableFromResultRow")))
                 )
             }
         )
@@ -457,7 +487,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
         return initDecl
     }
     
-    static func initializerForObjectFromDatabase(properties: [ModelConfiguration.Property]) -> InitializerDeclSyntax
+    static func initializerForObjectFromDatabase(properties: [ModelConfiguration.Property], skipRelations: Bool = false) -> InitializerDeclSyntax
     {
         var assignments = [CodeBlockItemSyntax]()
         
@@ -465,7 +495,11 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
         for property in properties {
             
             guard !property.isRelated else {
-                // TODO: Implement fetching ot related objects
+                if !skipRelations {
+                    // TODO: Implement fetching of related objects
+                    let assignment = CodeBlockItemSyntax(item: .expr("self.\(raw: property.name) = nil"))
+                    assignments.append(assignment)
+                }
                 continue
             }
             

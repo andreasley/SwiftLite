@@ -153,6 +153,14 @@ public struct Database
         
         return results
     }
+
+    public func snapshots<T: Model>(for modelType: T.Type = T.self) throws -> [T.Snapshot]
+    {
+        let query = T.__defaultSelectStatement
+        let objects: [T.Snapshot] = try execute(query)
+        return objects
+    }
+
     func updateTableIfNecessary(existingTable: ExistingSchema.Table, model: Model.Type) throws
     {
         // Compare columns
