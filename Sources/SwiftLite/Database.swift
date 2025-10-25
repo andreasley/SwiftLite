@@ -34,45 +34,7 @@ public struct Database
     }
     
     internal let connectionHandle: OpaquePointer
-    
-    func executeOneStep(_ query: String) throws
-    {
-        let result = sqlite3_exec(self.connectionHandle, query, nil, nil, nil)
-        guard result == SQLiteStatus.ok else {
-            let errmsg = String(cString: sqlite3_errmsg(self.connectionHandle))
-            print("Error while executing query: \(errmsg)")
-            throw Error.queryFailed(query: query, status: SQLiteStatus(result), errorMessage: errmsg)
-        }
-    }
-    
-    func execute<T: InitializableFromResultRow>(_ query: String, expecting: T.Type = T.self) throws -> [T]
-    {
-        var statement: OpaquePointer?
-        
-        let result = sqlite3_prepare_v2(self.connectionHandle, query, -1, &statement, nil)
-        defer { sqlite3_finalize(statement) }
-        
-        guard result == SQLiteStatus.ok else  {
-            let errmsg = String(cString: sqlite3_errmsg(self.connectionHandle))
-            print("Error while executing query: \(errmsg)")
-            throw Error.queryFailed(query: query, status: SQLiteStatus(result), errorMessage: errmsg)
-        }
-        
-        var results = [T]()
-        
-        // TODO: Log errors returned from `sqlite3_step()`. Also consider retrying for `SQLITE_BUSY` and `SQLITE_LOCKED` (after a delay).
-        
-        while sqlite3_step(statement) == SQLITE_ROW, let statement {
-            let resultRow = SQLiteQueryResult(statement: statement)
-            let object = try T(row: resultRow)
-            results.append(object)
-            
-            // TODO: To throw here means a result can't be fetched if any field of any row can't be converted as expected. The alternative is to skip one row and log the problem. Decide which is better and implement accordingly.
-        }
-        
-        return results
-    }
-    
+
     public init(storage: StorageType, cacheSizeLimit: CacheSize? = nil) throws
     {
         var pointer: OpaquePointer?
@@ -154,6 +116,43 @@ public struct Database
         }
     }
     
+    public func executeOneStep(_ query: String) throws
+    {
+        let result = sqlite3_exec(self.connectionHandle, query, nil, nil, nil)
+        guard result == SQLiteStatus.ok else {
+            let errmsg = String(cString: sqlite3_errmsg(self.connectionHandle))
+            print("Error while executing query: \(errmsg)")
+            throw Error.queryFailed(query: query, status: SQLiteStatus(result), errorMessage: errmsg)
+        }
+    }
+    
+    public func execute<T: InitializableFromResultRow>(_ query: String, expecting: T.Type = T.self) throws -> [T]
+    {
+        var statement: OpaquePointer?
+        
+        let result = sqlite3_prepare_v2(self.connectionHandle, query, -1, &statement, nil)
+        defer { sqlite3_finalize(statement) }
+        
+        guard result == SQLiteStatus.ok else  {
+            let errmsg = String(cString: sqlite3_errmsg(self.connectionHandle))
+            print("Error while executing query: \(errmsg)")
+            throw Error.queryFailed(query: query, status: SQLiteStatus(result), errorMessage: errmsg)
+        }
+        
+        var results = [T]()
+        
+        // TODO: Log errors returned from `sqlite3_step()`. Also consider retrying for `SQLITE_BUSY` and `SQLITE_LOCKED` (after a delay).
+        
+        while sqlite3_step(statement) == SQLITE_ROW, let statement {
+            let resultRow = SQLiteQueryResult(statement: statement)
+            let object = try T(row: resultRow)
+            results.append(object)
+            
+            // TODO: To throw here means a result can't be fetched if any field of any row can't be converted as expected. The alternative is to skip one row and log the problem. Decide which is better and implement accordingly.
+        }
+        
+        return results
+    }
     func updateTableIfNecessary(existingTable: ExistingSchema.Table, model: Model.Type) throws
     {
         // Compare columns
