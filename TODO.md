@@ -5,3 +5,4 @@
 - `@inline(__always)` some calls?
 - Decide if `Foundation` is required. If not, use something other than `UUID`. If it is, remove the `canImport` conditionals.
 - Add a function to check the whole database (read every row into a `Model`)
+- Make property update behaviour configurable, e.g. override OR keep unsaved changes in a model when the respective field is updated by a sync
