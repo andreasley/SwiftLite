@@ -246,9 +246,10 @@ public struct Database
         {
             var columnDefinition = "\"\(column.name)\" \(column.storageClass.rawValue.uppercased())"
 
-            if let defaultValue = column.defaultValue {
-                columnDefinition += " DEFAULT \(defaultValue)"
-            }
+            // TODO: What default value should be assigned (if any)? The default value might be a Swift expression that can't be set in SQLite.
+//            if let defaultValue = column.defaultValue {
+//                columnDefinition += " DEFAULT \(defaultValue)"
+//            }
 
             if !column.isNullable {
                 columnDefinition += " NOT NULL"
