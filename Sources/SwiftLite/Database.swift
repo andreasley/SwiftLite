@@ -1,7 +1,7 @@
 import SQLite3
 import Foundation
 
-public struct Database
+public actor Database
 {
     public enum StorageType {
         case file(URL)
@@ -34,6 +34,7 @@ public struct Database
     }
     
     internal let connectionHandle: OpaquePointer
+    public internal(set) var isClosed = false
 
     public init(storage: StorageType, cacheSizeLimit: CacheSize? = nil) throws
     {
@@ -59,22 +60,32 @@ public struct Database
             throw Error.failedToOpen(SQLiteStatus(openStatus))
         }
         
-        self.connectionHandle = pointer
-        
+        func setPragma(name: String, value: String) throws
+        {
+            let query = "PRAGMA \(name) = \(value)"
+            let result = sqlite3_exec(pointer, query, nil, nil, nil)
+            guard result == SQLiteStatus.ok else {
+                let errmsg = String(cString: sqlite3_errmsg(pointer))
+                print("Error while executing query: \(errmsg)")
+                sqlite3_close_v2(pointer)
+                throw Error.queryFailed(query: query, status: SQLiteStatus(result), errorMessage: errmsg)
+            }
+        }
+
         if let cacheSizeLimit {
             let limit = switch cacheSizeLimit {
             case .megabytes(let value): -value * 1024
             case .pages(let value): value
             }
-            try executeOneStep("PRAGMA cache_size = \(limit)")
+            try setPragma(name: "cache_size", value: String(limit))
         }
 
         // "Foreign key constraints are disabled by default (for backwards compatibility), so must be enabled separately for each database connection" (https://sqlite.org/foreignkeys.html).
-        try executeOneStep("PRAGMA foreign_keys = ON")
+        try setPragma(name: "foreign_keys", value: "ON")
         
-        try executeOneStep("PRAGMA journal_mode = WAL")
-        
-        // TODO: Compare schema and migrate if necessary
+        try setPragma(name: "journal_mode", value: "WAL")
+
+        self.connectionHandle = pointer
     }
     
     public func register(models: any Model.Type...) throws
@@ -278,10 +289,22 @@ public struct Database
 
     public func close() throws
     {
+        guard !isClosed else { return }
+        
         let result = sqlite3_close(self.connectionHandle)
         
         guard result == SQLiteStatus.ok else {
             throw Error.failedToClose(SQLiteStatus(result))
         }
+        
+        isClosed = true
     }
+    
+    // This would be a good idea, but "Isolated deinit is only available in macOS 15.4.0 or newer"
+//    isolated deinit
+//    {
+//        if !isClosed {
+//            sqlite3_close(self.connectionHandle)
+//        }
+//    }
 }
