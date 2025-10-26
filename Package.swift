@@ -6,7 +6,7 @@ import CompilerPluginSupport
 
 let package = Package(
     name: "SwiftLite",
-    platforms: [.macOS(.v13), .iOS(.v16), .tvOS(.v16), .watchOS(.v9), .macCatalyst(.v16)],
+    platforms: [.macOS(.v14), .iOS(.v17), .tvOS(.v17), .watchOS(.v10), .macCatalyst(.v17)],
     products: [
         // Products define the executables and libraries a package produces, making them visible to other packages.
         .library(

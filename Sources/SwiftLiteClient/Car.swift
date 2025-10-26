@@ -1,7 +1,8 @@
 import SwiftLite
 import Foundation
+import Observation
 
-@Model final class Car
+@Observable @Model final class Car
 {
     static let customIndexes = [
         CompositeIndex<Car>(columns: ["name": \.name, "year": \.year])
