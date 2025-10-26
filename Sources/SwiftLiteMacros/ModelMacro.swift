@@ -123,6 +123,9 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
         addStaticStoredVariablesForDefaultValues(from: properties, to: &generatedDeclarations)
         
         if let tableName {
+            let columnsStructDecl = getColumnsStruct(properties: properties)
+            generatedDeclarations.append(columnsStructDecl)
+
             let tableDeclaration = getSchemaTable(tableName: tableName, properties: properties)
             generatedDeclarations.append(tableDeclaration)
 
@@ -174,6 +177,109 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
         generatedDeclarations.append(getSnapshotDecl(properties: properties))
 
         return generatedDeclarations
+    }
+    
+    static func getColumnsStruct(properties: [ModelConfiguration.Property]) -> DeclSyntax
+    {
+        let structName = "Columns"
+        let memberDeclList = MemberBlockItemListSyntax {
+            properties.map { property in
+
+                let positionExpression: ExprSyntax
+                if let position = property.positionInPrimaryKey {
+                    positionExpression = ExprSyntax(IntegerLiteralExprSyntax(integerLiteral: position))
+                } else {
+                    positionExpression = ExprSyntax(NilLiteralExprSyntax())
+                }
+                
+                let unwrappedTypeExpression = ExprSyntax(
+                    MemberAccessExprSyntax(
+                        base: TypeExprSyntax(type: property.unwrappedType),
+                        declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
+                    )
+                )
+                
+                // TODO: Make a decision if default values in SQLite are supported
+                let defaultValueExpression: ExprSyntax
+//                if let defaultValuePropertyName = property.defaultValuePropertyName {
+//                    defaultValueExpression = ExprSyntax(
+//                        MemberAccessExprSyntax(
+//                            base: TypeExprSyntax(type: property.unwrappedType),
+//                            declName: DeclReferenceExprSyntax(baseName: .init(stringLiteral: defaultValuePropertyName))
+//                        )
+//                    )
+//                } else {
+                    defaultValueExpression = ExprSyntax(NilLiteralExprSyntax())
+//                }
+
+                let functionCall = FunctionCallExprSyntax(
+                    calledExpression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("Schema.Column"))),
+                    leftParen: .leftParenToken(),
+                    arguments: LabeledExprListSyntax {
+                        LabeledExprSyntax(
+                            label: .identifier("name"),
+                            colon: .colonToken(),
+                            expression: StringLiteralExprSyntax(content: property.name)
+                        )
+                        LabeledExprSyntax(
+                            label: .identifier("type"),
+                            colon: .colonToken(),
+                            expression: unwrappedTypeExpression
+                        )
+                        LabeledExprSyntax(
+                            label: .identifier("positionInPrimaryKey"),
+                            colon: .colonToken(),
+                            expression: positionExpression
+                        )
+                        LabeledExprSyntax(
+                            label: .identifier("isNullable"),
+                            colon: .colonToken(),
+                            expression: ExprSyntax(literal: property.typeIsOptional)
+                        )
+                        LabeledExprSyntax(
+                            label: .identifier("defaultValue"),
+                            colon: .colonToken(),
+                            expression: defaultValueExpression
+                        )
+                    },
+                    rightParen: .rightParenToken()
+                )
+
+                let variableDecl = VariableDeclSyntax(
+                    modifiers: [DeclModifierSyntax(name: .keyword(.static))],
+                    bindingSpecifier: .keyword(.let),
+                    bindingsBuilder: {
+                        PatternBindingSyntax(
+                            pattern: IdentifierPatternSyntax(
+                                identifier: .identifier(property.name)
+                            ),
+                            initializer: InitializerClauseSyntax(
+                                equal: .equalToken(),
+                                value: ExprSyntax(functionCall)
+                            )
+                        )
+                    }
+                )
+
+                let member: MemberBlockItemSyntax = MemberBlockItemSyntax(
+                    decl: DeclSyntax(variableDecl),
+                    semicolon: nil
+                )
+                
+                return member
+            }
+        }
+
+        let structDecl = StructDeclSyntax(
+            name: .identifier(structName),
+            memberBlock: MemberBlockSyntax(
+                leftBrace: .leftBraceToken(),
+                members: memberDeclList,
+                rightBrace: .rightBraceToken()
+            )
+        )
+
+        return DeclSyntax(structDecl)
     }
     
     static func getFlatDecl(properties: [ModelConfiguration.Property]) -> DeclSyntax
@@ -414,7 +520,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
     {
         let columnInitializers: String = properties.map { p in
             """
-            .init(name: "\(p.columnName)", type: \(p.unwrappedType).self, positionInPrimaryKey: \(p.positionInPrimaryKey?.description ?? "nil"), isNullable: \(p.typeIsOptional), defaultValue: \(p.defaultValuePropertyName ?? "nil"))
+            Columns.\(p.name)
             """
         }.joined(separator: ",\n")
         
