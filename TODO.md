@@ -4,5 +4,4 @@
 - Make roundtrip tests for every datatype with different payloads including some with non-UTF-8 text
 - `@inline(__always)` some calls?
 - Decide if `Foundation` is required. If not, use something other than `UUID`. If it is, remove the `canImport` conditionals.
-- Support for `let` properties in models (that can only bet set once when initializing them)
 - Add a function to check the whole database (read every row into a `Model`)
