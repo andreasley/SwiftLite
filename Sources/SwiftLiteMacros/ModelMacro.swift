@@ -6,7 +6,8 @@ import SwiftDiagnostics
 public struct ModelMacro: MemberMacro, ExtensionMacro
 {
     static let primaryKeyFieldName = "id"
-    
+    static let databaseReferencePropertyName = "db"
+
     public static func expansion(of node: SwiftSyntax.AttributeSyntax, attachedTo declaration: some SwiftSyntax.DeclGroupSyntax, providingExtensionsOf type: some SwiftSyntax.TypeSyntaxProtocol, conformingTo protocols: [SwiftSyntax.TypeSyntax], in context: some SwiftSyntaxMacros.MacroExpansionContext) throws -> [SwiftSyntax.ExtensionDeclSyntax]
     {
         var generatedExtensions = [SwiftSyntax.ExtensionDeclSyntax]()
@@ -105,6 +106,16 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
 //        let tableName = classDecl?.name.text
         
 
+        // MARK: Database reference
+        // TODO: Check if there's already a property `db`; warn if so
+        
+        let dbDecl: DeclSyntax =
+        """
+        let db: SwiftLite.Database
+        """
+        generatedDeclarations.append(dbDecl)
+
+        
         // MARK: ID
         // TODO: Check if there's already a property `id`; warn if so
         
@@ -113,7 +124,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
         let id: UUID
         """
         generatedDeclarations.append(idDecl)
-        
+
         
         // MARK: Entity
         // The entity details are required in the compiled app to check the schema and execute migrations if necessary.
@@ -287,23 +298,9 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
         let structName = "ReadOnlyFlatSnapshot"
         let initDecl = initializerForObjectFromDatabase(properties: properties, skipRelations: true)
         let memberDeclList = MemberBlockItemListSyntax {
+            MemberBlockItemSyntax(.let, name: databaseReferencePropertyName, type: "SwiftLite.Database")
             for property in properties.filter({ $0.isRelated == false }) {
-                MemberBlockItemSyntax(
-                    decl: VariableDeclSyntax(
-                        bindingSpecifier: .keyword(.let),
-                        bindingsBuilder: {
-                            PatternBindingSyntax(
-                                pattern: IdentifierPatternSyntax(
-                                    identifier: .identifier(property.name)
-                                ),
-                                typeAnnotation: TypeAnnotationSyntax(
-                                    colon: .colonToken(),
-                                    type: property.type
-                                )
-                            )
-                        }
-                    )
-                )
+                MemberBlockItemSyntax(.let, name: property.name, type: property.type)
             }
             initDecl
         }
@@ -314,9 +311,9 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
                 InheritedTypeSyntax(
                     type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Sendable")))
                 )
-                InheritedTypeSyntax(
-                    type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Codable")))
-                )
+//                InheritedTypeSyntax(
+//                    type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Codable")))
+//                )
                 InheritedTypeSyntax(
                     type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("InitializableFromResultRow")))
                 )
@@ -341,23 +338,9 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
         let structName = "ReadOnlySnapshot"
         let initDecl = initializerForObjectFromDatabase(properties: properties)
         let memberDeclList = MemberBlockItemListSyntax {
+            MemberBlockItemSyntax(.let, name: databaseReferencePropertyName, type: "SwiftLite.Database")
             for property in properties {
-                MemberBlockItemSyntax(
-                    decl: VariableDeclSyntax(
-                        bindingSpecifier: .keyword(.let),
-                        bindingsBuilder: {
-                            PatternBindingSyntax(
-                                pattern: IdentifierPatternSyntax(
-                                    identifier: .identifier(property.name)
-                                ),
-                                typeAnnotation: TypeAnnotationSyntax(
-                                    colon: .colonToken(),
-                                    type: property.typeForConstantInSnapshot
-                                )
-                            )
-                        }
-                    )
-                )
+                MemberBlockItemSyntax(.let, name: property.name, type: property.typeForConstantInSnapshot)
             }
             initDecl
         }
@@ -368,9 +351,9 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
                 InheritedTypeSyntax(
                     type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Sendable")))
                 )
-                InheritedTypeSyntax(
-                    type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Codable")))
-                )
+//                InheritedTypeSyntax(
+//                    type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Codable")))
+//                )
                 InheritedTypeSyntax(
                     type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("InitializableFromResultRow")))
                 )
@@ -397,7 +380,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
         
         let primaryKeyIdProperty = ModelConfiguration.Property(name: primaryKeyFieldName, columnName: .init(stringLiteral: primaryKeyFieldName), type: "UUID", positionInPrimaryKey: 0)
         properties.append(primaryKeyIdProperty)
-        
+
         for member in declaration.memberBlock.members {
             
             // Only variable declarations are to be processed
@@ -563,6 +546,16 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
         var parameters = [FunctionParameterSyntax]()
         var assignments = [CodeBlockItemSyntax]()
         
+        let dbParameterSyntax = FunctionParameterSyntax(
+            firstName: "db",
+            colon: .colonToken(trailingTrivia: .space),
+            type: TypeSyntax("SwiftLite.Database")
+        )
+        parameters.append(dbParameterSyntax)
+
+        let dbAssignment = CodeBlockItemSyntax(item: .expr("self.db = db"))
+        assignments.append(dbAssignment)
+
         for property in properties {
             if property.name == primaryKeyFieldName {
                 // The default UUID primary key is always autogenerated
@@ -597,6 +590,9 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
     {
         var assignments = [CodeBlockItemSyntax]()
         
+        let dbAssignment = CodeBlockItemSyntax(item: .expr("self.db = db"))
+        assignments.append(dbAssignment)
+
         var index = 0
         for property in properties {
             
@@ -619,6 +615,11 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
                 firstName: "row",
                 colon: .colonToken(trailingTrivia: .space),
                 type: TypeSyntax("SQLiteQueryResult")
+            )
+            FunctionParameterSyntax(
+                firstName: "db",
+                colon: .colonToken(trailingTrivia: .space),
+                type: TypeSyntax("SwiftLite.Database")
             )
         }
         

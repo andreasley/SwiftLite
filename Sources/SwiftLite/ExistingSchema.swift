@@ -29,7 +29,7 @@ public enum ExistingSchema
         
         public let isUserDefined: Bool
         
-        public init(row: SQLiteQueryResult) throws
+        public init(row: SQLiteQueryResult, db: Database) throws
         {
             // See https://sqlite.org/pragma.html#pragma_table_list
             /*
@@ -63,7 +63,7 @@ public enum ExistingSchema
         public let isNullable: Bool
         public let defaultValue: String?
         
-        public init(row: SQLiteQueryResult) throws
+        public init(row: SQLiteQueryResult, db: Database) throws
         {
             // See https://sqlite.org/pragma.html#pragma_table_info
             /* Columns in the (SQLite) result set include:
@@ -106,7 +106,7 @@ public enum ExistingSchema
         public let isPartial: Bool
         public let columns: [String]
         
-        public init(row: SQLiteQueryResult) throws
+        public init(row: SQLiteQueryResult, db: Database) throws
         {
             // See https://sqlite.org/pragma.html#pragma_index_list
             /* Output columns from the index_list pragma are as follows:
@@ -148,7 +148,7 @@ public enum ExistingSchema
         public let columnId: Int32
         public let name: String?
 
-        public init(row: SQLiteQueryResult) throws
+        public init(row: SQLiteQueryResult, db: Database) throws
         {
             // See https://sqlite.org/pragma.html#pragma_index_info
             /* Output columns from the index_info pragma are as follows:

@@ -9,8 +9,8 @@ try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediate
 
 let db = try Database(storage: .file(fileUrl))
 try await db.register(models: Car.self)
-let car = Car(name: "test")
-try await db.save(car)
+let car = Car(name: "test", db: db)
+try await car.save()
 
 let cars = try await db.snapshots(for: Car.self)
 

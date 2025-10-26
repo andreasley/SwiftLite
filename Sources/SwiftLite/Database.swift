@@ -156,7 +156,7 @@ public actor Database
         
         while sqlite3_step(statement) == SQLITE_ROW, let statement {
             let resultRow = SQLiteQueryResult(statement: statement)
-            let object = try T(row: resultRow)
+            let object = try T(row: resultRow, db: self)
             results.append(object)
             
             // TODO: To throw here means a result can't be fetched if any field of any row can't be converted as expected. The alternative is to skip one row and log the problem. Decide which is better and implement accordingly.

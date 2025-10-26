@@ -1,4 +1,4 @@
 public protocol InitializableFromResultRow
 {
-    init(row: SQLiteQueryResult) throws
+    init(row: SQLiteQueryResult, db: Database) throws
 }

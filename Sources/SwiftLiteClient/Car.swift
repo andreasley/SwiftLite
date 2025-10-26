@@ -23,9 +23,9 @@ import Observation
     @Stored(defaultValue: 0.1)
     var 😗: Decimal
 
-    convenience init(name: String)
+    convenience init(name: String, db: Database)
     {
-        self.init(name: name, year: 2025)
+        self.init(db: db, name: name, year: 2025)
     }
 }
 
