@@ -38,7 +38,7 @@ public struct Database
     public init(storage: StorageType, cacheSizeLimit: CacheSize? = nil) throws
     {
         var pointer: OpaquePointer?
-        var flags = [SQLITE_OPEN_READWRITE, SQLITE_OPEN_CREATE]
+        var flags = [SQLITE_OPEN_READWRITE, SQLITE_OPEN_CREATE, SQLITE_OPEN_FULLMUTEX] // see https://sqlite.org/c3ref/open.html
         var filename: String?
         
         if case .file(let url) = storage {
