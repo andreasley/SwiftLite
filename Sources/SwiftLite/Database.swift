@@ -161,9 +161,9 @@ public struct Database
         return objects
     }
 
-    func updateTableIfNecessary(existingTable: ExistingSchema.Table, model: Model.Type) throws
     {
         
+    func updateTableIfNecessary(existingTable: ExistingSchema.Table, model: any Model.Type) throws
         // TODO: Implement
 
 //        // Compare columns
@@ -178,7 +178,7 @@ public struct Database
 //        let existingIndexes = try getIndexes(tableName: existingTable.name)
     }
     
-    func createTable(model: Model.Type) throws
+    func createTable(model: any Model.Type) throws
     {
         let createTableStatement = createTableStatement(for: model.table)
         let createIndexStatements = createIndexStatements(for: model.table)
