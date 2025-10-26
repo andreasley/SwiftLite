@@ -161,9 +161,15 @@ public struct Database
         return objects
     }
 
+    public func save(_ models: any Model...) throws
     {
+        // TODO: Follow relations and save these objects (if there are changes)
         
+        
+    }
+
     func updateTableIfNecessary(existingTable: ExistingSchema.Table, model: any Model.Type) throws
+    {
         // TODO: Implement
 
 //        // Compare columns

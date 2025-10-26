@@ -10,6 +10,7 @@ try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediate
 let db = try Database(storage: .file(fileUrl))
 try db.register(models: Car.self)
 let car = Car(name: "test")
+try db.save(car)
 
 let cars = try db.snapshots(for: Car.self)
 
