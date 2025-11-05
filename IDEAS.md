@@ -1,0 +1,6 @@
+- Full text search
+- Hooks (e.g. before/after saving)
+- Automatic versioning of data
+- User management, access controls, access logging
+- Binary attachments (stored in filesystem; deleted when respective model is deleted)
+- Automatically generated previews for binary attachments
