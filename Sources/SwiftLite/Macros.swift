@@ -9,6 +9,7 @@ public macro stringify<T>(_ value: T) -> (T, String) = #externalMacro(module: "S
 
 // TODO: Limit names to actually used ones
 // TODO: Add parameters for table name and perhaps other table configuration (like `STRICT`)
+@attached(memberAttribute)
 @attached(member, names: arbitrary)
 @attached(extension, conformances: SwiftLite.Model)
 public macro Model(tableName: String? = nil) = #externalMacro(module: "SwiftLiteMacros", type: "ModelMacro")
@@ -25,3 +26,7 @@ public macro Transient() = #externalMacro(module: "SwiftLiteMacros", type: "Tran
 
 @attached(peer)
 public macro File() = #externalMacro(module: "SwiftLiteMacros", type: "FileMacro")
+
+@attached(peer, names: arbitrary)
+@attached(accessor, names: named(get), named(set))
+public macro Backed() = #externalMacro(module: "SwiftLiteMacros", type: "BackedMacro")

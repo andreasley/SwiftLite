@@ -3,12 +3,66 @@ import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 import SwiftDiagnostics
 
-public struct ModelMacro: MemberMacro, ExtensionMacro
+public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
 {
+    
+    // MARK: MemberAttributeMacro
+    
+    public static func expansion(
+        of node: SwiftSyntax.AttributeSyntax,
+        attachedTo declaration: some SwiftSyntax.DeclGroupSyntax,
+        providingAttributesFor member: some SwiftSyntax.DeclSyntaxProtocol,
+        in context: some SwiftSyntaxMacros.MacroExpansionContext
+    ) throws -> [SwiftSyntax.AttributeSyntax]
+    {
+        
+        // Check if the member is a variable declaration
+        guard let varDecl = member.as(VariableDeclSyntax.self) else {
+            return []
+        }
+        
+        // Check if it's a 'var' (not 'let')
+        guard varDecl.bindingSpecifier.tokenKind == .keyword(.var) else {
+            return []
+        }
+        
+        // Check if @Backed is already applied
+        let hasAttribute = varDecl.attributes.contains { attribute in
+            guard case let .attribute(attr) = attribute else { return false }
+            return attr.attributeName.as(IdentifierTypeSyntax.self)?.name.text == "Backed"
+        }
+        
+        if hasAttribute {
+            return []
+        }
+        
+        var declarations = [SwiftSyntax.AttributeSyntax]()
+        
+        declarations.append(AttributeSyntax(attributeName: IdentifierTypeSyntax(name: .identifier("Backed"))))
+        
+        let hasObservable = declaration.attributes.contains { attribute in
+            guard case let .attribute(attr) = attribute else { return false }
+            return attr.attributeName.as(IdentifierTypeSyntax.self)?.name.text == "Observable"
+        }
+        
+        if hasObservable {
+            // Add `@ObservationIgnored` to prevent `@Observable` adding `@ObservationTracked`, which adds a getter/setter (thereby conflicting with the getter/setter added by SwiftLite's `@Backed`.
+            declarations.append(AttributeSyntax(attributeName: IdentifierTypeSyntax(name: .identifier("ObservationIgnored"))))
+        }
+
+        return declarations
+    }
+    
     static let primaryKeyFieldName = "id"
     static let databaseReferencePropertyName = "db"
 
-    public static func expansion(of node: SwiftSyntax.AttributeSyntax, attachedTo declaration: some SwiftSyntax.DeclGroupSyntax, providingExtensionsOf type: some SwiftSyntax.TypeSyntaxProtocol, conformingTo protocols: [SwiftSyntax.TypeSyntax], in context: some SwiftSyntaxMacros.MacroExpansionContext) throws -> [SwiftSyntax.ExtensionDeclSyntax]
+    public static func expansion(
+        of node: SwiftSyntax.AttributeSyntax,
+        attachedTo declaration: some SwiftSyntax.DeclGroupSyntax,
+        providingExtensionsOf type: some SwiftSyntax.TypeSyntaxProtocol,
+        conformingTo protocols: [SwiftSyntax.TypeSyntax],
+        in context: some SwiftSyntaxMacros.MacroExpansionContext
+    ) throws -> [SwiftSyntax.ExtensionDeclSyntax]
     {
         var generatedExtensions = [SwiftSyntax.ExtensionDeclSyntax]()
         
@@ -85,7 +139,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
         }
     }
     
-    public static func expansion(of node: AttributeSyntax, providingMembersOf declaration: some DeclGroupSyntax, in context: some MacroExpansionContext) throws -> [DeclSyntax]
+    static public func expansion(of node: AttributeSyntax, providingMembersOf declaration: some DeclGroupSyntax, conformingTo protocols: [TypeSyntax], in context: some MacroExpansionContext) throws -> [DeclSyntax]
     {
         var diagnostics: [Diagnostic] = []
         var generatedDeclarations: [DeclSyntax] = []
@@ -147,6 +201,70 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
             generatedDeclarations.append(defaultSelectStatement)
         }
 
+        // MARK: Tracking value changes
+        
+        if let className = classDecl?.name.description {
+            let changeCollectionDecl: DeclSyntax =
+            """
+            private var _changes = ObjectChangelog<\(raw: className)>()
+            """
+
+            generatedDeclarations.append(changeCollectionDecl)
+        } else {
+            // TODO: Show error
+        }
+        
+//        var newMembers: [DeclSyntax] = []
+//
+//        for member in declaration.memberBlock.members
+//        {
+//            guard let variable = member.decl.as(VariableDeclSyntax.self),
+//                  variable.bindingSpecifier.tokenKind == .keyword(.var),
+//                  !variable.modifiers.contains(where: { $0.name.text == "private" && $0.name.text.hasPrefix("_") })
+//            else {
+//                continue
+//            }
+//            
+//            for binding in variable.bindings {
+//                guard let identifier = binding.pattern.as(IdentifierPatternSyntax.self),
+//                      let type = binding.typeAnnotation?.type
+//                else {
+//                    continue
+//                }
+//                
+//                let propertyName = identifier.identifier.text
+//                let propertyType = type.trimmedDescription
+//                let backingName = "_\(propertyName)"
+//                
+//                // Create backing storage
+//                newMembers.append(
+//                    """
+//                    private var \(raw: backingName): \(raw: propertyType)
+//                    """
+//                )
+//                
+//                // Create computed property with change tracking
+//                let computedProperty: DeclSyntax =
+//                    """
+//                    public var \(raw: propertyName): \(raw: propertyType) {
+//                        get {
+//                            return \(raw: backingName)
+//                        }
+//                        set {
+//                            \(raw: backingName) = newValue
+//                            _changes.append(PropertyChange(
+//                                propertyName: "\(raw: propertyName)",
+//                                value: newValue
+//                            ))
+//                        }
+//                    }
+//                    """
+//                
+//                newMembers.append(computedProperty)
+//            }
+//        }
+//
+        
         
         // MARK: Initializers
         
@@ -162,7 +280,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
         let initNewDecl = initializerForNewObject(properties: properties)
         generatedDeclarations.append(DeclSyntax(initNewDecl))
         
-        let initFromResultDecl = initializerForObjectFromDatabase(properties: properties)
+        let initFromResultDecl = initializerForObjectFromDatabase(properties: properties, useBackingField: true)
         generatedDeclarations.append(DeclSyntax(initFromResultDecl))
         
         // MARK: Create Table statement
@@ -296,7 +414,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
     static func getFlatDecl(properties: [ModelConfiguration.Property]) -> DeclSyntax
     {
         let structName = "ReadOnlyFlatSnapshot"
-        let initDecl = initializerForObjectFromDatabase(properties: properties, skipRelations: true)
+        let initDecl = initializerForObjectFromDatabase(properties: properties, skipRelations: true, useBackingField: false)
         let memberDeclList = MemberBlockItemListSyntax {
             MemberBlockItemSyntax(.let, name: databaseReferencePropertyName, type: "SwiftLite.Database")
             for property in properties.filter({ $0.isRelated == false }) {
@@ -336,7 +454,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
     static func getSnapshotDecl(properties: [ModelConfiguration.Property]) -> DeclSyntax
     {
         let structName = "ReadOnlySnapshot"
-        let initDecl = initializerForObjectFromDatabase(properties: properties)
+        let initDecl = initializerForObjectFromDatabase(properties: properties, useBackingField: false)
         let memberDeclList = MemberBlockItemListSyntax {
             MemberBlockItemSyntax(.let, name: databaseReferencePropertyName, type: "SwiftLite.Database")
             for property in properties {
@@ -378,7 +496,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
     {
         var properties = [ModelConfiguration.Property]()
         
-        let primaryKeyIdProperty = ModelConfiguration.Property(name: primaryKeyFieldName, columnName: .init(stringLiteral: primaryKeyFieldName), type: "UUID", positionInPrimaryKey: 0)
+        let primaryKeyIdProperty = ModelConfiguration.Property(name: primaryKeyFieldName, backingProperty: primaryKeyFieldName, columnName: .init(stringLiteral: primaryKeyFieldName), type: "UUID", positionInPrimaryKey: 0)
         properties.append(primaryKeyIdProperty)
 
         for member in declaration.memberBlock.members {
@@ -473,8 +591,17 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
                 continue
             }
             
+            let backingProperty: String
+            // TODO: Extract this check and name for the backing property
+            let needsBackingProperty = varDecl.bindingSpecifier.tokenKind == .keyword(.var)
+            if needsBackingProperty {
+                backingProperty = "_\(name)"
+            } else {
+                backingProperty = name
+            }
+            
             let columnName = columnNameExpr ?? "\(raw: name)"
-            properties.append(.init(name: name, columnName: columnName, type: type, positionInPrimaryKey: nil, isUnique: isUnique, isIndexed: isIndexed, isRelated: isRelated, defaultValue: defaultValueExpr, defaultValuePropertyName: defaultValuePropertyName))
+            properties.append(.init(name: name, backingProperty: backingProperty, columnName: columnName, type: type, positionInPrimaryKey: nil, isUnique: isUnique, isIndexed: isIndexed, isRelated: isRelated, defaultValue: defaultValueExpr, defaultValuePropertyName: defaultValuePropertyName))
             
             
             // Initial values for properties aren't supported in SwiftLite, because they make it impossible to set the value for `let` properties in the initializer (which is what is required when initializing a model from database results)
@@ -570,7 +697,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
                 )
                 parameters.append(functionParameterSyntax)
                 
-                let assignment = CodeBlockItemSyntax(item: .expr("self.\(raw: property.name) = \(raw: property.name)"))
+                let assignment = CodeBlockItemSyntax(item: .expr("self.\(raw: property.backingProperty) = \(raw: property.name)"))
                 assignments.append(assignment)
             }
         }
@@ -586,7 +713,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
         return initDecl
     }
     
-    static func initializerForObjectFromDatabase(properties: [ModelConfiguration.Property], skipRelations: Bool = false) -> InitializerDeclSyntax
+    static func initializerForObjectFromDatabase(properties: [ModelConfiguration.Property], skipRelations: Bool = false, useBackingField: Bool) -> InitializerDeclSyntax
     {
         var assignments = [CodeBlockItemSyntax]()
         
@@ -599,13 +726,12 @@ public struct ModelMacro: MemberMacro, ExtensionMacro
             guard !property.isRelated else {
                 if !skipRelations {
                     // TODO: Implement fetching of related objects
-                    let assignment = CodeBlockItemSyntax(item: .expr("self.\(raw: property.name) = nil"))
+                    let assignment = CodeBlockItemSyntax(item: .expr("self.\(raw: useBackingField ? property.backingProperty : property.name) = nil"))
                     assignments.append(assignment)
                 }
                 continue
             }
-            
-            let assignment = CodeBlockItemSyntax(item: .expr("self.\(raw: property.name) = try row.getStoredValue(index: \(raw: index))"))
+            let assignment = CodeBlockItemSyntax(item: .expr("self.\(raw: useBackingField ? property.backingProperty : property.name) = try row.getStoredValue(index: \(raw: index))"))
             assignments.append(assignment)
             index += 1
         }

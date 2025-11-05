@@ -30,6 +30,7 @@ public struct ModelConfiguration: Sendable
         }
         
         let name: String
+        let backingProperty: String
         let columnName: ExprSyntax
         let type: TypeSyntax
         let unwrappedType: TypeSyntax
@@ -41,11 +42,12 @@ public struct ModelConfiguration: Sendable
         let defaultValue: ExprSyntax?
         let defaultValuePropertyName: String?
         
-        init(name: String, columnName: ExprSyntax, type: TypeSyntax, positionInPrimaryKey: Int? = nil, isUnique: Bool = false, isIndexed: Bool = false, isRelated: Bool = false, defaultValue: ExprSyntax? = nil, defaultValuePropertyName: String? = nil)
+        init(name: String, backingProperty: String, columnName: ExprSyntax, type: TypeSyntax, positionInPrimaryKey: Int? = nil, isUnique: Bool = false, isIndexed: Bool = false, isRelated: Bool = false, defaultValue: ExprSyntax? = nil, defaultValuePropertyName: String? = nil)
         {
             (self.unwrappedType, self.typeIsOptional) = type.unwrapOptional()
 
             self.name = name
+            self.backingProperty = backingProperty
             self.type = type
             self.columnName = columnName
             self.positionInPrimaryKey = positionInPrimaryKey

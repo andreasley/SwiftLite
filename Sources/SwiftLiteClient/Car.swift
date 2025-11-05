@@ -2,7 +2,7 @@ import SwiftLite
 import Foundation
 import Observation
 
-@Observable @Model final class Car
+@Model final class Car
 {
     static let customIndexes = [
         CompositeIndex<Car>(columns: ["name": \.name, "year": \.year])
@@ -11,6 +11,7 @@ import Observation
     @Stored(defaultValue: UUID(), isUnique: true, isIndexed: true)
     let publicId: UUID
     
+    @Stored
     var name: String
     
     var year: Int

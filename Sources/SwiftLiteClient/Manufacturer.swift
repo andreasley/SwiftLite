@@ -5,6 +5,6 @@ import Foundation
 {
     @Stored(defaultValue: UUID(), isUnique: true)
     let publicId: UUID
-    
+
     var name: String
 }

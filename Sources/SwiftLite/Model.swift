@@ -36,3 +36,31 @@ extension Model
         fatalError("Not implemented")
     }
 }
+
+protocol AnyPropertyChange
+{
+    
+}
+
+struct PropertyChange<T: Model, V>: @unchecked Sendable, AnyPropertyChange
+{
+    let date = Date.now
+    let id = UUID()
+    let keyPath: WritableKeyPath<T, V>
+    let value: V
+}
+
+public class ObjectChangelog<T: Model>
+{
+    typealias Model = T
+    
+    var changes = [PartialKeyPath<Model>: AnyPropertyChange]()
+    
+    public init() {}
+    
+    public func log<V>(keyPath: WritableKeyPath<T, V>, value: V)
+    {
+        let change = PropertyChange(keyPath: keyPath, value: value)
+        changes[keyPath] = change
+    }
+}
