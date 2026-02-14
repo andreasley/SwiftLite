@@ -6,3 +6,5 @@
 - Decide if `Foundation` is required. If not, use something other than `UUID`. If it is, remove the `canImport` conditionals.
 - Add a function to check the whole database (read every row into a `Model`)
 - Make property update behaviour configurable, e.g. override OR keep unsaved changes in a model when the respective field is updated by a sync
+- Use `PRAGMA checksum_verification` and/or `PRAGMA page_checksum`?
+- When to do `PRAGMA integrity_check` or `PRAGMA quick_check`? 
