@@ -1,66 +1,73 @@
 import Foundation
 
-public protocol Model: InitializableFromResultRow
+public nonisolated protocol Model: AnyObject, Fetchable, Observable, @MainActor AutosavingModel, @MainActor AutoupdatingModel, Saveable
 {
-    associatedtype Snapshot: InitializableFromResultRow
-    associatedtype FlatSnapshot: InitializableFromResultRow
+    associatedtype Model = Self
+    associatedtype QueryProxy: WithNamedKeyPaths
+    associatedtype Snapshot: ModelSnapshot
+    associatedtype Schema: ModelSchema
     
-    var db: Database { get }
-    var id: UUID { get }
-    static var table: Schema.Table { get }
-    static var __defaultSelectStatement: String { get }
+    var _metadata: ModelMetadata { get }
+    
+    func _cascadeDeletion()
 }
 
-extension Model
+public nonisolated extension Model
 {
-    public func refresh() async throws
+    nonisolated(nonsending) func save() async throws
     {
-        // TODO: Implement
-        fatalError("Not implemented")
+        self._metadata.autosaveTask?.cancel()
+        
+        guard _hasPendingChanges else { return }
+        
+        try await _metadata.db.prepareWriteTransaction { transaction in
+            var success = false
+            let changeset = Changeset()
+            try self._beginSaving(transaction: transaction, changeset: changeset)
+            defer { self._endSaving(success: success, transaction: transaction) }
+            if changeset.needsSaving {
+                let frozenChangeset = FrozenChangeset(changes: changeset.changes)
+                try await transaction.db.save(changeset: frozenChangeset)
+            }
+            success = true
+        }
     }
-    
-    public func snapshot() async throws -> Snapshot
+
+    nonisolated(nonsending) func delete() async throws
     {
-        // TODO: Implement
-        fatalError("Not implemented")
+        _cascadeDeletion()
+        try await self.save()
     }
-    
-    public func save() async throws
+
+    nonisolated(nonsending) func update<V>(field: String, writableKeyPath: ReferenceWritableKeyPath<Self, V>, newValue: SQLValue?) async throws where V: SQLValueConvertible
     {
-        try await db.save(self)
-    }
-    
-    public func revert() async throws
-    {
-        // TODO: Implement
-        fatalError("Not implemented")
+        guard let newValue else { return }
+        guard _metadata.hasNoPendingChange(for: field) else { return }
+        let value: V = try await .init(db: self._metadata.db, sqlValue: newValue)
+        self[keyPath: writableKeyPath] = value
     }
 }
 
-protocol AnyPropertyChange
+public extension Model where Self: AutoupdatingModel
 {
-    
-}
-
-struct PropertyChange<T: Model, V>: @unchecked Sendable, AnyPropertyChange
-{
-    let date = Date.now
-    let id = UUID()
-    let keyPath: WritableKeyPath<T, V>
-    let value: V
-}
-
-public class ObjectChangelog<T: Model>
-{
-    typealias Model = T
-    
-    var changes = [PartialKeyPath<Model>: AnyPropertyChange]()
-    
-    public init() {}
-    
-    public func log<V>(keyPath: WritableKeyPath<T, V>, value: V)
+    nonisolated func _beginAutoupdatingIfOnMainActor()
     {
-        let change = PropertyChange(keyPath: keyPath, value: value)
-        changes[keyPath] = change
+        guard Thread.isMainThread else { return }
+        nonisolated(unsafe) let unsafeSelf = self
+        MainActor.assumeIsolated {
+            unsafeSelf._metadata._beginAutoupdating(model: unsafeSelf)
+        }
     }
+}
+
+public extension Model
+{
+    var hasBeenDeletedFromDatabase: Bool { _metadata.objectStatus == .deleted }
+}
+
+public nonisolated enum ModelSavingError: Swift.Error {
+    case alreadySaving
+    case wrongDatabase
+    case directSavingNotSupported
+    case updatingNotSupported
 }

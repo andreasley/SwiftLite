@@ -1,4 +1,4 @@
-extension Int: StorageConvertible.Integer
+nonisolated extension Int: StorageConvertible.Integer
 {
     public var storageValue: Int64 {
         Int64(self)
@@ -13,7 +13,7 @@ extension Int: StorageConvertible.Integer
     }
 }
 
-extension Int8: StorageConvertible.Integer
+nonisolated extension Int8: StorageConvertible.Integer
 {
     public var storageValue: Int64 {
         Int64(self)
@@ -28,7 +28,7 @@ extension Int8: StorageConvertible.Integer
     }
 }
 
-extension Int16: StorageConvertible.Integer
+nonisolated extension Int16: StorageConvertible.Integer
 {
     public var storageValue: Int64 {
         Int64(self)
@@ -43,7 +43,7 @@ extension Int16: StorageConvertible.Integer
     }
 }
 
-extension Int32: StorageConvertible.Integer
+nonisolated extension Int32: StorageConvertible.Integer
 {
     public var storageValue: Int64 {
         Int64(self)
@@ -58,7 +58,7 @@ extension Int32: StorageConvertible.Integer
     }
 }
 
-extension Int64: StorageConvertible.Integer
+nonisolated extension Int64: StorageConvertible.Integer
 {
     public var storageValue: Int64 {
         self
@@ -70,7 +70,7 @@ extension Int64: StorageConvertible.Integer
     }
 }
 
-extension UInt: StorageConvertible.Integer
+nonisolated extension UInt: StorageConvertible.Integer
 {
     public var storageValue: Int64 {
         Int64(self)
@@ -85,7 +85,7 @@ extension UInt: StorageConvertible.Integer
     }
 }
 
-extension UInt8: StorageConvertible.Integer
+nonisolated extension UInt8: StorageConvertible.Integer
 {
     public var storageValue: Int64 {
         Int64(self)
@@ -100,7 +100,7 @@ extension UInt8: StorageConvertible.Integer
     }
 }
 
-extension UInt16: StorageConvertible.Integer
+nonisolated extension UInt16: StorageConvertible.Integer
 {
     public var storageValue: Int64 {
         Int64(self)
@@ -115,7 +115,7 @@ extension UInt16: StorageConvertible.Integer
     }
 }
 
-extension UInt32: StorageConvertible.Integer
+nonisolated extension UInt32: StorageConvertible.Integer
 {
     public var storageValue: Int64 {
         Int64(self)
@@ -131,7 +131,7 @@ extension UInt32: StorageConvertible.Integer
 }
 
 // Store UInt64 by flipping the top bit (thereby shifting the value into the range of an Int64). This way it's possible to store the value in the (same-sized) `INTEGER` column and keep the ability to INDEX and ORDER.
-extension UInt64: StorageConvertible.Integer
+nonisolated extension UInt64: StorageConvertible.Integer
 {
     public var storageValue: Int64 {
         // Flip the top bit to map from UInt64 to Int64
@@ -146,30 +146,29 @@ extension UInt64: StorageConvertible.Integer
 }
 
 
-@available(macOS 15.0, *)
-extension Int128: StorageConvertible.Blob
-{
-    // TODO
-    public var storageValue: UnsafeRawPointer {
-        fatalError("Not implemented")
-    }
-    
-    public init(storageValue: UnsafeRawPointer)
-    {
-        fatalError("Not implemented")
-    }
-}
-
-@available(macOS 15.0, *)
-extension UInt128: StorageConvertible.Blob
-{
-    // TODO
-    public var storageValue: UnsafeRawPointer {
-        fatalError("Not implemented")
-    }
-
-    public init(storageValue: UnsafeRawPointer)
-    {
-        fatalError("Not implemented")
-    }
-}
+// TODO: Implement?
+//@available(macOS 15.0, *)
+//nonisolated extension Int128: StorageConvertible.Blob
+//{
+//    public var storageValue: UnsafeRawPointer {
+//        fatalError("Not implemented")
+//    }
+//    
+//    public init(storageValue: UnsafeRawPointer)
+//    {
+//        fatalError("Not implemented")
+//    }
+//}
+//
+//@available(macOS 15.0, *)
+//nonisolated extension UInt128: StorageConvertible.Blob
+//{
+//    public var storageValue: UnsafeRawPointer {
+//        fatalError("Not implemented")
+//    }
+//
+//    public init(storageValue: UnsafeRawPointer)
+//    {
+//        fatalError("Not implemented")
+//    }
+//}

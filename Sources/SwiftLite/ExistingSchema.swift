@@ -1,10 +1,9 @@
 import SQLite3
 
-public enum ExistingSchema
+public nonisolated enum ExistingSchema
 {
     public struct Table: Sendable, InitializableFromResultRow, Hashable
     {
-        
         public enum TableType: String, Sendable, StorageConvertible.Text {
             public var storageValue: String { rawValue }
             
@@ -29,7 +28,7 @@ public enum ExistingSchema
         
         public let isUserDefined: Bool
         
-        public init(row: SQLiteQueryResult, db: Database) throws
+        public init(db: Database, row: Database.Row) throws
         {
             // See https://sqlite.org/pragma.html#pragma_table_list
             /*
@@ -43,12 +42,12 @@ public enum ExistingSchema
              Additional columns will likely be added in future releases.
              */
             
-            self.schema = try row.getStoredValue(index: 0)
-            self.name = try row.getStoredValue(index: 1)
-            self.type = try row.getStoredValue(index: 2)
-            self.numberOfColumns = try row.getStoredValue(index: 3)
-            self.isWithoutRowId = try row.getStoredValue(index: 4)
-            self.isStrict = try row.getStoredValue(index: 5)
+            self.schema = try row.get("schema")
+            self.name = try row.get("name")
+            self.type = try row.get("type")
+            self.numberOfColumns = try row.get("ncol")
+            self.isWithoutRowId = try row.get("wr")
+            self.isStrict = try row.get("strict")
             
             self.isUserDefined = (!name.hasPrefix("sqlite_") && schema == "main")
         }
@@ -63,7 +62,7 @@ public enum ExistingSchema
         public let isNullable: Bool
         public let defaultValue: String?
         
-        public init(row: SQLiteQueryResult, db: Database) throws
+        public init(db: Database, row: Database.Row) throws
         {
             // See https://sqlite.org/pragma.html#pragma_table_info
             /* Columns in the (SQLite) result set include:
@@ -74,12 +73,12 @@ public enum ExistingSchema
              - "pk": either zero for columns that are not part of the primary key, or the 1-based index of the column within the primary key
              */
             
-            self.columnId = try row.getStoredValue(index: 0)
-            self.name = try row.getStoredValue(index: 1)
-            self.storageClass = try row.getStoredValue(index: 2)
-            self.isNullable = try row.getStoredValue(index: 3)
-            self.defaultValue = try row.getStoredValue(index: 4)
-            self.positionInPrimaryKey = try row.getStoredValue(index: 5)
+            self.columnId = try row.get("cid")
+            self.name = try row.get("name")
+            self.storageClass = try row.get("type")
+            self.isNullable = try row.get("notnull")
+            self.defaultValue = try row.get("dflt_value")
+            self.positionInPrimaryKey = try row.get("pk")
         }
     }
     
@@ -106,7 +105,7 @@ public enum ExistingSchema
         public let isPartial: Bool
         public let columns: [String]
         
-        public init(row: SQLiteQueryResult, db: Database) throws
+        public init(db: Database, row: Database.Row) throws
         {
             // See https://sqlite.org/pragma.html#pragma_index_list
             /* Output columns from the index_list pragma are as follows:
@@ -118,11 +117,11 @@ public enum ExistingSchema
              - "1" if the index is a partial index and "0" if not.
              */
             
-            self.sequence = try row.getStoredValue(index: 0)
-            self.name = try row.getStoredValue(index: 1)
-            self.isUnique = try row.getStoredValue(index: 2)
-            self.origin = try row.getStoredValue(index: 3)
-            self.isPartial = try row.getStoredValue(index: 4)
+            self.sequence = try row.get("seq")
+            self.name = try row.get("name")
+            self.isUnique = try row.get("unique")
+            self.origin = try row.get("origin")
+            self.isPartial = try row.get("partial")
             self.columns = []
         }
         
@@ -148,7 +147,7 @@ public enum ExistingSchema
         public let columnId: Int32
         public let name: String?
 
-        public init(row: SQLiteQueryResult, db: Database) throws
+        public init(db: Database, row: Database.Row) throws
         {
             // See https://sqlite.org/pragma.html#pragma_index_info
             /* Output columns from the index_info pragma are as follows:
@@ -158,9 +157,9 @@ public enum ExistingSchema
              - The name of the column being indexed. This columns is NULL if the column is the rowid or an expression.
             */
             
-            self.sequence = try row.getStoredValue(index: 0)
-            self.columnId = try row.getStoredValue(index: 1)
-            self.name = try row.getStoredValue(index: 2)
+            self.sequence = try row.get("seqno")
+            self.columnId = try row.get("cid")
+            self.name = try row.get("name")
         }
     }
 }

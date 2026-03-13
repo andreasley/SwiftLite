@@ -1,7 +1,8 @@
 #if canImport(Foundation)
 import Foundation
 
-extension UUID: StorageConvertible.Text {
+nonisolated extension UUID: StorageConvertible.Text
+{
     public var storageValue: String {
         self.uuidString
     }

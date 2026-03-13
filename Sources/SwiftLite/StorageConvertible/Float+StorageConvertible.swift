@@ -1,4 +1,4 @@
-extension Float16: StorageConvertible.Real
+nonisolated extension Float16: StorageConvertible.Real
 {
     public var storageValue: Double {
         Double(self)
@@ -10,7 +10,7 @@ extension Float16: StorageConvertible.Real
     }
 }
 
-extension Float32: StorageConvertible.Real
+nonisolated extension Float32: StorageConvertible.Real
 {
     public var storageValue: Double {
         Double(self)
@@ -22,7 +22,7 @@ extension Float32: StorageConvertible.Real
     }
 }
 
-extension Float64: StorageConvertible.Real
+nonisolated extension Float64: StorageConvertible.Real
 {
     public var storageValue: Double {
         self

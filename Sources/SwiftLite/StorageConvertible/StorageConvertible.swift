@@ -1,40 +1,35 @@
-public enum StorageConvertible
+import Foundation
+
+public nonisolated enum StorageConvertible
 {
-    enum ConversionError: Swift.Error {
+    public enum ConversionError: Swift.Error {
         case invalidPrimaryKey
         case failedToConvert
+        case unexpectedNull
         case valueOutsideConvertibleRange
     }
-
-    public protocol Integer
+    
+    public nonisolated protocol Integer: SQLValueConvertible
     {
         init(storageValue: Int64) throws
         var storageValue: Int64 { get }
     }
-
-    public protocol Text
+    
+    public nonisolated protocol Text: SQLValueConvertible
     {
         init(storageValue: String) throws
         var storageValue: String { get }
     }
-
-    public protocol Blob
+    
+    public nonisolated protocol Blob: SQLValueConvertible
     {
-        // TODO
-        init(storageValue: UnsafeRawPointer) throws
-        var storageValue: UnsafeRawPointer { get }
+        init(storageValue: Data) throws
+        var storageValue: Data { get }
     }
-
-    public protocol Real
+    
+    public nonisolated protocol Real: SQLValueConvertible
     {
         init(storageValue: Double) throws
         var storageValue: Double { get }
-    }
-
-    public protocol `Any`
-    {
-        // TODO
-        init(storageValue: Any) throws
-        var storageValue: Any { get }
     }
 }

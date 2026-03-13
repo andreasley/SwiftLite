@@ -1,4 +1,4 @@
-extension Bool: StorageConvertible.Integer
+nonisolated extension Bool: StorageConvertible.Integer
 {
     public var storageValue: Int64 {
         self ? 1 : 0

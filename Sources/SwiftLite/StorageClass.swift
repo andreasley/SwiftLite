@@ -1,6 +1,6 @@
 import Foundation
 
-public enum StorageClass: String, Equatable, Sendable, StorageConvertible.Text {
+public nonisolated enum StorageClass: String, Equatable, Sendable, StorageConvertible.Text {
     public var storageValue: String { rawValue }
     
     case text
@@ -15,7 +15,7 @@ public enum StorageClass: String, Equatable, Sendable, StorageConvertible.Text {
         switch type {
         case is StorageConvertible.Integer.Type:
             self = .integer
-        case is StorageConvertible.Text.Type:
+        case is StorageConvertible.Text.Type, is any Fetchable.Type:
             self = .text
         case is StorageConvertible.Blob.Type:
             self = .blob

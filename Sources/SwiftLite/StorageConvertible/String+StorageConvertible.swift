@@ -1,4 +1,5 @@
-extension String: StorageConvertible.Text {
+nonisolated extension String: StorageConvertible.Text
+{
     public var storageValue: String {
         self
     }
