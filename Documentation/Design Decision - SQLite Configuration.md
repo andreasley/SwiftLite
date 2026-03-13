@@ -1,5 +1,8 @@
 - Use UUID as primary key for easier implementation of sync functionality (despite probably slightly worse performance for general usage)
 - Create tables `WITHOUT ROWID` to use the UUID as actual primary key
 - Use `STRICT` tables to catch schema mistakes earlier (requires SQLite 3.37+ though and therefore makes the package require macOS 13 or higher)
-- Use `DEFERRABLE INITIALLY DEFERRED` foreign key contraints to allow the library to ignore the order of insertion for nested objects.
+- Use pragma `defer_foreign_keys` in transactions to allow the library to ignore the order of insertion/deletion for nested objects.
 - Implement auto-migration, because typical use-cases (simple projects) mostly require additive changes, which can be handled well by auto-migration.
+- Make all fields nullable, so they can be added by synchronization. Add ability to specify fallback values for initialization with unexpected null fields.
+- Use foreign keys only to prevent deletion of referenced objects, not for cascading deletion (because that wouldn't send the required notifications)
+- The column `id` is always the PRIMARY KEY

@@ -1,0 +1,3 @@
+- Swift 6+
+- macOS 15+
+- async/await and @Observable (no Combine)
