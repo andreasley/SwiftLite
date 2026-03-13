@@ -39,10 +39,11 @@ public struct ModelConfiguration: Sendable
         let isUnique: Bool
         let isIndexed: Bool
         let isRelated: Bool
+        let isVariable: Bool
         let defaultValue: ExprSyntax?
         let defaultValuePropertyName: String?
         
-        init(name: String, backingProperty: String, columnName: ExprSyntax, type: TypeSyntax, positionInPrimaryKey: Int? = nil, isUnique: Bool = false, isIndexed: Bool = false, isRelated: Bool = false, defaultValue: ExprSyntax? = nil, defaultValuePropertyName: String? = nil)
+        init(name: String, backingProperty: String, columnName: ExprSyntax, type: TypeSyntax, positionInPrimaryKey: Int? = nil, isUnique: Bool = false, isIndexed: Bool = false, isRelated: Bool = false, isVariable: Bool, defaultValue: ExprSyntax? = nil, defaultValuePropertyName: String? = nil)
         {
             (self.unwrappedType, self.typeIsOptional) = type.unwrapOptional()
 
@@ -54,6 +55,7 @@ public struct ModelConfiguration: Sendable
             self.isUnique = isUnique
             self.isIndexed = isIndexed
             self.isRelated = isRelated
+            self.isVariable = isVariable
             self.defaultValue = defaultValue
             self.defaultValuePropertyName = defaultValuePropertyName
         }

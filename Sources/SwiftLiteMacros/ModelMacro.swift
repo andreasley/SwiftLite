@@ -214,7 +214,12 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             // TODO: Show error
         }
         
-//        var newMembers: [DeclSyntax] = []
+        // MARK: Nested backing class for stored properties and support for observation
+        
+        generatedDeclarations.append(getBackingDecl(properties: properties))
+
+        
+        //        var newMembers: [DeclSyntax] = []
 //
 //        for member in declaration.memberBlock.members
 //        {
@@ -280,7 +285,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         let initNewDecl = initializerForNewObject(properties: properties)
         generatedDeclarations.append(DeclSyntax(initNewDecl))
         
-        let initFromResultDecl = initializerForObjectFromDatabase(properties: properties, useBackingField: true)
+        let initFromResultDecl = initializerForObjectFromDatabase(properties: properties, forMainModel: true)
         generatedDeclarations.append(DeclSyntax(initFromResultDecl))
         
         // MARK: Create Table statement
@@ -411,10 +416,46 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         return DeclSyntax(structDecl)
     }
     
+    static func getBackingDecl(properties: [ModelConfiguration.Property]) -> DeclSyntax
+    {
+        let structName = "BackingData"
+        let initDecl = initializerForObjectFromDatabase(properties: properties, skipRelations: true, forMainModel: false, forBacking: true)
+        let memberDeclList = MemberBlockItemListSyntax {
+            for property in properties.filter({ $0.isVariable }) {
+                MemberBlockItemSyntax(.var, name: property.name, type: property.type)
+            }
+            initDecl
+        }
+
+        let inheritanceClause = InheritanceClauseSyntax(
+            colon: .colonToken(),
+            inheritedTypesBuilder: {
+                InheritedTypeSyntax(
+                    type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Observable")))
+                )
+            }
+        )
+
+        let observableAttribute: AttributeSyntax = AttributeSyntax(atSign: .atSignToken(), attributeName: IdentifierTypeSyntax(name: .identifier("Observable")))
+
+        let classDecl = ClassDeclSyntax(
+            attributes: [.attribute(observableAttribute)],
+            name: .identifier(structName),
+            inheritanceClause: inheritanceClause,
+            memberBlock: MemberBlockSyntax(
+                leftBrace: .leftBraceToken(),
+                members: memberDeclList,
+                rightBrace: .rightBraceToken()
+            )
+        )
+
+        return DeclSyntax(classDecl)
+    }
+
     static func getFlatDecl(properties: [ModelConfiguration.Property]) -> DeclSyntax
     {
         let structName = "ReadOnlyFlatSnapshot"
-        let initDecl = initializerForObjectFromDatabase(properties: properties, skipRelations: true, useBackingField: false)
+        let initDecl = initializerForObjectFromDatabase(properties: properties, skipRelations: true, forMainModel: false)
         let memberDeclList = MemberBlockItemListSyntax {
             MemberBlockItemSyntax(.let, name: databaseReferencePropertyName, type: "SwiftLite.Database")
             for property in properties.filter({ $0.isRelated == false }) {
@@ -454,7 +495,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
     static func getSnapshotDecl(properties: [ModelConfiguration.Property]) -> DeclSyntax
     {
         let structName = "ReadOnlySnapshot"
-        let initDecl = initializerForObjectFromDatabase(properties: properties, useBackingField: false)
+        let initDecl = initializerForObjectFromDatabase(properties: properties, forMainModel: false)
         let memberDeclList = MemberBlockItemListSyntax {
             MemberBlockItemSyntax(.let, name: databaseReferencePropertyName, type: "SwiftLite.Database")
             for property in properties {
@@ -496,7 +537,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
     {
         var properties = [ModelConfiguration.Property]()
         
-        let primaryKeyIdProperty = ModelConfiguration.Property(name: primaryKeyFieldName, backingProperty: primaryKeyFieldName, columnName: .init(stringLiteral: primaryKeyFieldName), type: "UUID", positionInPrimaryKey: 0)
+        let primaryKeyIdProperty = ModelConfiguration.Property(name: primaryKeyFieldName, backingProperty: primaryKeyFieldName, columnName: .init(stringLiteral: primaryKeyFieldName), type: "UUID", positionInPrimaryKey: 0, isVariable: false)
         properties.append(primaryKeyIdProperty)
 
         for member in declaration.memberBlock.members {
@@ -593,15 +634,15 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             
             let backingProperty: String
             // TODO: Extract this check and name for the backing property
-            let needsBackingProperty = varDecl.bindingSpecifier.tokenKind == .keyword(.var)
-            if needsBackingProperty {
-                backingProperty = "_\(name)"
+            let isVariable = varDecl.bindingSpecifier.tokenKind == .keyword(.var)
+            if isVariable {
+                backingProperty = "_backingData.\(name)"
             } else {
                 backingProperty = name
             }
             
             let columnName = columnNameExpr ?? "\(raw: name)"
-            properties.append(.init(name: name, backingProperty: backingProperty, columnName: columnName, type: type, positionInPrimaryKey: nil, isUnique: isUnique, isIndexed: isIndexed, isRelated: isRelated, defaultValue: defaultValueExpr, defaultValuePropertyName: defaultValuePropertyName))
+            properties.append(.init(name: name, backingProperty: backingProperty, columnName: columnName, type: type, positionInPrimaryKey: nil, isUnique: isUnique, isIndexed: isIndexed, isRelated: isRelated, isVariable: isVariable, defaultValue: defaultValueExpr, defaultValuePropertyName: defaultValuePropertyName))
             
             
             // Initial values for properties aren't supported in SwiftLite, because they make it impossible to set the value for `let` properties in the initializer (which is what is required when initializing a model from database results)
@@ -684,6 +725,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         assignments.append(dbAssignment)
 
         for property in properties {
+            guard property.isVariable else { continue }
             if property.name == primaryKeyFieldName {
                 // The default UUID primary key is always autogenerated
                 let assignment = CodeBlockItemSyntax(item: .expr("self.\(raw: property.name) = .init()"))
@@ -701,7 +743,10 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
                 assignments.append(assignment)
             }
         }
-        
+
+        let backingAssignment = CodeBlockItemSyntax(item: .expr("self._backingData = BackingData()"))
+        assignments.append(backingAssignment)
+
         let parameterList = FunctionParameterClauseSyntax { parameters }
         
         let initDecl = InitializerDeclSyntax(
@@ -713,25 +758,33 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         return initDecl
     }
     
-    static func initializerForObjectFromDatabase(properties: [ModelConfiguration.Property], skipRelations: Bool = false, useBackingField: Bool) -> InitializerDeclSyntax
+    static func initializerForObjectFromDatabase(properties: [ModelConfiguration.Property], skipRelations: Bool = false, forMainModel: Bool, forBacking: Bool = false) -> InitializerDeclSyntax
     {
         var assignments = [CodeBlockItemSyntax]()
         
-        let dbAssignment = CodeBlockItemSyntax(item: .expr("self.db = db"))
-        assignments.append(dbAssignment)
+        if !forBacking {
+            let dbAssignment = CodeBlockItemSyntax(item: .expr("self.db = db"))
+            assignments.append(dbAssignment)
+        }
 
         var index = 0
         for property in properties {
             
+            if forBacking {
+                guard property.isVariable else { continue }
+            } else if forMainModel {
+                guard !property.isVariable else { continue }
+            }
+            
             guard !property.isRelated else {
                 if !skipRelations {
                     // TODO: Implement fetching of related objects
-                    let assignment = CodeBlockItemSyntax(item: .expr("self.\(raw: useBackingField ? property.backingProperty : property.name) = nil"))
+                    let assignment = CodeBlockItemSyntax(item: .expr("self.\(raw: forMainModel ? property.backingProperty : property.name) = nil"))
                     assignments.append(assignment)
                 }
                 continue
             }
-            let assignment = CodeBlockItemSyntax(item: .expr("self.\(raw: useBackingField ? property.backingProperty : property.name) = try row.getStoredValue(index: \(raw: index))"))
+            let assignment = CodeBlockItemSyntax(item: .expr("self.\(raw: forMainModel ? property.backingProperty : property.name) = try row.getStoredValue(index: \(raw: index))"))
             assignments.append(assignment)
             index += 1
         }
@@ -742,11 +795,13 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
                 colon: .colonToken(trailingTrivia: .space),
                 type: TypeSyntax("SQLiteQueryResult")
             )
-            FunctionParameterSyntax(
-                firstName: "db",
-                colon: .colonToken(trailingTrivia: .space),
-                type: TypeSyntax("SwiftLite.Database")
-            )
+            if !forBacking {
+                FunctionParameterSyntax(
+                    firstName: "db",
+                    colon: .colonToken(trailingTrivia: .space),
+                    type: TypeSyntax("SwiftLite.Database")
+                )
+            }
         }
         
         let initDecl = InitializerDeclSyntax(
