@@ -19,7 +19,11 @@ public macro Model(tableName: String? = nil) = #externalMacro(module: "SwiftLite
 public macro Stored(columName: String? = nil, defaultValue: Any? = nil, isUnique: Bool = false, isIndexed: Bool = true) = #externalMacro(module: "SwiftLiteMacros", type: "StoredMacro")
 
 @attached(peer)
-public macro Related() = #externalMacro(module: "SwiftLiteMacros", type: "RelatedMacro")
+public macro Related(onDelete: DeletionPolicy = .ignore) = #externalMacro(module: "SwiftLiteMacros", type: "RelatedMacro")
+
+@attached(accessor, names: named(get), named(set))
+@attached(peer, names: arbitrary)
+public macro RelatedMany<T>(_ type: T.Type, onDelete: DeletionPolicy = .ignore) = #externalMacro(module: "SwiftLiteMacros", type: "RelatedManyMacro")
 
 @attached(peer)
 public macro Transient() = #externalMacro(module: "SwiftLiteMacros", type: "TransientMacro")
@@ -27,6 +31,14 @@ public macro Transient() = #externalMacro(module: "SwiftLiteMacros", type: "Tran
 @attached(peer)
 public macro File() = #externalMacro(module: "SwiftLiteMacros", type: "FileMacro")
 
-@attached(peer, names: arbitrary)
 @attached(accessor, names: named(get), named(set))
-public macro Backed() = #externalMacro(module: "SwiftLiteMacros", type: "BackedMacro")
+public macro EditableValue() = #externalMacro(module: "SwiftLiteMacros", type: "EditableValueMacro")
+
+@attached(accessor, names: named(get), named(set))
+@attached(peer, names: arbitrary)
+public macro InverseRelated<T, U>(_ keyPath: KeyPath<T, U>) = #externalMacro(module: "SwiftLiteMacros", type: "InverseRelatedMacro")
+
+@attached(accessor, names: named(get))
+@attached(peer, names: arbitrary)
+public macro InverseRelatedMany<T, U>(_ keyPath: KeyPath<T, U>) = #externalMacro(module: "SwiftLiteMacros", type: "InverseRelatedManyMacro")
+
