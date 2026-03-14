@@ -1,3 +1,4 @@
+import SwiftLite
 import Foundation
 import Observation
 
@@ -17,7 +18,7 @@ nonisolated final class InteriorExpanded
     {
         let id = UUID()
         
-        self._metadata = Metadata(db: db, table: Schema.table.name, id: id, isNew: true)
+        self._metadata = ModelMetadata(db: db, table: Schema.table.name, id: id, isNew: true)
         
         self.id = id
         
@@ -29,7 +30,7 @@ nonisolated final class InteriorExpanded
     {
         let id: UUID = try row.get("id")
         
-        self._metadata = Metadata(db: db, table: Schema.table.name, id: id, isNew: false)
+        self._metadata = ModelMetadata(db: db, table: Schema.table.name, id: id, isNew: false)
         
         self.id = id
     }

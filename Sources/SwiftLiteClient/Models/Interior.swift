@@ -1,5 +1,6 @@
 import SwiftLite
+import Foundation
 
-@Model class Interior
+@Model final class Interior
 {
 }

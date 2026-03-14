@@ -1,4 +1,5 @@
 import SwiftLite
+import Foundation
 
 @Model nonisolated final class Passenger
 {
@@ -6,5 +7,5 @@ import SwiftLite
     var name: String
 
     @InverseRelatedMany(\Car.passengers)
-    var cars: AnyRandomAccessCollection<Car>
+    var cars: CarsCollection
 }
