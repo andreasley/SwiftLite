@@ -58,7 +58,7 @@ public nonisolated enum RequiredSchema
         public let referencedTable: String
         public let referencedColumn: String
         
-        init(column: String, referencedTable: String, referencedColumn: String = "id")
+        public init(column: String, referencedTable: String, referencedColumn: String = "id")
         {
             self.column = column
             self.referencedTable = referencedTable

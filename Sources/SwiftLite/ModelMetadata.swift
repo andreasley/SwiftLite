@@ -53,7 +53,7 @@ public nonisolated final class ModelMetadata: DatabaseEntityMetadata, WithTracke
         self.lastRead = isNew ? nil : .now
     }
     
-    func logValueChange<V: SQLValueConvertible>(field: String, value: V)
+    public func logValueChange<V: SQLValueConvertible>(field: String, value: V)
     {
         changedValues.log(field: field, value: value)
     }
@@ -81,7 +81,7 @@ public nonisolated final class ModelMetadata: DatabaseEntityMetadata, WithTracke
         return ChangedObject(table: table, objectId: id, status: status, updatedFields: changes, transactionId: transactionId)
     }
     
-    func _beginSaving(transaction: DatabaseTask.WriteTransaction, changeset: Changeset) throws
+    public func _beginSaving(transaction: DatabaseTask.WriteTransaction, changeset: Changeset) throws
     {
         guard transaction.db == self.db else { throw ModelSavingError.wrongDatabase }
 
@@ -90,7 +90,7 @@ public nonisolated final class ModelMetadata: DatabaseEntityMetadata, WithTracke
         try changeset.append(collectForSaving(transactionId: transaction.id))
     }
     
-    func _endSaving(success: Bool, transaction: DatabaseTask.WriteTransaction)
+    public func _endSaving(success: Bool, transaction: DatabaseTask.WriteTransaction)
     {
         guard currentSavingTransaction == transaction else { return } // can this even happen?
         currentSavingTransaction = nil
@@ -112,13 +112,13 @@ public nonisolated final class ModelMetadata: DatabaseEntityMetadata, WithTracke
         lastSavingTransactionId == changes.transactionId
     }
     
-    func _cascadeDeletion()
+    public func _cascadeDeletion()
     {
         objectStatus = .markedForDeletion
     }
     
     @MainActor
-    func _beginAutoupdating<T: Model>(model: T)
+    public func _beginAutoupdating<T: Model>(model: T)
     {
         guard objectChangedNotificationToken == nil else { return }
         objectChangedNotificationToken = DeregisteringNotificationToken(model: model)
