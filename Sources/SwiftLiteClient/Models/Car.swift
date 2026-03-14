@@ -1,7 +1,7 @@
 import SwiftLite
 import Foundation
 
-@Model class Car
+@Model nonisolated final class Car
 {
     var combinedName: String {
         name + "zzz"
@@ -17,7 +17,7 @@ import Foundation
     var interior: Interior?
 
     @RelatedMany(Passenger.self, onDelete: .cascade)
-    var passengers
+    var passengers: PassengersCollection
 
     @Stored(defaultValue: "asd")
     var name: String

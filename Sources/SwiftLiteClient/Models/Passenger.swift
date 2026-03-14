@@ -1,10 +1,10 @@
 import SwiftLite
 
-class Passenger
+@Model nonisolated final class Passenger
 {
     @Stored(defaultValue: "")
     var name: String
 
     @InverseRelatedMany(\Car.passengers)
-    var cars
+    var cars: AnyRandomAccessCollection<Car>
 }
