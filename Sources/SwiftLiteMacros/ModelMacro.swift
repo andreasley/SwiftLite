@@ -261,9 +261,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             try generateDefaultValuesStruct(propertyInfo: propertyInfo)
             
             try generateFallbackValuesStruct(propertyInfo: propertyInfo)
-            
-            try generateEditableDataClass(propertyInfo: propertyInfo, className: className)
-            
+                        
             try generateQueryProxyStruct(
                 className: className,
                 propertyInfo: propertyInfo
@@ -464,6 +462,8 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             className: className,
             propertyInfo: propertyInfo
         ))
+        
+        members.append(try generateEditableDataClass(propertyInfo: propertyInfo, className: className))
         
         return members
     }
