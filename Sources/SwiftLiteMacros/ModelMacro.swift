@@ -3,7 +3,7 @@ import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 import SwiftDiagnostics
 
-public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro, PeerMacro
+public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
 {
     // MARK: - Diagnostics
     
@@ -218,55 +218,6 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro, Pee
         return attributesToAdd
     }
     
-    // MARK: PeerMacro
-    
-    public static func expansion(
-        of node: AttributeSyntax,
-        providingPeersOf declaration: some DeclSyntaxProtocol,
-        in context: some MacroExpansionContext
-    ) throws -> [DeclSyntax] {
-        guard let declGroup = declaration.asProtocol(DeclGroupSyntax.self),
-              let classDecl = validateDeclaration(declGroup, node: node, in: context) else {
-            return []
-        }
-        
-        let className = classDecl.name.text
-        let propertyInfo = try collectPropertyInfo(from: classDecl)
-        
-        var peers: [DeclSyntax] = []
-        
-        // Generate RelationshipModelSchema for each @RelatedMany property
-        for prop in propertyInfo.relatedMany {
-            peers.append(try generateRelationshipModelSchema(
-                className: className,
-                property: prop
-            ))
-        }
-        
-        return peers
-    }
-    
-    private static func generateRelationshipModelSchema(
-        className: String,
-        property: (name: String, elementType: String, schemaType: String, onDelete: String?)
-    ) throws -> DeclSyntax {
-        let deletionPolicy = property.onDelete ?? ".nullify"
-        let tableName = "\(className)_\(property.name)__\(property.elementType)"
-        
-        return """
-        nonisolated final class \(raw: property.schemaType): RelationshipModelSchema
-        {
-            typealias Parent = \(raw: className)
-            typealias Element = \(raw: property.elementType)
-            typealias Model = ManyToMany<\(raw: property.schemaType)>.JunctionModel
-            
-            static let deletionPolicy: DeletionPolicy = \(raw: deletionPolicy)
-            
-            static let table = RelationshipModelSchemaDefaults.getTable(name: "\(raw: tableName)", parentTable: Parent.Schema.table.name, elementTable: Element.Schema.table.name)
-        }
-        """
-    }
-    
     // MARK: ExtensionMacro
     
     public static func expansion(
@@ -298,6 +249,14 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro, Pee
                 className: className,
                 propertyInfo: propertyInfo
             )
+            
+            // Generate RelationshipModelSchema for each @RelatedMany property
+            for prop in propertyInfo.relatedMany {
+                try generateRelationshipModelSchema(
+                    className: className,
+                    property: prop
+                )
+            }
             
             try generateDefaultValuesStruct(propertyInfo: propertyInfo)
             
@@ -919,6 +878,27 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro, Pee
             ], foreignKeys: [
                 \(raw: foreignKeys.joined(separator: ",\n        "))
             ])
+        }
+        """
+    }
+    
+    private static func generateRelationshipModelSchema(
+        className: String,
+        property: (name: String, elementType: String, schemaType: String, onDelete: String?)
+    ) throws -> DeclSyntax {
+        let deletionPolicy = property.onDelete ?? ".nullify"
+        let tableName = "\(className)_\(property.name)__\(property.elementType)"
+        
+        return """
+        nonisolated final class \(raw: property.schemaType): RelationshipModelSchema
+        {
+            typealias Parent = \(raw: className)
+            typealias Element = \(raw: property.elementType)
+            typealias Model = ManyToMany<\(raw: property.schemaType)>.JunctionModel
+
+            static let deletionPolicy: DeletionPolicy = \(raw: deletionPolicy)
+            
+            static let table = RelationshipModelSchemaDefaults.getTable(name: "\(raw: tableName)", parentTable: Parent.Schema.table.name, elementTable: Element.Schema.table.name)
         }
         """
     }
