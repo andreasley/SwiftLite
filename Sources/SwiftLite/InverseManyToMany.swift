@@ -93,6 +93,8 @@ extension InverseManyToMany
 {
     public func _beginAutoupdating()
     {
+        junctions.forEach { $0._beginAutoupdating() }
+
         self.notificationToken = DeregisteringNotificationToken(db: db, table: Schema.table.name) { [weak self] changes in
             guard let self else { return }
             switch changes.status {
