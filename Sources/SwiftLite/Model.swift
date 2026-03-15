@@ -10,6 +10,9 @@ public nonisolated protocol Model: AnyObject, Fetchable, Observable, @MainActor 
     var _metadata: ModelMetadata { get }
     
     func _cascadeDeletion()
+    
+    @MainActor
+    func _update(with: ChangedObject) async throws
 }
 
 public nonisolated extension Model
@@ -19,7 +22,7 @@ public nonisolated extension Model
         self._metadata.autosaveTask?.cancel()
         
         guard _hasPendingChanges else { return }
-        
+
         try await _metadata.db.prepareWriteTransaction { transaction in
             var success = false
             let changeset = Changeset()
@@ -55,7 +58,7 @@ public extension Model where Self: AutoupdatingModel
         guard Thread.isMainThread else { return }
         nonisolated(unsafe) let unsafeSelf = self
         MainActor.assumeIsolated {
-            unsafeSelf._metadata._beginAutoupdating(model: unsafeSelf)
+            unsafeSelf._beginAutoupdating()
         }
     }
 }

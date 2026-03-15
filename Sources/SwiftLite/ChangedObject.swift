@@ -2,11 +2,11 @@ import Foundation
 
 public nonisolated struct ChangedObject: Sendable
 {
-    let table: String
-    let objectId: UUID
-    let status: Status
-    let updatedFields: [String: SQLValue]?
-    let transactionId: UUID
+    public let table: String
+    public let objectId: UUID
+    public let status: Status
+    public let updatedFields: [String: SQLValue]?
+    public let transactionId: UUID
 
     public nonisolated enum Status: Sendable {
         case created

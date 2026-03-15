@@ -4,7 +4,7 @@ import Foundation
 
 class SampleModels
 {
-    @Model class Car
+    @Model final class Car
     {
         // @Unique
         let publicId: UUID
@@ -14,11 +14,11 @@ class SampleModels
         
         convenience init(name: String, year: Int)
         {
-            self.init(publicId: UUID(), name: name, year: year)
+            self.init(name: name, year: year)
         }
     }
     
-    @Model class Manufacturer
+    @Model final class Manufacturer
     {
         // @Unique
         let publicId: UUID
@@ -43,5 +43,5 @@ class SampleModels
 //    db.insert(xc40)
 //    db.save()
     
-    try db.close()
+    try await db.close()
 }

@@ -61,9 +61,10 @@ final class SwiftLiteTests: XCTestCase
             """
             class Test {
                 @Model class Car {
-                    @DefaultValue("asd")
                     var year: Int
                     var réböt: String
+                    @InverseRelatedMany(\\Car.passengers)
+                    var cars: CarCollection
                 }
                 @Model class 车 {}
                 @Model class Մեքենա {}

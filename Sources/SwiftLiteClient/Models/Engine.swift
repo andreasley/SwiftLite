@@ -7,5 +7,5 @@ import Foundation
     var name: String
 
     @InverseRelated(\Car.engine)
-    var cars: CarsCollection
+    var cars: RelatedCollection<Car.Snapshot>
 }

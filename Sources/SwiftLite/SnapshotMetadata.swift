@@ -5,4 +5,10 @@ public nonisolated struct SnapshotMetadata<T: ModelSnapshot>: Sendable, Database
     public let id: UUID
     public let db: Database
     public let lastRead: Date? = .now
+    
+    public init(id: UUID, db: Database)
+    {
+        self.id = id
+        self.db = db
+    }
 }

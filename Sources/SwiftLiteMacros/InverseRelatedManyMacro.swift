@@ -3,7 +3,7 @@ import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 import SwiftDiagnostics
 
-public struct InverseRelatedManyMacro: AccessorMacro, PeerMacro
+public struct InverseRelatedManyMacro: AccessorMacro
 {
     public enum DiagnosticMessage: String, SwiftDiagnostics.DiagnosticMessage {
         case invalidDeclaration
@@ -52,42 +52,6 @@ public struct InverseRelatedManyMacro: AccessorMacro, PeerMacro
     
     public static func expansion(
         of node: AttributeSyntax,
-        providingPeersOf declaration: some DeclSyntaxProtocol,
-        in context: some MacroExpansionContext
-    ) throws -> [DeclSyntax]
-    {
-        guard
-            let varDecl = declaration.as(VariableDeclSyntax.self),
-            let binding = varDecl.bindings.first,
-            let identifier = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier
-        else { throw Error.invalidDeclaration }
-
-        let propertyName = identifier.text
-        
-        // Extract the key path argument from the macro
-        guard case .argumentList(let arguments) = node.arguments,
-              let firstArg = arguments.first,
-              let keyPathExpr = firstArg.expression.as(KeyPathExprSyntax.self)
-        else { throw Error.missingKeyPath }
-        
-        // Extract the referenced type from the key path
-        guard let rootType = keyPathExpr.root?.as(IdentifierTypeSyntax.self)?.name.text
-        else { throw Error.invalidKeyPath }
-        
-        // Generate the collection type name: CarsCollection
-        let collectionTypeName = propertyName.prefix(1).uppercased() + propertyName.dropFirst() + "Collection"
-        
-        // Generate typealias
-        let typealiasDecl: DeclSyntax =
-        """
-        typealias \(raw: collectionTypeName) = AnyRandomAccessCollection<\(raw: rootType).Snapshot>
-        """
-        
-        return [typealiasDecl]
-    }
-    
-    public static func expansion(
-        of node: AttributeSyntax,
         providingAccessorsOf declaration: some DeclSyntaxProtocol,
         in context: some MacroExpansionContext
     ) throws -> [AccessorDeclSyntax]
@@ -107,7 +71,7 @@ public struct InverseRelatedManyMacro: AccessorMacro, PeerMacro
               let keyPathExpr = firstArg.expression.as(KeyPathExprSyntax.self)
         else { throw Error.missingKeyPath }
         
-        // Extract the referenced type and property from the key path
+        // Extract the referenced type from the key path
         guard let rootType = keyPathExpr.root?.as(IdentifierTypeSyntax.self)?.name.text
         else { throw Error.invalidKeyPath }
         
@@ -122,8 +86,8 @@ public struct InverseRelatedManyMacro: AccessorMacro, PeerMacro
         
         guard let referencingField = referencingField else { throw Error.invalidKeyPath }
         
-        // Generate the expected collection type name
-        let expectedTypeName = propertyName.prefix(1).uppercased() + propertyName.dropFirst() + "Collection"
+        // Generate the expected collection type: RelatedCollection<RootType.Snapshot>
+        let expectedTypeName = "RelatedCollection<\(rootType).Snapshot>"
         
         // Check if type annotation exists and matches expected
         if let typeAnnotation = binding.typeAnnotation {
@@ -135,7 +99,14 @@ public struct InverseRelatedManyMacro: AccessorMacro, PeerMacro
                     changes: [
                         .replace(
                             oldNode: Syntax(typeAnnotation.type),
-                            newNode: Syntax(IdentifierTypeSyntax(name: .identifier(expectedTypeName)))
+                            newNode: Syntax(
+                                IdentifierTypeSyntax(
+                                    name: .identifier("RelatedCollection"),
+                                    genericArgumentClause: GenericArgumentClauseSyntax {
+                                        GenericArgumentSyntax(argument: IdentifierTypeSyntax(name: .identifier(rootType)))
+                                    }
+                                )
+                            )
                         )
                     ]
                 )
@@ -151,7 +122,12 @@ public struct InverseRelatedManyMacro: AccessorMacro, PeerMacro
             // Type annotation is missing - provide Fix-It to add it
             let newTypeAnnotation = TypeAnnotationSyntax(
                 colon: .colonToken(trailingTrivia: .space),
-                type: IdentifierTypeSyntax(name: .identifier(expectedTypeName))
+                type: IdentifierTypeSyntax(
+                    name: .identifier("RelatedCollection"),
+                    genericArgumentClause: GenericArgumentClauseSyntax {
+                        GenericArgumentSyntax(argument: IdentifierTypeSyntax(name: .identifier(rootType)))
+                    }
+                )
             )
             
             let fixIt = FixIt(
@@ -176,7 +152,7 @@ public struct InverseRelatedManyMacro: AccessorMacro, PeerMacro
 
         return [
             """
-            get { AnyRandomAccessCollection(_editableData.\(raw: propertyName).collection) }
+            get { _editableData.\(raw: propertyName).collection }
             """
         ]
     }

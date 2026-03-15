@@ -8,11 +8,10 @@
 public macro stringify<T>(_ value: T) -> (T, String) = #externalMacro(module: "SwiftLiteMacros", type: "StringifyMacro")
 
 // TODO: Limit names to actually used ones
-// TODO: Add parameters for table name and perhaps other table configuration (like `STRICT`)
 @attached(memberAttribute)
-@attached(member, names: arbitrary)
-@attached(extension, conformances: SwiftLite.Model)
-public macro Model(tableName: String? = nil) = #externalMacro(module: "SwiftLiteMacros", type: "ModelMacro")
+@attached(member, names: named(id), named(_metadata), named(_editableData), named(init))
+@attached(extension, conformances: SwiftLite.Model, names: named(_beginAutoupdating), named(_hasPendingChanges), named(_beginSaving), named(_endSaving), named(_update), named(_cascadeDeletion), named(Schema), named(FallbackValues), named(DefaultValues), named(EditableData), named(QueryProxy), named(Snapshot))
+public macro Model() = #externalMacro(module: "SwiftLiteMacros", type: "ModelMacro")
 
 
 @attached(peer)
@@ -20,10 +19,6 @@ public macro Stored(columName: String? = nil, defaultValue: Any? = nil, isUnique
 
 @attached(peer)
 public macro Related(onDelete: DeletionPolicy = .ignore) = #externalMacro(module: "SwiftLiteMacros", type: "RelatedMacro")
-
-@attached(accessor, names: named(get), named(set))
-@attached(peer, names: arbitrary)
-public macro RelatedMany<T>(_ type: T.Type, onDelete: DeletionPolicy = .ignore) = #externalMacro(module: "SwiftLiteMacros", type: "RelatedManyMacro")
 
 @attached(peer)
 public macro Transient() = #externalMacro(module: "SwiftLiteMacros", type: "TransientMacro")
@@ -34,11 +29,15 @@ public macro File() = #externalMacro(module: "SwiftLiteMacros", type: "FileMacro
 @attached(accessor, names: named(get), named(set))
 public macro EditableValue() = #externalMacro(module: "SwiftLiteMacros", type: "EditableValueMacro")
 
-@attached(accessor, names: named(get), named(set))
-@attached(peer, names: arbitrary)
+
+
+@attached(accessor, names: named(get))
+public macro RelatedMany<T>(_ type: T.Type, onDelete: DeletionPolicy = .ignore) = #externalMacro(module: "SwiftLiteMacros", type: "RelatedManyMacro")
+
+@attached(accessor, names: named(get))
 public macro InverseRelated<T, U>(_ keyPath: KeyPath<T, U>) = #externalMacro(module: "SwiftLiteMacros", type: "InverseRelatedMacro")
 
 @attached(accessor, names: named(get))
-@attached(peer, names: arbitrary)
 public macro InverseRelatedMany<T, U>(_ keyPath: KeyPath<T, U>) = #externalMacro(module: "SwiftLiteMacros", type: "InverseRelatedManyMacro")
+
 

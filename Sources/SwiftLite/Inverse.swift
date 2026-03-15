@@ -9,29 +9,29 @@ public nonisolated class Inverse<ReferencingModel: ModelSnapshot, ReferencedMode
     let referencingField: String
     
     private var notificationToken: AnyDeregisteringNotificationToken?
-    private var _items: Collection
+    public private(set) var collection: RelatedCollection<ReferencingModel>
     
-    var items: Collection {
-        get { _items }
-        set { _items = newValue }
-    }
-
-    init(db: Database, objectId: UUID, referencingField: String)
+    public init(db: Database, objectId: UUID, referencingField: String)
     {
         self.db = db
         self.objectId = objectId
         self.referencingField = referencingField
 
-        self._items = Collection()
+        self.collection = RelatedCollection()
+        
+        // TODO: Add handlers for collection.onAppend/collection.onRemove
     }
 
-    init(db: Database, objectId: UUID, referencingField: String) async throws
+    public init(db: Database, objectId: UUID, referencingField: String) async throws
     {
         self.db = db
         self.objectId = objectId
         self.referencingField = referencingField
 
-        self._items = Collection(items: try await Self.fetchItems(db: db, referencingField: referencingField, objectId: objectId))
+        let items = try await Self.fetchItems(db: db, referencingField: referencingField, objectId: objectId)
+        self.collection = RelatedCollection(items: items)
+
+        // TODO: Add handlers for collection.onAppend/collection.onRemove
     }
 
     public static nonisolated func fetchItems(db: Database, referencingField: String, objectId: UUID) async throws -> [ReferencingModel]
@@ -39,7 +39,9 @@ public nonisolated class Inverse<ReferencingModel: ModelSnapshot, ReferencedMode
         try await db.find(ReferencingModel.self, condition: .init(field: referencingField, value: .string(objectId.storageValue)))
     }
 
-    public var _hasPendingChanges: Bool { false }
+    public var _hasPendingChanges: Bool {
+        collection.items.contains { $0._hasPendingChanges }
+    }
     
     public func _beginSaving(transaction: DatabaseTask.WriteTransaction, changeset: Changeset) throws
     {
@@ -77,51 +79,9 @@ extension Inverse
     {
         self.notificationToken = DeregisteringNotificationToken(db: db, table: ReferencingModel.Model.Schema.table.name) { [weak self] changes in
             guard let self else { return }
-            self._items = try await Collection(items: Self.fetchItems(db: db, referencingField: referencingField, objectId: objectId))
+            let items = try await Self.fetchItems(db: db, referencingField: referencingField, objectId: objectId)
+            self.collection.items = items
             // TODO: Implement individual updates
-        }
-    }
-}
-
-    
-public nonisolated extension Inverse
-{
-    nonisolated struct Collection: RandomAccessCollection
-    {
-        public typealias Element = ReferencingModel
-        
-        public internal(set) var items: [Element]
-        
-        public var startIndex: Int { items.startIndex }
-        public var endIndex: Int { items.endIndex }
-        
-        fileprivate init(items: [Element] = [])
-        {
-            self.items = items
-        }
-        
-        public subscript(index: Int) -> Element {
-            get { items[index] }
-        }
-        
-        public var _hasPendingChanges: Bool {
-            items.contains { $0._hasPendingChanges }
-        }
-        
-        public func _beginSaving(transaction: DatabaseTask.WriteTransaction, changeset: Changeset) throws
-        {
-//            try items.forEach { try $0._beginSaving(transaction: transaction, changeset: changeset) }
-        }
-        
-        public mutating func _endSaving(success: Bool, transaction: DatabaseTask.WriteTransaction)
-        {
-//            items.forEach { $0._endSaving(success: success, transaction: transaction) }
-//            items.removeAll { $0._metadata.isDeleted && !$0._metadata.statusIsUnsaved }
-        }
-        
-        public func _cascadeDeletion()
-        {
-//            items.forEach { $0._cascadeDeletion() }
         }
     }
 }

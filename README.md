@@ -21,7 +21,6 @@ It leverages Swift Macros to transform the model code to a partial database sche
 
 - Must be `class` and annotated with `@Model`
 - Automatically get the property `id`, a random UUID, as the primary key
-- May contain a `static let tableName = "<your_preferred_name>"` to manually specify the table name to be used (instead of one derived from the name of the class) 
 
 ## Concept
 

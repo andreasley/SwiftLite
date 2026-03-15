@@ -17,7 +17,7 @@ import Foundation
     var interior: Interior?
 
     @RelatedMany(Passenger.self, onDelete: .cascade)
-    var passengers: PassengersCollection
+    var passengers: RelatedCollection<Passenger>
 
     @Stored(defaultValue: "asd")
     var name: String

@@ -7,5 +7,5 @@ import Foundation
     var name: String
 
     @InverseRelatedMany(\Car.passengers)
-    var cars: CarsCollection
+    var cars: RelatedCollection<Car>
 }

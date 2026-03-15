@@ -343,7 +343,7 @@ public actor Database: Observable
         return try await objects(type: T.self, sqlStatement: preset.sqlStatement).first
     }
 
-    public nonisolated(nonsending) func get<T: Fetchable, I: Fetchable>(from other: I) async throws -> T? where T.Model == I.Model
+    public nonisolated(nonsending) func get<T: Fetchable, I: Fetchable>(_ type: T.Type = T.self, from other: I) async throws -> T? where T.Model == I.Model
     {
         let preset = T.Model.Schema.table.defaultSelectStatement.withCondition(.byId(other.id), limit: 1)
         return try await objects(type: T.self, sqlStatement: preset.sqlStatement).first
@@ -407,7 +407,7 @@ public actor Database: Observable
         return results
     }
 
-    public nonisolated(nonsending) func prepareWriteTransaction(_ body: @escaping (DatabaseTask.WriteTransaction) async throws -> Void) async throws
+    public func prepareWriteTransaction(_ body: @escaping (DatabaseTask.WriteTransaction) async throws -> Void, isolation: isolated (any Actor)? = #isolation) async throws
     {
         guard DatabaseTask.currentWriteTransaction == nil else {
             throw DatabaseTask.Error.alreadyInTransaction
@@ -415,6 +415,7 @@ public actor Database: Observable
 
         let writeTransaction = DatabaseTask.WriteTransaction(db: self, id: UUID())
         try await DatabaseTask.$currentWriteTransaction.withValue(writeTransaction) {
+            _ = isolation // ensure this runs in the same isolation as `prepareWriteTransaction` was called in
             try await body(writeTransaction)
         }
     }

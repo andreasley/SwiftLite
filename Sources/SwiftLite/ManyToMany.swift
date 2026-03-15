@@ -8,45 +8,69 @@ public nonisolated class ManyToMany<Schema: RelationshipModelSchema>: Saveable
     let parentId: UUID
 
     private var notificationToken: AnyDeregisteringNotificationToken?
-    private var _collection: Collection
+    public private(set) var collection: RelatedCollection<Schema.Element>
+    private var junctions: [JunctionModel]
 
-    public var collection: Collection {
-        get { _collection }
-        set { _collection = newValue }
-    }
     
     public var _hasPendingChanges: Bool {
-        _collection._hasPendingChanges
+        junctions.contains { $0._hasPendingChanges }
     }
     
     init(db: Database, parentId: UUID)
     {
         self.db = db
         self.parentId = parentId
-        self._collection = Collection(db: db, parentId: parentId, items: [])
+        self.junctions = []
+        self.collection = RelatedCollection(items: [])
+
+        setUpCollectionChangeHandlers()
     }
     
     init(db: Database, parentId: UUID) async throws
     {
-        let items = try await db.find(RelationshipModel.self, condition: .byParent(parentId))
         self.db = db
         self.parentId = parentId
-        self._collection = Collection(db: db, parentId: parentId, items: items)
+        let junctions = try await db.find(JunctionModel.self, condition: .byParent(parentId))
+        self.junctions = junctions
+        self.collection = RelatedCollection(items: junctions.map { $0.element })
+        
+        setUpCollectionChangeHandlers()
+    }
+    
+    func setUpCollectionChangeHandlers()
+    {
+        self.collection.onAppend = { [weak self] newElement in
+            guard let self else { return }
+            let newJunction = JunctionModel(db: self.db, parent: self.parentId, element: newElement)
+            junctions.append(newJunction)
+            collection.items.append(newJunction.element)
+        }
+
+        self.collection.onRemove = { [weak self] removedElement in
+            guard let self else { return }
+            if let indexOfElementToRemove = collection.items.firstIndex(where: { $0.id == removedElement.id }) {
+                collection.items.remove(at: indexOfElementToRemove)
+            }
+            if let junctionToMarkAsDeleted = junctions.first(where: { $0.element.id == removedElement.id }) {
+                junctionToMarkAsDeleted._cascadeDeletion()
+            }
+        }
     }
 
     public func _beginSaving(transaction: DatabaseTask.WriteTransaction, changeset: Changeset) throws
     {
-        try _collection._beginSaving(transaction: transaction, changeset: changeset)
+        try junctions.forEach { try $0._beginSaving(transaction: transaction, changeset: changeset) }
     }
     
     public func _endSaving(success: Bool, transaction: DatabaseTask.WriteTransaction)
     {
-        _collection._endSaving(success: success, transaction: transaction)
+        junctions.forEach { $0._endSaving(success: success, transaction: transaction) }
+        junctions.removeAll { $0._metadata.objectStatus == .deleted }
     }
     
     public func _cascadeDeletion()
     {
-        _collection._cascadeDeletion()
+        junctions.forEach { $0._cascadeDeletion() }
     }
 }
 
@@ -70,17 +94,22 @@ extension ManyToMany
 {
     public func _beginAutoupdating()
     {
-        collection._beginAutoupdating()
+        junctions.forEach { $0._beginAutoupdating() }
+        
         self.notificationToken = DeregisteringNotificationToken(db: db, table: Schema.table.name) { [weak self] changes in
             guard let self else { return }
             switch changes.status {
             case .deleted:
-                self.collection.removeRelation(id: changes.objectId)
+                guard let indexOfJunctionToRemove = junctions.firstIndex(where: { $0.id == changes.objectId }) else { return }
+                let junctionToRemove = junctions.remove(at: indexOfJunctionToRemove)
+                guard let indexOfElementToRemove = collection.firstIndex(where: { $0.id == junctionToRemove.element.id }) else { return }
+                collection.items.remove(at: indexOfElementToRemove)
             case .created:
                 guard changes.isForParent(self.parentId) else { return }
-                guard !self.collection.containsRelation(id: changes.objectId) else { return }
-                guard let newRelation = try await self.db.get(RelationshipModel.self, id: changes.objectId) else { return }
-                self.collection.appendRelation(newRelation)
+                guard !junctions.contains(where: { $0.id == changes.objectId }) else { return }
+                guard let newJunction = try await self.db.get(JunctionModel.self, id: changes.objectId) else { return }
+                junctions.append(newJunction)
+                collection.items.append(newJunction.element)
             default:
                 // relations can't change; nested objects subscribe themselves for changes
                 return
@@ -91,11 +120,11 @@ extension ManyToMany
 
 public nonisolated extension ManyToMany
 {
-    nonisolated final class RelationshipModel: SwiftLite.Model
+    nonisolated final class JunctionModel: SwiftLite.Model
     {
         nonisolated public struct Snapshot: ModelSnapshot
         {
-            public typealias Model = RelationshipModel
+            public typealias Model = JunctionModel
 
             public let id: UUID
             public let _metadata: SnapshotMetadata<Self>
@@ -176,8 +205,8 @@ public nonisolated extension ManyToMany
 
         public func _beginSaving(transaction: DatabaseTask.WriteTransaction, changeset: Changeset) throws
         {
-            try element._beginSaving(transaction: transaction, changeset: changeset)
             try _metadata._beginSaving(transaction: transaction, changeset: changeset)
+            try element._beginSaving(transaction: transaction, changeset: changeset)
         }
         
         public func _endSaving(success: Bool, transaction: DatabaseTask.WriteTransaction)
@@ -205,106 +234,3 @@ public nonisolated extension ManyToMany
     }
 }
 
-    
-public nonisolated extension ManyToMany
-{
-    nonisolated struct Collection: RandomAccessCollection
-    {
-        public typealias Element = Schema.Element
-        
-        public private(set) var items: [RelationshipModel]
-        public private(set) var visibleItems: [RelationshipModel]
-        
-        public var startIndex: Int { visibleItems.startIndex }
-        public var endIndex: Int { visibleItems.endIndex }
-        
-        let db: Database
-        let parentId: UUID
-        
-        fileprivate init(db: Database, parentId: UUID, items: [RelationshipModel] = [])
-        {
-            self.db = db
-            self.parentId = parentId
-            self.items = items
-            self.visibleItems = items
-        }
-        
-        public mutating func append(_ element: Element)
-        {
-            let new = RelationshipModel(db: db, parent: parentId, element: element)
-            items.append(new)
-            visibleItems.append(new)
-        }
-        
-        public mutating func remove(at index: Int) -> Element
-        {
-            let relationEntry = visibleItems.remove(at: index)
-            
-            if relationEntry._metadata.objectStatus == .new {
-                if let indexInItems = items.firstIndex(of: relationEntry) {
-                    items.remove(at: indexInItems)
-                }
-            } else {
-                relationEntry._metadata._cascadeDeletion()
-                relationEntry._cascadeDeletion()
-            }
-            
-            return relationEntry.element
-        }
-        
-        @discardableResult
-        public mutating func remove(_ element: Element) -> Element?
-        {
-            guard let index = visibleItems.firstIndex(where: { $0.element == element }) else { return nil }
-            return remove(at: index)
-        }
-        
-        internal mutating func containsRelation(id: UUID) -> Bool
-        {
-            items.contains { $0.id == id }
-        }
-        
-        internal mutating func removeRelation(id: UUID)
-        {
-            items.removeAll { $0.id == id }
-            visibleItems.removeAll { $0.id == id }
-        }
-        
-        internal mutating func appendRelation(_ relation: RelationshipModel)
-        {
-            items.append(relation)
-            visibleItems.append(relation)
-        }
-        
-        public subscript(index: Int) -> Element
-        {
-            get { visibleItems[index].element }
-        }
-        
-        public var _hasPendingChanges: Bool {
-            items.contains { $0._hasPendingChanges }
-        }
-        
-        public func _beginSaving(transaction: DatabaseTask.WriteTransaction, changeset: Changeset) throws
-        {
-            try items.forEach { try $0._beginSaving(transaction: transaction, changeset: changeset) }
-        }
-        
-        public mutating func _endSaving(success: Bool, transaction: DatabaseTask.WriteTransaction)
-        {
-            items.forEach { $0._endSaving(success: success, transaction: transaction) }
-            items.removeAll { $0._metadata.objectStatus == .deleted }
-        }
-        
-        public func _cascadeDeletion()
-        {
-            items.forEach { $0._cascadeDeletion() }
-        }
-        
-        @MainActor
-        public func _beginAutoupdating()
-        {
-            items.forEach { $0._beginAutoupdating() }
-        }
-    }
-}

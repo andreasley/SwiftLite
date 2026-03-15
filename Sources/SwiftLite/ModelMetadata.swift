@@ -3,7 +3,7 @@ import Foundation
 @Observable
 public nonisolated final class ModelMetadata: DatabaseEntityMetadata, WithTrackedChanges
 {
-    enum ObjectStatus {
+    public enum ObjectStatus {
         case new // not stored in database yet
         case stored
         case markedForDeletion // marked for deletion but not saved yet
@@ -24,7 +24,7 @@ public nonisolated final class ModelMetadata: DatabaseEntityMetadata, WithTracke
     public let id: UUID
     
     let changedValues = UpdatedValues()
-    var objectStatus: ObjectStatus
+    public var objectStatus: ObjectStatus
     
     @ObservationIgnored
     var isAutosaving: Bool
@@ -43,7 +43,7 @@ public nonisolated final class ModelMetadata: DatabaseEntityMetadata, WithTracke
         changedValues.hasChanges || objectStatus.hasChanges
     }
     
-    init(db: Database, table: String, id: UUID, isNew: Bool, isAutosaving: Bool = false)
+    public init(db: Database, table: String, id: UUID, isNew: Bool, isAutosaving: Bool = false)
     {
         self.db = db
         self.table = table
@@ -100,7 +100,7 @@ public nonisolated final class ModelMetadata: DatabaseEntityMetadata, WithTracke
         self.lastWrite  = .now
     }
     
-    func _update(with changes: ChangedObject)
+    public func _update(with changes: ChangedObject)
     {
         if changes.status == .deleted {
             objectStatus = .deleted

@@ -9,12 +9,12 @@ public nonisolated protocol ModelSnapshot: Fetchable, Sendable, SQLValueConverti
     var id: UUID { get }
 }
 
-nonisolated extension ModelSnapshot
+public nonisolated extension ModelSnapshot
 {
     var _hasPendingChanges: Bool { false }
 }
 
-extension ModelSnapshot
+public nonisolated extension ModelSnapshot
 {
     func _beginAutoupdating() {}
 }

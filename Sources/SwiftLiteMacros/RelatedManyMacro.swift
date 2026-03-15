@@ -3,7 +3,7 @@ import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 import SwiftDiagnostics
 
-public struct RelatedManyMacro: AccessorMacro, PeerMacro
+public struct RelatedManyMacro: AccessorMacro
 {
     public enum DiagnosticMessage: String, SwiftDiagnostics.DiagnosticMessage {
         case invalidDeclaration
@@ -46,46 +46,6 @@ public struct RelatedManyMacro: AccessorMacro, PeerMacro
     
     public static func expansion(
         of node: AttributeSyntax,
-        providingPeersOf declaration: some DeclSyntaxProtocol,
-        in context: some MacroExpansionContext
-    ) throws -> [DeclSyntax]
-    {
-        guard
-            let varDecl = declaration.as(VariableDeclSyntax.self),
-            let binding = varDecl.bindings.first,
-            let identifier = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier
-        else { throw Error.invalidDeclaration }
-
-        let propertyName = identifier.text
-        
-        // Extract the type argument from @RelatedMany(Passenger.self)
-        var relatedTypeName: String = "Unknown"
-        if case .argumentList(let arguments) = node.arguments,
-           let firstArg = arguments.first {
-            // Try to extract the type from expressions like "Passenger.self"
-            if let memberAccess = firstArg.expression.as(MemberAccessExprSyntax.self),
-               let baseType = memberAccess.base?.as(DeclReferenceExprSyntax.self) {
-                relatedTypeName = baseType.baseName.text
-            }
-        }
-        
-        // Generate the relation schema name: PassengersRelationSchema
-        let schemaName = propertyName.prefix(1).uppercased() + propertyName.dropFirst() + "RelationSchema"
-        
-        // Generate the collection type name: PassengersCollection
-        let collectionTypeName = propertyName.prefix(1).uppercased() + propertyName.dropFirst() + "Collection"
-        
-        // Generate typealias
-        let typealiasDecl: DeclSyntax =
-        """
-        typealias \(raw: collectionTypeName) = ManyToMany<\(raw: schemaName)>.Collection
-        """
-        
-        return [typealiasDecl]
-    }
-    
-    public static func expansion(
-        of node: AttributeSyntax,
         providingAccessorsOf declaration: some DeclSyntaxProtocol,
         in context: some MacroExpansionContext
     ) throws -> [AccessorDeclSyntax]
@@ -99,8 +59,16 @@ public struct RelatedManyMacro: AccessorMacro, PeerMacro
 
         let propertyName = identifier.text
         
-        // Generate the expected collection type name
-        let expectedTypeName = propertyName.prefix(1).uppercased() + propertyName.dropFirst() + "Collection"
+        // Extract the type argument from the macro (e.g., Passenger from @RelatedMany(Passenger.self))
+        guard case .argumentList(let arguments) = node.arguments,
+              let firstArg = arguments.first,
+              let memberAccessExpr = firstArg.expression.as(MemberAccessExprSyntax.self),
+              let baseExpr = memberAccessExpr.base,
+              let relatedTypeName = baseExpr.as(DeclReferenceExprSyntax.self)?.baseName.text
+        else { throw Error.missingTypeArgument }
+        
+        // Generate the expected collection type: RelatedCollection<Passenger>
+        let expectedTypeName = "RelatedCollection<\(relatedTypeName)>"
         
         // Check if type annotation exists and matches expected
         if let typeAnnotation = binding.typeAnnotation {
@@ -112,7 +80,14 @@ public struct RelatedManyMacro: AccessorMacro, PeerMacro
                     changes: [
                         .replace(
                             oldNode: Syntax(typeAnnotation.type),
-                            newNode: Syntax(IdentifierTypeSyntax(name: .identifier(expectedTypeName)))
+                            newNode: Syntax(
+                                IdentifierTypeSyntax(
+                                    name: .identifier("RelatedCollection"),
+                                    genericArgumentClause: GenericArgumentClauseSyntax {
+                                        GenericArgumentSyntax(argument: IdentifierTypeSyntax(name: .identifier(relatedTypeName)))
+                                    }
+                                )
+                            )
                         )
                     ]
                 )
@@ -128,7 +103,12 @@ public struct RelatedManyMacro: AccessorMacro, PeerMacro
             // Type annotation is missing - provide Fix-It to add it
             let newTypeAnnotation = TypeAnnotationSyntax(
                 colon: .colonToken(trailingTrivia: .space),
-                type: IdentifierTypeSyntax(name: .identifier(expectedTypeName))
+                type: IdentifierTypeSyntax(
+                    name: .identifier("RelatedCollection"),
+                    genericArgumentClause: GenericArgumentClauseSyntax {
+                        GenericArgumentSyntax(argument: IdentifierTypeSyntax(name: .identifier(relatedTypeName)))
+                    }
+                )
             )
             
             let fixIt = FixIt(
@@ -154,9 +134,6 @@ public struct RelatedManyMacro: AccessorMacro, PeerMacro
         return [
             """
             get { _editableData.\(raw: propertyName).collection }
-            """,
-            """
-            set { _editableData.\(raw: propertyName).collection = newValue }
             """
         ]
     }
