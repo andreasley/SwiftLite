@@ -1,6 +1,5 @@
 #if canImport(SwiftUI)
 import SwiftUI
-import SwiftLite
 
 @MainActor
 @propertyWrapper
