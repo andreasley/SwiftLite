@@ -28,6 +28,6 @@ public nonisolated enum StorageClass: String, Equatable, Sendable, StorageConver
     
     public init(storageValue: String) throws
     {
-        self = .init(rawValue: storageValue) ?? .undefined
+        self = .init(rawValue: storageValue.lowercased()) ?? .undefined
     }
 }

@@ -94,7 +94,12 @@ public nonisolated enum ExistingSchema
             
             public init(storageValue: String) throws
             {
-                self = .init(rawValue: storageValue) ?? .unknown
+                self = switch storageValue {
+                case "c": .createIndex
+                case "u": .uniqueConstraint
+                case "pk": .primaryKeyConstraint
+                default: .unknown
+                }
             }
         }
         

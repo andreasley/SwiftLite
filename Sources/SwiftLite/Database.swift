@@ -25,6 +25,7 @@ public actor Database: Observable
         case sqliteError(code: Int32)
         case failedToFindResultValue
         case failedToFindReadTransaction
+        case failedToMigrateSchema
 
         var description: String {
             return switch self {
@@ -46,6 +47,8 @@ public actor Database: Observable
                 "Failed to find result value"
             case .failedToFindReadTransaction:
                 "Failed to find a read transaction"
+            case .failedToMigrateSchema:
+                "Failed to migrate schema"
             }
         }
     }
@@ -143,17 +146,30 @@ public actor Database: Observable
             }
         }
         
-        for table in requiredTables {
-            print("Checking table \(table.name)...")
-            let existingTableForModel = existingTables.first { $0.name == table.name }
-            if let existingTableForModel {
-                print("exists; comparing...")
-                tablesWithoutMatchingModels.remove(existingTableForModel)
-                // compare schema
-                try updateTableIfNecessary(existingTable: existingTableForModel, table: table)
-            } else {
-                print("doesn't exist; creating...")
-                try createTable(table)
+        try await gate.run {
+            print("▶️ BEGINNING SCHEMA UPDATE TRANSACTION")
+            try self.run("BEGIN")
+            do {
+                for table in requiredTables {
+                    print("Checking table \(table.name)...")
+                    let existingTableForModel = existingTables.first { $0.name == table.name }
+                    if let existingTableForModel {
+                        print("exists; comparing...")
+                        tablesWithoutMatchingModels.remove(existingTableForModel)
+                        // compare schema
+                        try updateTableIfNecessary(existingTable: existingTableForModel, table: table)
+                    } else {
+                        print("doesn't exist; creating...")
+                        try createTable(table)
+                    }
+
+                }
+                try self.run("COMMIT")
+                print("✅ COMMITTED SCHEMA UPDATE TRANSACTION")
+            } catch {
+                try? self.run("ROLLBACK")
+                print("✴️ ROLLED BACK SCHEMA UPDATE TRANSACTION")
+                throw error
             }
 
         }
@@ -470,18 +486,96 @@ public actor Database: Observable
 
     func updateTableIfNecessary(existingTable: ExistingSchema.Table, table: RequiredSchema.Table) throws
     {
-        // TODO: Implement
-
-//        // Compare columns
-//        let existingColumns = try getColumns(tableName: existingTable.name)
-//
-//
-//        for existingColumn in existingColumns {
-//
-//        }
-//
-//        // Compare indexes
-//        let existingIndexes = try getIndexes(tableName: existingTable.name)
+        // Get existing schema details
+        let existingColumns = try getColumns(tableName: table.name)
+        let existingIndexes = try getIndexes(tableName: table.name)
+        
+        // Compare table properties
+        let needsRecreation = existingTable.isStrict != true || existingTable.isWithoutRowId != true
+        
+        // Compare columns
+        var columnsToAdd = [RequiredSchema.Column]()
+        var columnTypeChanged = false
+        
+        // Build a map of existing columns for quick lookup
+        let existingColumnMap = Dictionary(uniqueKeysWithValues: existingColumns.map { ($0.name, $0) })
+        let requiredColumnMap = Dictionary(uniqueKeysWithValues: table.columns.map { ($0.name, $0) })
+        
+        // Check for columns that need to be added or have changed types
+        for requiredColumn in table.columns {
+            if let existingColumn = existingColumnMap[requiredColumn.name] {
+                // Column exists, check if type matches
+                if existingColumn.storageClass != requiredColumn.storageClass {
+                    print("⚠️ Column '\(requiredColumn.name)' type changed from \(existingColumn.storageClass.rawValue) to \(requiredColumn.storageClass.rawValue)")
+                    columnTypeChanged = true
+                }
+            } else {
+                // Column doesn't exist, needs to be added
+                columnsToAdd.append(requiredColumn)
+            }
+        }
+        
+        // Compare indexes
+        var indexesToAdd = [RequiredSchema.Index]()
+        var indexesToRemove = [ExistingSchema.Index]()
+        
+        // Filter out system-generated indexes (like primary key indexes)
+        let userCreatedIndexes = existingIndexes.filter { $0.origin == .createIndex }
+        
+        let existingIndexMap = Dictionary(uniqueKeysWithValues: userCreatedIndexes.map { ($0.name, $0) })
+        let requiredIndexMap = Dictionary(uniqueKeysWithValues: table.indexes.map { ($0.name, $0) })
+        
+        for requiredIndex in table.indexes {
+            if let existingIndex = existingIndexMap[requiredIndex.name] {
+                // Index exists, check if it matches
+                let columnsMatch = existingIndex.columns == requiredIndex.columns
+                let uniquenessMatches = existingIndex.isUnique == requiredIndex.isUnique
+                
+                if !columnsMatch || !uniquenessMatches {
+                    // Index needs to be recreated
+                    indexesToRemove.append(existingIndex)
+                    indexesToAdd.append(requiredIndex)
+                }
+            } else {
+                // Index doesn't exist
+                indexesToAdd.append(requiredIndex)
+            }
+        }
+        
+        // Check for indexes to remove
+        for existingIndex in userCreatedIndexes {
+            if requiredIndexMap[existingIndex.name] == nil {
+                indexesToRemove.append(existingIndex)
+            }
+        }
+        
+        // Decide on migration strategy
+        if needsRecreation || columnTypeChanged {
+            // Would need to recreate the table, which is not supported
+            print("⛔️ Schema migration failed; Table '\(table.name)' requires structural changes")
+            throw Error.failedToMigrateSchema
+        } else {
+            // Can use simpler ALTER TABLE operations
+            
+            // Add new columns
+            for column in columnsToAdd {
+                print("➕ Adding column '\(column.name)' to table '\(table.name)'")
+                let alterStatement = "ALTER TABLE \"\(table.name)\" ADD COLUMN \"\(column.name)\" \(column.storageClass.rawValue.uppercased())"
+                try run(alterStatement)
+            }
+            
+            // Update indexes
+            for index in indexesToRemove {
+                print("🗑️ Dropping index '\(index.name)'")
+                try run("DROP INDEX \"\(index.name)\"")
+            }
+            
+            for index in indexesToAdd {
+                print("➕ Creating index '\(index.name)'")
+                let createIndexStatement = "CREATE \(index.isUnique ? "UNIQUE " : "")INDEX \"\(index.name)\" ON \"\(table.name)\"(\(index.columns.joined(separator: ", ")))"
+                try run(createIndexStatement)
+            }
+        }
     }
     
     func createTable(_ table: RequiredSchema.Table) throws
@@ -536,8 +630,6 @@ public actor Database: Observable
     
     func createTableStatement(for table: RequiredSchema.Table) -> String
     {
-        // TODO: Handle references
-        
         var columns = [String]()
         var foreignKeys = [String]()
 
