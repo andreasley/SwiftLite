@@ -1,7 +1,6 @@
 import SwiftLite
 import Foundation
 
-
 let temporaryDirectory = URL.temporaryDirectory.appending(component: "SwiftLiteDevelopment", directoryHint: .isDirectory)
 let fileUrl = temporaryDirectory.appending(component: "test.sqlite", directoryHint: .notDirectory)
 

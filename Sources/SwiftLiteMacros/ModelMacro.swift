@@ -697,7 +697,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             }
         }
         for prop in propertyInfo.relatedMany {
-            hasPendingChecks.append("\(prop.name)._hasPendingChanges")
+            hasPendingChecks.append("_editableData.\(prop.name)._hasPendingChanges")
         }
         for prop in propertyInfo.inverseRelated {
             hasPendingChecks.append("_editableData.\(prop.name)._hasPendingChanges")
@@ -726,7 +726,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             }
         }
         for prop in propertyInfo.relatedMany {
-            beginSavingCalls.append("try \(prop.name)._beginSaving(transaction: transaction, changeset: changeset)")
+            beginSavingCalls.append("try _editableData.\(prop.name)._beginSaving(transaction: transaction, changeset: changeset)")
         }
         for prop in propertyInfo.inverseRelated {
             beginSavingCalls.append("try _editableData.\(prop.name)._beginSaving(transaction: transaction, changeset: changeset)")
@@ -754,7 +754,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             }
         }
         for prop in propertyInfo.relatedMany {
-            endSavingCalls.append("\(prop.name)._endSaving(success: success, transaction: transaction)")
+            endSavingCalls.append("_editableData.\(prop.name)._endSaving(success: success, transaction: transaction)")
         }
         for prop in propertyInfo.inverseRelated {
             endSavingCalls.append("_editableData.\(prop.name)._endSaving(success: success, transaction: transaction)")
@@ -812,7 +812,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         }
         for prop in propertyInfo.relatedMany {
             if prop.onDelete == ".cascade" {
-                cascadeCalls.append("\(prop.name)._cascadeDeletion()")
+                cascadeCalls.append("_editableData.\(prop.name)._cascadeDeletion()")
             }
         }
         
@@ -835,10 +835,10 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         var relatedTypes = [String]()
         for prop in propertyInfo.related {
             let baseType = prop.type.replacingOccurrences(of: "?", with: "")
-            relatedTypes.append("\(baseType).Schema.self")
+            relatedTypes.append("\(baseType).Model.Schema.self")
         }
         for prop in propertyInfo.relatedMany {
-            relatedTypes.append("\(prop.elementType).Schema.self")
+            relatedTypes.append("\(prop.elementType).Model.Schema.self")
             relatedTypes.append("\(prop.schemaType).self")
         }
         
@@ -1098,7 +1098,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         }
         
         for prop in propertyInfo.related {
-            let baseType = prop.type.replacingOccurrences(of: "?", with: "")
+            let baseType = prop.type.replacingOccurrences(of: "?", with: "").replacingOccurrences(of: ".Snapshot", with: "")
             if prop.isOptional {
                 storedProps.append("")
                 storedProps.append("let _\(prop.name): DirectRelationReference<\(baseType)>?")
