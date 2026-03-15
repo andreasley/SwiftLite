@@ -10,10 +10,11 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
     enum ModelDiagnostic: String, DiagnosticMessage {
         case requiresFinal
         case requiresClass
+        case propertyNeedsAnnotation
         
         var severity: DiagnosticSeverity {
             switch self {
-            case .requiresFinal, .requiresClass:
+            case .requiresFinal, .requiresClass, .propertyNeedsAnnotation:
                 return .error
             }
         }
@@ -24,6 +25,8 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
                 return "@Model requires the class to be marked as 'final'"
             case .requiresClass:
                 return "@Model can only be applied to classes"
+            case .propertyNeedsAnnotation:
+                return "Property in @Model class must be annotated with @Stored, @Transient, or a relationship attribute"
             }
         }
         
@@ -185,8 +188,6 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             return []
         }
         
-        var attributesToAdd = [SwiftSyntax.AttributeSyntax]()
-        
         // Check existing attributes
         let existingAttributeNames = varDecl.attributes.compactMap { attribute -> String? in
             guard case let .attribute(attr) = attribute else { return nil }
@@ -201,15 +202,45 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         let hasTransient = existingAttributeNames.contains("Transient")
         let hasEditableValue = existingAttributeNames.contains("EditableValue")
         
-        // Add @Stored to stored properties that don't have it and aren't relationship properties
+        // If the property doesn't have any of the required annotations, emit a warning with Fix-Its
         if !hasStored && !hasRelated && !hasRelatedMany && !hasInverseRelated && !hasInverseRelatedMany && !hasTransient {
-            attributesToAdd.append(
-                AttributeSyntax(attributeName: IdentifierTypeSyntax(name: .identifier("Stored")))
+            // Create Fix-Its for adding @Stored or @Transient
+            let storedFixIt = FixIt(
+                message: MacroExpansionFixItMessage("Add @Stored attribute"),
+                changes: [
+                    .replace(
+                        oldNode: Syntax(varDecl.attributes),
+                        newNode: Syntax(varDecl.attributes.appending(
+                            .attribute(AttributeSyntax(attributeName: IdentifierTypeSyntax(name: .identifier("Stored"))))
+                        ))
+                    )
+                ]
             )
+            
+            let transientFixIt = FixIt(
+                message: MacroExpansionFixItMessage("Add @Transient attribute"),
+                changes: [
+                    .replace(
+                        oldNode: Syntax(varDecl.attributes),
+                        newNode: Syntax(varDecl.attributes.appending(
+                            .attribute(AttributeSyntax(attributeName: IdentifierTypeSyntax(name: .identifier("Transient"))))
+                        ))
+                    )
+                ]
+            )
+            
+            let diagnostic = Diagnostic(
+                node: Syntax(varDecl),
+                message: ModelDiagnostic.propertyNeedsAnnotation,
+                fixIts: [storedFixIt, transientFixIt]
+            )
+            
+            context.diagnose(diagnostic)
         }
         
         // Add @EditableValue if the property has @Related/@RelatedMany/@Stored and not @Transient or @EditableValue
-        if !hasEditableValue && !hasTransient && (hasRelated || hasStored || !attributesToAdd.isEmpty) {
+        var attributesToAdd = [SwiftSyntax.AttributeSyntax]()
+        if !hasEditableValue && !hasTransient && (hasRelated || hasStored) {
             attributesToAdd.append(
                 AttributeSyntax(attributeName: IdentifierTypeSyntax(name: .identifier("EditableValue")))
             )
