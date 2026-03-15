@@ -1,3 +1,4 @@
+#if canImport(SwiftUI)
 import SwiftUI
 
 public protocol ModelLifecycleEventTriggeringView<Content>: View
@@ -96,3 +97,4 @@ public extension ModelLifecycleEventTriggeringView
     }
 }
 
+#endif

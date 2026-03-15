@@ -1,3 +1,4 @@
+#if canImport(SwiftUI)
 import SwiftUI
 
 struct ModelPicker<Item: Identifiable & Equatable & Hashable, Label: View>: View
@@ -42,3 +43,4 @@ struct ModelPicker<Item: Identifiable & Equatable & Hashable, Label: View>: View
         )
     }
 }
+#endif

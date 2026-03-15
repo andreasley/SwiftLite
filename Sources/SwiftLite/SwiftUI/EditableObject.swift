@@ -1,3 +1,4 @@
+#if canImport(SwiftUI)
 import SwiftUI
 
 @MainActor
@@ -47,3 +48,4 @@ public struct EditableObject<T: Model>: DynamicProperty
         }
     }
 }
+#endif

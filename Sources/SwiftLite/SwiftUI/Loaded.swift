@@ -1,3 +1,4 @@
+#if canImport(SwiftUI)
 import SwiftUI
 
 @MainActor
@@ -11,3 +12,4 @@ public struct Loaded<T>: DynamicProperty
         self.wrappedValue = wrappedValue
     }
 }
+#endif

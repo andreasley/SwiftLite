@@ -1,3 +1,4 @@
+#if canImport(SwiftUI)
 import SwiftUI
 
 @MainActor
@@ -75,3 +76,4 @@ public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
     }
 }
 
+#endif
