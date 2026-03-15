@@ -372,7 +372,7 @@ public actor Database: Observable
         var results = [T]()
         
         try await gate.run {
-            print("✳️ BEGINNING READ TRANSACTION")
+            print("▶️ BEGINNING READ TRANSACTION")
             let readTransaction = DatabaseTask.ReadTransaction(db: self)
             
             try await DatabaseTask.$currentReadTransaction.withValue(readTransaction) {
@@ -383,7 +383,7 @@ public actor Database: Observable
                     print("✅ COMMITTED READ TRANSACTION")
                 } catch {
                     try? await self.run("ROLLBACK")
-                    print("❎ ROLLED BACK READ TRANSACTION")
+                    print("✴️ ROLLED BACK READ TRANSACTION")
                     throw error
                 }
             }
@@ -424,7 +424,7 @@ public actor Database: Observable
     public func save(changeset: FrozenChangeset) async throws
     {
         try await gate.run {
-            print("✳️ BEGINNING WRITE TRANSACTION")
+            print("▶️ BEGINNING WRITE TRANSACTION")
             var transactionCompletedSuccessfully = false
             try self.run("BEGIN")
             do {
@@ -454,7 +454,7 @@ public actor Database: Observable
                 transactionCompletedSuccessfully = true
             } catch {
                 try? self.run("ROLLBACK")
-                print("❎ ROLLED BACK WRITE TRANSACTION")
+                print("✴️ ROLLED BACK WRITE TRANSACTION")
                 throw error
             }
 
