@@ -12,6 +12,7 @@ import SwiftLiteMacros
 let testMacros: [String: Macro.Type] = [
     "stringify": StringifyMacro.self,
     "Model": ModelMacro.self,
+    "Stored": StoredMacro.self,
 ]
 #endif
 
@@ -92,6 +93,38 @@ final class SwiftLiteTests: XCTestCase
             }
             }
             """,
+            macros: testMacros
+        )
+    }
+    
+    func testStoredWithDefaultValueDiagnostic() throws
+    {
+        try checkMacroAvailability()
+        
+        assertMacroExpansion(
+            """
+            @Model final class Interior {
+                @Stored
+                let name: String = "gna"
+            }
+            """,
+            expandedSource: """
+            @Model final class Interior {
+                @Stored
+                let name: String
+            }
+            """,
+            diagnostics: [
+                DiagnosticSpec(
+                    message: "@Stored properties cannot have default values; use the 'defaultValue' parameter instead",
+                    line: 3,
+                    column: 22,
+                    severity: .error,
+                    fixIts: [
+                        FixItSpec(message: "Move default value to '@Stored(defaultValue:)' parameter")
+                    ]
+                )
+            ],
             macros: testMacros
         )
     }
