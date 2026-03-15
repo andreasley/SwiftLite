@@ -195,7 +195,7 @@ public nonisolated extension ManyToMany
         @MainActor
         public func _beginAutoupdating()
         {
-            _metadata._beginAutoupdating(model: self)
+            // calling _beginAutoupdating on _metadata is not required, because the junctions can't change and the respective collection will remove them when deleted
             element._beginAutoupdating()
         }
 

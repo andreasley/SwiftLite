@@ -195,8 +195,8 @@ public nonisolated extension InverseManyToMany
         @MainActor
         public func _beginAutoupdating()
         {
-            _metadata._beginAutoupdating(model: self)
-            parent._beginAutoupdating()
+            // calling _beginAutoupdating on _metadata is not required, because the junctions can't change and the respective collection will remove them when deleted
+            // calling _beginAutoupdating on parent is pointless, since a Snapshot can't autoupdate
         }
 
         public var _hasPendingChanges: Bool {
