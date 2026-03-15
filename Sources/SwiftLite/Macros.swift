@@ -15,7 +15,7 @@ public macro Model() = #externalMacro(module: "SwiftLiteMacros", type: "ModelMac
 
 
 @attached(peer)
-public macro Stored(columName: String? = nil, defaultValue: Any? = nil, isUnique: Bool = false, isIndexed: Bool = true) = #externalMacro(module: "SwiftLiteMacros", type: "StoredMacro")
+public macro Stored(columName: String? = nil, defaultValue: Any? = nil, fallbackValue: Any? = nil, isUnique: Bool = false, isIndexed: Bool = true) = #externalMacro(module: "SwiftLiteMacros", type: "StoredMacro")
 
 @attached(peer)
 public macro Related(onDelete: DeletionPolicy = .ignore) = #externalMacro(module: "SwiftLiteMacros", type: "RelatedMacro")

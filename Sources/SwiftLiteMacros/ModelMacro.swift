@@ -309,7 +309,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
     }
     
     private static func collectPropertyInfo(from classDecl: ClassDeclSyntax) throws -> PropertyInfo {
-        var storedProperties: [(name: String, type: String, hasDefault: Bool, defaultValue: String?)] = []
+        var storedProperties: [(name: String, type: String, hasDefault: Bool, defaultValue: String?, fallbackValue: String?)] = []
         var relatedProperties: [(name: String, type: String, isOptional: Bool, onDelete: String?)] = []
         var relatedManyProperties: [(name: String, elementType: String, schemaType: String, onDelete: String?)] = []
         var inverseRelatedProperties: [(name: String, type: String, referencingField: String)] = []
@@ -342,6 +342,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             var isInverseRelated = false
             var isInverseRelatedMany = false
             var defaultValue: String? = nil
+            var fallbackValue: String? = nil
             var elementType: String? = nil
             var onDelete: String? = nil
             var referencingField: String? = nil
@@ -359,6 +360,8 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
                         for argument in arguments {
                             if argument.label?.text == "defaultValue" {
                                 defaultValue = argument.expression.trimmedDescription
+                            } else if argument.label?.text == "fallbackValue" {
+                                fallbackValue = argument.expression.trimmedDescription
                             }
                         }
                     }
@@ -409,7 +412,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             }
             
             if isStored {
-                storedProperties.append((name: propertyName, type: typeAnnotation, hasDefault: defaultValue != nil, defaultValue: defaultValue))
+                storedProperties.append((name: propertyName, type: typeAnnotation, hasDefault: defaultValue != nil, defaultValue: defaultValue, fallbackValue: fallbackValue))
             } else if isRelated {
                 let isOptional = typeAnnotation.hasSuffix("?")
                 relatedProperties.append((name: propertyName, type: typeAnnotation, isOptional: isOptional, onDelete: onDelete))
@@ -434,7 +437,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
     }
     
     private struct PropertyInfo {
-        let stored: [(name: String, type: String, hasDefault: Bool, defaultValue: String?)]
+        let stored: [(name: String, type: String, hasDefault: Bool, defaultValue: String?, fallbackValue: String?)]
         let related: [(name: String, type: String, isOptional: Bool, onDelete: String?)]
         let relatedMany: [(name: String, elementType: String, schemaType: String, onDelete: String?)]
         let inverseRelated: [(name: String, type: String, referencingField: String)]
@@ -612,7 +615,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         
         // Extract stored properties from row
         for prop in propertyInfo.stored {
-            if prop.hasDefault {
+            if let fallbackValue = prop.fallbackValue {
                 bodyLines.append("let \(prop.name): \(prop.type) = try row.get(\"\(prop.name)\", fallback: FallbackValues.\(prop.name))")
             } else {
                 bodyLines.append("let \(prop.name): \(prop.type) = try row.get(\"\(prop.name)\")")
@@ -961,20 +964,10 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
     private static func generateFallbackValuesStruct(propertyInfo: PropertyInfo) throws -> DeclSyntax {
         var fallbackVars = [String]()
         
-        for prop in propertyInfo.stored where prop.hasDefault {
-            // Generate appropriate fallback based on type
-            let fallback: String
-            if prop.type == "String" {
-                fallback = "\"\""
-            } else if prop.type == "Int" || prop.type == "Double" || prop.type == "Float" {
-                fallback = "0"
-            } else if prop.type == "Bool" {
-                fallback = "false"
-            } else {
-                // For complex types, use default constructor
-                fallback = "\(prop.type)()"
+        for prop in propertyInfo.stored {
+            if let fallbackValue = prop.fallbackValue {
+                fallbackVars.append("static var \(prop.name): \(prop.type) { \(fallbackValue) }")
             }
-            fallbackVars.append("static var \(prop.name): \(prop.type) { \(fallback) }")
         }
         
         guard !fallbackVars.isEmpty else {
