@@ -47,7 +47,7 @@ nonisolated final class PassengerExpanded
     {
         let id: UUID = try row.get("id")
         let name: String = try row.get("name")
-        let cars: any AnyInverseManyToMany<Car> = try await row.get(inverse: \Car._editableData.passengers, db: db, elementId: id)
+        let cars: any AnyInverseManyToMany<Car.Snapshot> = try await row.get(inverse: \Car._editableData.passengers, db: db, elementId: id)
 
         self._metadata = ModelMetadata(db: db, table: Schema.table.name, id: id, isNew: false)
         self._editableData = EditableData(name: name, cars: cars)
@@ -127,9 +127,9 @@ nonisolated extension PassengerExpanded: Model
     @Observable nonisolated class EditableData
     {
         var name: String
-        var cars: any AnyInverseManyToMany<Car>
+        var cars: any AnyInverseManyToMany<Car.Snapshot>
 
-        fileprivate init(name: String, cars: any AnyInverseManyToMany<Car> )
+        fileprivate init(name: String, cars: any AnyInverseManyToMany<Car.Snapshot> )
         {
             self.name = name
             self.cars = cars

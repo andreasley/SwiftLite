@@ -509,7 +509,8 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         
         // Initialize inverse many-to-many relationships
         for prop in propertyInfo.inverseRelatedMany {
-            bodyLines.append("let \(prop.name) = InverseManyToMany(keyPath: \(prop.keyPath), db: db, elementId: id)")
+            let transformedKeyPath = transformKeyPath(prop.keyPath)
+            bodyLines.append("let \(prop.name) = InverseManyToMany(keyPath: \(transformedKeyPath), db: db, elementId: id)")
         }
         
         bodyLines.append("")
@@ -604,8 +605,8 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         // Extract inverse many-to-many relationships from row
         for prop in propertyInfo.inverseRelatedMany {
             let relatedType = extractRelatedType(from: prop.type)
-            let baseType = relatedType.hasSuffix(".Snapshot") ? String(relatedType.dropLast(9)) : relatedType
-            bodyLines.append("let \(prop.name): any AnyInverseManyToMany<\(baseType)> = try await row.get(inverse: \(prop.keyPath), db: db, elementId: id)")
+            let transformedKeyPath = transformKeyPath(prop.keyPath)
+            bodyLines.append("let \(prop.name): any AnyInverseManyToMany<\(relatedType)> = try await row.get(inverse: \(transformedKeyPath), db: db, elementId: id)")
         }
         
         bodyLines.append("")
@@ -991,10 +992,8 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         for prop in propertyInfo.inverseRelatedMany {
             // Extract the related type from RelatedCollection<Type.Snapshot> and get base type
             let relatedType = extractRelatedType(from: prop.type)
-            // Remove .Snapshot suffix to get the base type
-            let baseType = relatedType.hasSuffix(".Snapshot") ? String(relatedType.dropLast(9)) : relatedType
-            properties.append("var \(prop.name): any AnyInverseManyToMany<\(baseType)>")
-            initParams.append("\(prop.name): any AnyInverseManyToMany<\(baseType)>")
+            properties.append("var \(prop.name): any AnyInverseManyToMany<\(relatedType)>")
+            initParams.append("\(prop.name): any AnyInverseManyToMany<\(relatedType)>")
             initAssignments.append("self.\(prop.name) = \(prop.name)")
         }
         
@@ -1019,6 +1018,22 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             return String(typeAnnotation[typeAnnotation.index(after: start)..<end])
         }
         return typeAnnotation
+    }
+    
+    // Helper function to transform keyPath from \Model.property to \Model._editableData.property
+    private static func transformKeyPath(_ keyPath: String) -> String {
+        // keyPath is something like \SomeModel.someProperty
+        // We need to transform it to \SomeModel._editableData.someProperty
+        
+        // Find the first dot that separates the model name from the property
+        if let dotIndex = keyPath.firstIndex(of: ".") {
+            let beforeDot = keyPath[..<dotIndex]  // \SomeModel
+            let afterDot = keyPath[keyPath.index(after: dotIndex)...]  // someProperty
+            return "\(beforeDot)._editableData.\(afterDot)"
+        }
+        
+        // If no dot found, return as-is (shouldn't happen in normal cases)
+        return keyPath
     }
     
     private static func generateQueryProxyStruct(

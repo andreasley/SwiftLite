@@ -1,11 +1,6 @@
 import Foundation
 
-nonisolated public protocol RelationReference<T>
-{
-    associatedtype T
-}
-
-nonisolated public struct DirectRelationReference<T: Model>: RelationReference, Sendable
+nonisolated public struct DirectRelationReference<T: Fetchable>: Sendable
 {
     public let id: UUID
 }

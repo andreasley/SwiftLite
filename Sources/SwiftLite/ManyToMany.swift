@@ -16,7 +16,7 @@ public nonisolated class ManyToMany<Schema: RelationshipModelSchema>: Saveable
         junctions.contains { $0._hasPendingChanges }
     }
     
-    init(db: Database, parentId: UUID)
+    public init(db: Database, parentId: UUID)
     {
         self.db = db
         self.parentId = parentId
@@ -26,7 +26,7 @@ public nonisolated class ManyToMany<Schema: RelationshipModelSchema>: Saveable
         setUpCollectionChangeHandlers()
     }
     
-    init(db: Database, parentId: UUID) async throws
+    public init(db: Database, parentId: UUID) async throws
     {
         self.db = db
         self.parentId = parentId

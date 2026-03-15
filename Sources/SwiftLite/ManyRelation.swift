@@ -1,9 +1,8 @@
-public nonisolated protocol AnyInverseManyToMany<T> where T: Model
+public nonisolated protocol AnyInverseManyToMany<S> where S: ModelSnapshot
 {
-    associatedtype T = Schema.Parent
-    associatedtype Schema: RelationshipModelSchema
+    associatedtype S
     
-    var collection: RelatedCollection<T.Snapshot> { get }
+    var collection: RelatedCollection<S> { get }
     var _hasPendingChanges: Bool { get }
 
     func _beginSaving(transaction: DatabaseTask.WriteTransaction, changeset: Changeset) throws

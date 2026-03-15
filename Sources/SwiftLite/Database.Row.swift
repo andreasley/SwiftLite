@@ -154,7 +154,7 @@ public nonisolated extension Database
 
         // MARK: Inverse related collection (many to many)
         
-        public func get<T: Model, Schema: RelationshipModelSchema>(inverse keyPath: KeyPath<T, ManyToMany<Schema>>, db: Database, elementId: UUID) async throws -> InverseManyToMany<Schema> where Schema.Parent == T
+        public func get<Schema: RelationshipModelSchema>(inverse keyPath: KeyPath<Schema.Parent, ManyToMany<Schema>>, db: Database, elementId: UUID) async throws -> InverseManyToMany<Schema>
         {
             try await InverseManyToMany(keyPath: keyPath, db: db, elementId: elementId)
         }
