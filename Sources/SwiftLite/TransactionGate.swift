@@ -2,7 +2,7 @@ actor TransactionGate
 {
     private var pending: [CheckedContinuation<Void, Never>] = []
     private var isRunning = false
-
+    
     private func acquire() async
     {
         if isRunning {
@@ -10,7 +10,7 @@ actor TransactionGate
         }
         isRunning = true
     }
-
+    
     private func release()
     {
         if let next = pending.first {
@@ -27,7 +27,6 @@ actor TransactionGate
         await acquire()
         defer { Task { await release() }}
         let result = try await body()
-        await release()
         return result
     }
 }
