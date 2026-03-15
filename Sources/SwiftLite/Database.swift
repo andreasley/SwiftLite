@@ -53,7 +53,7 @@ public actor Database: Observable
     internal let connectionHandle: OpaquePointer
     internal var notificationProxies = [ActorNotificationProxy]()
 
-    let gate = AsyncGate()
+    let gate = TransactionGate()
 
     public internal(set) var isClosed = false
 
@@ -371,7 +371,7 @@ public actor Database: Observable
         
         var results = [T]()
         
-        try await gate.withGate {
+        try await gate.run {
             print("BEGIN READ TRANSACTION")
             let readTransaction = DatabaseTask.ReadTransaction(db: self)
             
@@ -422,7 +422,7 @@ public actor Database: Observable
 
     public func save(changeset: FrozenChangeset) async throws
     {
-        try await gate.withGate {
+        try await gate.run {
             print("BEGIN WRITE TRANSACTION")
             var transactionCompletedSuccessfully = false
             try self.run("BEGIN")
