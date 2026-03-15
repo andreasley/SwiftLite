@@ -5,16 +5,23 @@ public nonisolated protocol RelationshipModelSchema<Parent, Element>: ModelSchem
     associatedtype Parent: SwiftLite.Model
     associatedtype Element: SwiftLite.Model
     
+    typealias Model = ManyToMany<Self>.JunctionModel
     typealias Columns = RelationshipModelSchemaDefaults.Columns
     typealias Indexes = RelationshipModelSchemaDefaults.Indexes
 
     static var deletionPolicy: DeletionPolicy { get }
-//    static var inverseDeletionPolicy: DeletionPolicy { get }
+}
+
+public extension RelationshipModelSchema
+{
+    static var related: [any ModelSchema.Type] {
+        [Parent.Schema.self, Element.Schema.self]
+    }
 }
 
 public nonisolated enum RelationshipModelSchemaDefaults
 {
-    static func getTable(name: String, parentTable: String, elementTable: String) -> RequiredSchema.Table
+    public static func getTable(name: String, parentTable: String, elementTable: String) -> RequiredSchema.Table
     {
         RequiredSchema.Table(name: name, columns: [
             Columns.id,

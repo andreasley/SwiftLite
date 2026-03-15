@@ -258,13 +258,10 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro, Pee
         {
             typealias Parent = \(raw: className)
             typealias Element = \(raw: property.elementType)
-            typealias Model = ManyToMany<\(raw: property.schemaType)>.RelationshipModel
             
             static let deletionPolicy: DeletionPolicy = \(raw: deletionPolicy)
             
             static let table = RelationshipModelSchemaDefaults.getTable(name: "\(raw: tableName)", parentTable: Parent.Schema.table.name, elementTable: Element.Schema.table.name)
-            
-            static let related: [any ModelSchema.Type] = [Parent.Schema.self, Element.Schema.self]
         }
         """
     }
@@ -305,7 +302,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro, Pee
             
             try generateFallbackValuesStruct(propertyInfo: propertyInfo)
             
-            try generateEditableDataClass(propertyInfo: propertyInfo)
+            try generateEditableDataClass(propertyInfo: propertyInfo, className: className)
             
             try generateQueryProxyStruct(
                 className: className,
@@ -326,6 +323,8 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro, Pee
         var storedProperties: [(name: String, type: String, hasDefault: Bool, defaultValue: String?)] = []
         var relatedProperties: [(name: String, type: String, isOptional: Bool, onDelete: String?)] = []
         var relatedManyProperties: [(name: String, elementType: String, schemaType: String, onDelete: String?)] = []
+        var inverseRelatedProperties: [(name: String, type: String, referencingField: String)] = []
+        var inverseRelatedManyProperties: [(name: String, type: String, keyPath: String)] = []
         var computedProperties: [(name: String, body: String)] = []
         
         for member in classDecl.memberBlock.members {
@@ -351,9 +350,13 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro, Pee
             var isStored = false
             var isRelated = false
             var isRelatedMany = false
+            var isInverseRelated = false
+            var isInverseRelatedMany = false
             var defaultValue: String? = nil
             var elementType: String? = nil
             var onDelete: String? = nil
+            var referencingField: String? = nil
+            var keyPath: String? = nil
             
             for attribute in varDecl.attributes {
                 guard case let .attribute(attr) = attribute,
@@ -393,6 +396,26 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro, Pee
                             }
                         }
                     }
+                } else if attrName == "InverseRelated" {
+                    isInverseRelated = true
+                    if let arguments = attr.arguments?.as(LabeledExprListSyntax.self) {
+                        for argument in arguments {
+                            // The first argument is a key path like \Car.engine
+                            let keyPathText = argument.expression.trimmedDescription
+                            // Extract the field name from the keypath (e.g., "engine" from "\Car.engine")
+                            if let dotIndex = keyPathText.lastIndex(of: ".") {
+                                referencingField = String(keyPathText[keyPathText.index(after: dotIndex)...])
+                            }
+                        }
+                    }
+                } else if attrName == "InverseRelatedMany" {
+                    isInverseRelatedMany = true
+                    if let arguments = attr.arguments?.as(LabeledExprListSyntax.self) {
+                        for argument in arguments {
+                            // The first argument is a key path like \Car.passengers
+                            keyPath = argument.expression.trimmedDescription
+                        }
+                    }
                 }
             }
             
@@ -404,6 +427,10 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro, Pee
             } else if isRelatedMany, let element = elementType {
                 let schemaName = "\(propertyName.prefix(1).uppercased())\(propertyName.dropFirst())RelationSchema"
                 relatedManyProperties.append((name: propertyName, elementType: element, schemaType: schemaName, onDelete: onDelete))
+            } else if isInverseRelated, let field = referencingField {
+                inverseRelatedProperties.append((name: propertyName, type: typeAnnotation, referencingField: field))
+            } else if isInverseRelatedMany, let kp = keyPath {
+                inverseRelatedManyProperties.append((name: propertyName, type: typeAnnotation, keyPath: kp))
             }
         }
         
@@ -411,6 +438,8 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro, Pee
             stored: storedProperties,
             related: relatedProperties,
             relatedMany: relatedManyProperties,
+            inverseRelated: inverseRelatedProperties,
+            inverseRelatedMany: inverseRelatedManyProperties,
             computed: computedProperties
         )
     }
@@ -419,6 +448,8 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro, Pee
         let stored: [(name: String, type: String, hasDefault: Bool, defaultValue: String?)]
         let related: [(name: String, type: String, isOptional: Bool, onDelete: String?)]
         let relatedMany: [(name: String, elementType: String, schemaType: String, onDelete: String?)]
+        let inverseRelated: [(name: String, type: String, referencingField: String)]
+        let inverseRelatedMany: [(name: String, type: String, keyPath: String)]
         let computed: [(name: String, body: String)]
     }
     
@@ -447,7 +478,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro, Pee
             """
         )
         
-        if !propertyInfo.stored.isEmpty || !propertyInfo.related.isEmpty || !propertyInfo.relatedMany.isEmpty {
+        if !propertyInfo.stored.isEmpty || !propertyInfo.related.isEmpty || !propertyInfo.relatedMany.isEmpty || !propertyInfo.inverseRelated.isEmpty || !propertyInfo.inverseRelatedMany.isEmpty {
             members.append(
                 """
                 let _editableData: EditableData
@@ -461,7 +492,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro, Pee
             let id: UUID
             """
         )
-                
+                        
         // Generate first initializer (for creating new objects)
         members.append(generateCreateInitializer(
             className: className,
@@ -510,11 +541,22 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro, Pee
             bodyLines.append("let \(prop.name) = ManyToMany<\(prop.schemaType)>(db: db, parentId: id)")
         }
         
+        // Initialize inverse relationships
+        for prop in propertyInfo.inverseRelated {
+            let relatedType = extractRelatedType(from: prop.type)
+            bodyLines.append("let \(prop.name) = Inverse<\(relatedType), \(className)>(db: db, objectId: id, referencingField: \"\(prop.referencingField)\")")
+        }
+        
+        // Initialize inverse many-to-many relationships
+        for prop in propertyInfo.inverseRelatedMany {
+            bodyLines.append("let \(prop.name) = InverseManyToMany(keyPath: \(prop.keyPath), db: db, elementId: id)")
+        }
+        
         bodyLines.append("")
         bodyLines.append("self._metadata = Metadata(db: db, table: Schema.table.name, id: id, isNew: true)")
         
         // Build EditableData initialization
-        if !propertyInfo.stored.isEmpty || !propertyInfo.related.isEmpty || !propertyInfo.relatedMany.isEmpty {
+        if !propertyInfo.stored.isEmpty || !propertyInfo.related.isEmpty || !propertyInfo.relatedMany.isEmpty || !propertyInfo.inverseRelated.isEmpty || !propertyInfo.inverseRelatedMany.isEmpty {
             var editableParams: [String] = []
             for prop in propertyInfo.stored {
                 editableParams.append("\(prop.name): \(prop.name)")
@@ -523,6 +565,12 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro, Pee
                 editableParams.append("\(prop.name): \(prop.name)")
             }
             for prop in propertyInfo.relatedMany {
+                editableParams.append("\(prop.name): \(prop.name)")
+            }
+            for prop in propertyInfo.inverseRelated {
+                editableParams.append("\(prop.name): \(prop.name)")
+            }
+            for prop in propertyInfo.inverseRelatedMany {
                 editableParams.append("\(prop.name): \(prop.name)")
             }
             bodyLines.append("self._editableData = EditableData(\(editableParams.joined(separator: ", ")))")
@@ -587,11 +635,24 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro, Pee
             bodyLines.append("let \(prop.name): ManyToMany<\(prop.schemaType)> = try await row.get(parentId: id)")
         }
         
+        // Extract inverse relationships from row
+        for prop in propertyInfo.inverseRelated {
+            let relatedType = extractRelatedType(from: prop.type)
+            bodyLines.append("let \(prop.name): Inverse<\(relatedType), \(className)> = try await row.get(objectId: id, referencingField: \"\(prop.referencingField)\")")
+        }
+        
+        // Extract inverse many-to-many relationships from row
+        for prop in propertyInfo.inverseRelatedMany {
+            let relatedType = extractRelatedType(from: prop.type)
+            let baseType = relatedType.hasSuffix(".Snapshot") ? String(relatedType.dropLast(9)) : relatedType
+            bodyLines.append("let \(prop.name): any AnyInverseManyToMany<\(baseType)> = try await row.get(inverse: \(prop.keyPath), db: db, elementId: id)")
+        }
+        
         bodyLines.append("")
         bodyLines.append("self._metadata = Metadata(db: db, table: Schema.table.name, id: id, isNew: false)")
         
         // Build EditableData initialization
-        if !propertyInfo.stored.isEmpty || !propertyInfo.related.isEmpty || !propertyInfo.relatedMany.isEmpty {
+        if !propertyInfo.stored.isEmpty || !propertyInfo.related.isEmpty || !propertyInfo.relatedMany.isEmpty || !propertyInfo.inverseRelated.isEmpty || !propertyInfo.inverseRelatedMany.isEmpty {
             var editableParams: [String] = []
             for prop in propertyInfo.stored {
                 editableParams.append("\(prop.name): \(prop.name)")
@@ -600,6 +661,12 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro, Pee
                 editableParams.append("\(prop.name): \(prop.name)")
             }
             for prop in propertyInfo.relatedMany {
+                editableParams.append("\(prop.name): \(prop.name)")
+            }
+            for prop in propertyInfo.inverseRelated {
+                editableParams.append("\(prop.name): \(prop.name)")
+            }
+            for prop in propertyInfo.inverseRelatedMany {
                 editableParams.append("\(prop.name): \(prop.name)")
             }
             bodyLines.append("self._editableData = EditableData(\(editableParams.joined(separator: ", ")))")
@@ -644,6 +711,12 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro, Pee
         for prop in propertyInfo.relatedMany {
             autoupdatingCalls.append("_editableData.\(prop.name)._beginAutoupdating()")
         }
+        for prop in propertyInfo.inverseRelated {
+            autoupdatingCalls.append("_editableData.\(prop.name)._beginAutoupdating()")
+        }
+        for prop in propertyInfo.inverseRelatedMany {
+            autoupdatingCalls.append("_editableData.\(prop.name)._beginAutoupdating()")
+        }
         
         methods.append("""
         @MainActor
@@ -664,6 +737,12 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro, Pee
         }
         for prop in propertyInfo.relatedMany {
             hasPendingChecks.append("\(prop.name)._hasPendingChanges")
+        }
+        for prop in propertyInfo.inverseRelated {
+            hasPendingChecks.append("_editableData.\(prop.name)._hasPendingChanges")
+        }
+        for prop in propertyInfo.inverseRelatedMany {
+            hasPendingChecks.append("_editableData.\(prop.name)._hasPendingChanges")
         }
         
         methods.append("""
@@ -688,6 +767,12 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro, Pee
         for prop in propertyInfo.relatedMany {
             beginSavingCalls.append("try \(prop.name)._beginSaving(transaction: transaction, changeset: changeset)")
         }
+        for prop in propertyInfo.inverseRelated {
+            beginSavingCalls.append("try _editableData.\(prop.name)._beginSaving(transaction: transaction, changeset: changeset)")
+        }
+        for prop in propertyInfo.inverseRelatedMany {
+            beginSavingCalls.append("try _editableData.\(prop.name)._beginSaving(transaction: transaction, changeset: changeset)")
+        }
         
         methods.append("""
         func _beginSaving(transaction: DatabaseTask.WriteTransaction, changeset: Changeset) throws
@@ -709,6 +794,12 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro, Pee
         }
         for prop in propertyInfo.relatedMany {
             endSavingCalls.append("\(prop.name)._endSaving(success: success, transaction: transaction)")
+        }
+        for prop in propertyInfo.inverseRelated {
+            endSavingCalls.append("_editableData.\(prop.name)._endSaving(success: success, transaction: transaction)")
+        }
+        for prop in propertyInfo.inverseRelatedMany {
+            endSavingCalls.append("_editableData.\(prop.name)._endSaving(success: success, transaction: transaction)")
         }
         
         methods.append("""
@@ -885,7 +976,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro, Pee
         """
     }
     
-    private static func generateEditableDataClass(propertyInfo: PropertyInfo) throws -> DeclSyntax {
+    private static func generateEditableDataClass(propertyInfo: PropertyInfo, className: String) throws -> DeclSyntax {
         var properties = [String]()
         var initParams = [String]()
         var initAssignments = [String]()
@@ -908,6 +999,24 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro, Pee
             initAssignments.append("self.\(prop.name) = \(prop.name)")
         }
         
+        for prop in propertyInfo.inverseRelated {
+            // Extract the related type from RelatedCollection<Type.Snapshot>
+            let relatedType = extractRelatedType(from: prop.type)
+            properties.append("let \(prop.name): Inverse<\(relatedType), \(className)>")
+            initParams.append("\(prop.name): Inverse<\(relatedType), \(className)>")
+            initAssignments.append("self.\(prop.name) = \(prop.name)")
+        }
+        
+        for prop in propertyInfo.inverseRelatedMany {
+            // Extract the related type from RelatedCollection<Type.Snapshot> and get base type
+            let relatedType = extractRelatedType(from: prop.type)
+            // Remove .Snapshot suffix to get the base type
+            let baseType = relatedType.hasSuffix(".Snapshot") ? String(relatedType.dropLast(9)) : relatedType
+            properties.append("var \(prop.name): any AnyInverseManyToMany<\(baseType)>")
+            initParams.append("\(prop.name): any AnyInverseManyToMany<\(baseType)>")
+            initAssignments.append("self.\(prop.name) = \(prop.name)")
+        }
+        
         return """
         @Observable internal nonisolated final class EditableData
         {
@@ -919,6 +1028,16 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro, Pee
             }
         }
         """
+    }
+    
+    // Helper function to extract type from RelatedCollection<Type>
+    private static func extractRelatedType(from typeAnnotation: String) -> String {
+        // Extract Type from RelatedCollection<Type>
+        if let start = typeAnnotation.firstIndex(of: "<"),
+           let end = typeAnnotation.lastIndex(of: ">") {
+            return String(typeAnnotation[typeAnnotation.index(after: start)..<end])
+        }
+        return typeAnnotation
     }
     
     private static func generateQueryProxyStruct(
