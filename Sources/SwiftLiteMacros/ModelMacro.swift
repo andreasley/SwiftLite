@@ -477,8 +477,10 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         
         // Add stored properties with defaults
         for prop in propertyInfo.stored {
-            if prop.hasDefault, let defaultVal = prop.defaultValue {
+            if prop.hasDefault {
                 parameters.append("\(prop.name): \(prop.type) = DefaultValues.\(prop.name)")
+            } else {
+                parameters.append("\(prop.name): \(prop.type)")
             }
         }
         
