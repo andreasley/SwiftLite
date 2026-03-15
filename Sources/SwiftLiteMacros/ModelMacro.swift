@@ -857,7 +857,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             columns.append("Columns.\(prop.name)")
             columnDefs.append("static let \(prop.name) = RequiredSchema.Column(name: \"\(prop.name)\", type: \(baseType).self)")
             indexes.append(".init(name: \"idx_\(prop.name)\", isUnique: false, columns: [Columns.\(prop.name)])")
-            foreignKeys.append(".init(column: \"\(prop.name)\", referencedTable: \"\(baseType)\")")
+            foreignKeys.append(".init(column: \"\(prop.name)\", referencedTable: \(baseType).Model.Schema.table.name)")
         }
         
         return """
