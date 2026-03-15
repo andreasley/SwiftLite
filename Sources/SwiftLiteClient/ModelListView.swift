@@ -5,20 +5,12 @@ struct ModelListView<T: Listable>: View
 {
     @Environment(Database.self) private var db
     @Environment(\.defaultEngine) private var defaultEngine
-    @State private var selectedModel: T?
-    @State private var newModelId: UUID?
+    @Binding var selectedModelId: T.ID?
     @LiveCollection(T.self) var snapshots
-
+    
     var body: some View {
-        List(selection: $selectedModel) {
-            ForEach(snapshots) { snapshot in
-                NavigationLink(snapshot.name) {
-                    AnyView(snapshot.detailView)
-                        .id(snapshot.id)
-                        .task {
-                            print("Loading navigationLink")
-                        }
-                }
+        List(snapshots, selection: $selectedModelId) { snapshot in
+            NavigationLink(snapshot.name, value: snapshot)
                 .contextMenu {
                     Button("Delete Item", systemImage: "minus") {
                         Task {
@@ -26,13 +18,6 @@ struct ModelListView<T: Listable>: View
                         }
                     }
                 }
-            }
-        }
-        .onChange(of: snapshots) { oldValue, newValue in
-            guard let newModelId else { return }
-            if let newObject = newValue.first(where: { $0.id == newModelId }) {
-                selectedModel = newObject
-            }
         }
         .toolbar {
             ToolbarItem(placement: .navigation) {
@@ -51,7 +36,7 @@ struct ModelListView<T: Listable>: View
         Task {
             let newModel = C.create(database: db, defaultEngine: defaultEngine)
             try await newModel.save()
-            newModelId = newModel.id
+            selectedModelId = newModel.id
         }
     }
 }

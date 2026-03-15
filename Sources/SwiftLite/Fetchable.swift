@@ -1,10 +1,13 @@
 import Foundation
 
-public nonisolated protocol Fetchable: Hashable, Identifiable, InitializableFromResultRowAsync, SQLValueConvertible, DatabaseEntityReferenceConvertible, Saveable, SendableMetatype where Model: SwiftLite.Model
+public nonisolated protocol Fetchable: Hashable, Identifiable, InitializableFromResultRowAsync, SQLValueConvertible, DatabaseObjectReferenceConvertible, Saveable, ObjectReference, SendableMetatype where Model: SwiftLite.Model, ID == UUID
 {
     associatedtype Model
-    var id: UUID { get }
+    associatedtype Metadata: DatabaseEntityMetadata
+
+    var id: ID { get }
     var _hasPendingChanges: Bool { get }
+    var _metadata: Metadata { get }
 }
 
 public nonisolated extension Fetchable

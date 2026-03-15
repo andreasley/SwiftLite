@@ -4,24 +4,58 @@ import SwiftLite
 
 struct ContentView: View
 {
-    @Environment(Database.self) var db
-    @State private var selectedEntity: NavigationItem?
-    @State private var selectedModel: (any Fetchable)?
+    enum MainNavigationItem: Int, Hashable, CaseIterable, Identifiable {
+        case car
+        case engine
+        case passenger
+        
+        var id: Int { rawValue }
+        
+        var name: String {
+            switch self {
+            case .car: return "Car"
+            case .engine: return "Engine"
+            case .passenger: return "Passenger"
+            }
+        }
+    }
     
+    @Environment(Database.self) var db
+    @State private var selectedEntity: MainNavigationItem?
+    @State private var selectedModelId: UUID?
 
     var body: some View {
         NavigationSplitView {
-            List(selection: $selectedEntity) {
-                ForEach([NavigationItem.car, NavigationItem.engine, NavigationItem.passenger]) { item in
-                    NavigationLink(item.name, destination: item.listView)
-                }
+            List(MainNavigationItem.allCases, selection: $selectedEntity) { item in
+                NavigationLink(item.name, value: item)
             }
         } content: {
-            EmptyView()
+            if let selectedEntity {
+                switch selectedEntity {
+                case .car:
+                    ModelListView<Car.Snapshot>(selectedModelId: $selectedModelId)
+                case .engine:
+                    ModelListView<Engine.Snapshot>(selectedModelId: $selectedModelId)
+                case .passenger:
+                    ModelListView<Passenger.Snapshot>(selectedModelId: $selectedModelId)
+                }
+            }
         } detail: {
-            EmptyView()
+            if let selectedEntity, let selectedModelId {
+                Group {
+                    switch selectedEntity {
+                    case .car:
+                        CarDetailView.loading(car: GlobalObjectReference(id: selectedModelId))
+                    case .engine:
+                        EngineDetailView.loading(engine: GlobalObjectReference(id: selectedModelId))
+                    case .passenger:
+                        PassengerDetailView.loading(passenger: GlobalObjectReference(id: selectedModelId))
+                    }
+                }.id(selectedModelId)
+            }
         }
     }
+    
 }
 
 
