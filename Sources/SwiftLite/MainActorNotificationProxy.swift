@@ -3,14 +3,12 @@ import Foundation
 @MainActor
 public class MainActorNotificationProxy: ActorNotificationProxy
 {
-    // TODO: Decide if some automatic cleanup is required and how to implement that if so. Currently, this is only used by PropertyWrappers for SwiftUI which should unregister properly
-
     // TODO: Use `AsyncStream`?
 
     // TODO: Test if notification registration in the property wrapper is quick enough or if there's a risk that some network-synchronized changes get lost
 
     typealias ModelName = String
-    typealias OnChangeCallback = ((ChangedObject) async throws -> Void)
+    public typealias OnChangeCallback = ((ChangedObject) async throws -> Void)
     
     private static var instances = [ObjectIdentifier: MainActorNotificationProxy]()
     

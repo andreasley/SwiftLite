@@ -1,12 +1,12 @@
 import Foundation
 
 @MainActor
-class DeregisteringNotificationToken: AnyDeregisteringNotificationToken
+public class DeregisteringNotificationToken: AnyDeregisteringNotificationToken
 {
     let notificationToken: MainActorNotificationProxy.NotificationToken
     let databaseIdentifier: ObjectIdentifier
     
-    init(db: Database, table: String, objectId: UUID? = nil, callback: @escaping MainActorNotificationProxy.OnChangeCallback)
+    public init(db: Database, table: String, objectId: UUID? = nil, callback: @escaping MainActorNotificationProxy.OnChangeCallback)
     {
         let proxy = MainActorNotificationProxy.get(db: db)
 
@@ -14,7 +14,7 @@ class DeregisteringNotificationToken: AnyDeregisteringNotificationToken
         self.notificationToken = proxy.register(modelName: table, objectId: objectId, callback: callback)
     }
 
-    convenience init<T: Model>(model: T)
+    public convenience init<T: Model>(model: T)
     {
         let db = model._metadata.db
         let table = T.Schema.table.name
