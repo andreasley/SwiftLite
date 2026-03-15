@@ -1120,7 +1120,11 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         
         for prop in propertyInfo.stored {
             storedProps.append("let \(prop.name): \(prop.type)")
-            rowExtractions.append("self.\(prop.name) = try row.get(\"\(prop.name)\")")
+            if let fallbackValue = prop.fallbackValue {
+                rowExtractions.append("self.\(prop.name) = try row.get(\"\(prop.name)\", fallback: FallbackValues.\(prop.name))")
+            } else {
+                rowExtractions.append("self.\(prop.name) = try row.get(\"\(prop.name)\")")
+            }
         }
         
         for prop in propertyInfo.related {
