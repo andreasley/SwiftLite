@@ -9,7 +9,7 @@ try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediate
 let db = try Database(storage: .file(fileUrl))
 try await db.register(models: Car.self)
 
-var defaultEngine: Engine.Snapshot
+let defaultEngine: Engine.Snapshot
 if let firstEngine = try await db.get(Engine.Snapshot.self).first {
     defaultEngine = firstEngine
 } else {
@@ -24,7 +24,29 @@ if let firstEngine = try await db.get(Engine.Snapshot.self).first {
 let car = Car(db: db, name: "test", engine: defaultEngine)
 try await car.save()
 
-let cars = try await db.get(Car.self)
+for _ in 0..<100 {
+    let car = Car(db: db, name: "test", engine: defaultEngine)
+    try await car.save()
+}
 
-print(cars)
+
+try await withThrowingTaskGroup(of: Void.self) { group in
+    for _ in 0..<10 {
+        group.addTask {
+            for _ in 0..<10 {
+                let car = Car(db: db, name: "test", engine: defaultEngine)
+                try await car.save()
+            }
+        }
+    }
+    
+    try await group.waitForAll()
+}
+
+
+let carCount = try await db.count(Car.self)
+print(carCount)
 //try FileManager.default.removeItem(at: temporaryDirectory)
+
+let cars = try await db.get(Car.self)
+print(cars.count)
