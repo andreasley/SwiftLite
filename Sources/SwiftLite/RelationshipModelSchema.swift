@@ -5,7 +5,6 @@ public nonisolated protocol RelationshipModelSchema<Parent, Element>: ModelSchem
     associatedtype Parent: SwiftLite.Model
     associatedtype Element: SwiftLite.Model
     
-    typealias Model = ManyToMany<Self>.JunctionModel
     typealias Columns = RelationshipModelSchemaDefaults.Columns
     typealias Indexes = RelationshipModelSchemaDefaults.Indexes
 

@@ -1,6 +1,6 @@
 // SwiftUI `List` only updates if the collection passed to it is a mutating struct. Classes that conform to `RandomAccessCollection` don't work as expected, even when @Observable or manually calling the observation functions when appropriate. Additionally, we need a way to handle append/remove, because these may trigger additional work to be done, so the struct needs to have corresponding handlers registered. Also, the user shouldn't be able to replace the collection, because that would remove these handlers.
 // This struct provides the necessary ergonomics to be used by the various `RelatedX` properties
-public nonisolated struct RelatedCollection<Element>: RandomAccessCollection where Element: Equatable
+public nonisolated struct RelatedCollection<Element>: RandomAccessCollection where Element: Fetchable
 {
     typealias OnMutateCallback = (Element) -> Void
     

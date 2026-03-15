@@ -11,6 +11,7 @@ public macro stringify<T>(_ value: T) -> (T, String) = #externalMacro(module: "S
 @attached(memberAttribute)
 @attached(member, names: named(id), named(_metadata), named(_editableData), named(init))
 @attached(extension, conformances: SwiftLite.Model, names: named(_beginAutoupdating), named(_hasPendingChanges), named(_beginSaving), named(_endSaving), named(_update), named(_cascadeDeletion), named(Schema), named(FallbackValues), named(DefaultValues), named(EditableData), named(QueryProxy), named(Snapshot))
+@attached(peer)
 public macro Model() = #externalMacro(module: "SwiftLiteMacros", type: "ModelMacro")
 
 

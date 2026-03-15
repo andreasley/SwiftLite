@@ -5,7 +5,8 @@ nonisolated final class PassengersRelationSchemaExample: RelationshipModelSchema
 {
     typealias Parent = Car
     typealias Element = Passenger
-    
+    typealias Model = ManyToMany<PassengersRelationSchemaExample>.JunctionModel
+
     static let deletionPolicy: DeletionPolicy = .cascade
     
     static let table = RelationshipModelSchemaDefaults.getTable(name: "Car_passengers__Passenger", parentTable: Parent.Schema.table.name, elementTable: Element.Schema.table.name)

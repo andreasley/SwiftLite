@@ -258,6 +258,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro, Pee
         {
             typealias Parent = \(raw: className)
             typealias Element = \(raw: property.elementType)
+            typealias Model = ManyToMany<\(raw: property.schemaType)>.JunctionModel
             
             static let deletionPolicy: DeletionPolicy = \(raw: deletionPolicy)
             
