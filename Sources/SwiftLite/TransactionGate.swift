@@ -25,6 +25,7 @@ actor TransactionGate
     func run<T>(_ body: () async throws -> T, isolation: isolated (any Actor)? = #isolation) async rethrows -> T
     {
         await acquire()
+        defer { Task { await release() }}
         let result = try await body()
         await release()
         return result
