@@ -372,7 +372,7 @@ public actor Database: Observable
         var results = [T]()
         
         try await gate.run {
-            print("BEGIN READ TRANSACTION")
+            print("✳️ BEGINNING READ TRANSACTION")
             let readTransaction = DatabaseTask.ReadTransaction(db: self)
             
             try await DatabaseTask.$currentReadTransaction.withValue(readTransaction) {
@@ -380,12 +380,13 @@ public actor Database: Observable
                 do {
                     results = try await body()
                     try await self.run("COMMIT")
+                    print("✅ COMMITTED READ TRANSACTION")
                 } catch {
                     try? await self.run("ROLLBACK")
+                    print("❎ ROLLED BACK READ TRANSACTION")
                     throw error
                 }
             }
-            print("END READ TRANSACTION")
         }
         
         // Start autoupdating here, because at this point, the Model objects should be back on actor they'll live in (even if that's not where they were created).
@@ -423,7 +424,7 @@ public actor Database: Observable
     public func save(changeset: FrozenChangeset) async throws
     {
         try await gate.run {
-            print("BEGIN WRITE TRANSACTION")
+            print("✳️ BEGINNING WRITE TRANSACTION")
             var transactionCompletedSuccessfully = false
             try self.run("BEGIN")
             do {
@@ -449,12 +450,13 @@ public actor Database: Observable
                     }
                 }
                 try self.run("COMMIT")
+                print("✅ COMMITTED WRITE TRANSACTION")
                 transactionCompletedSuccessfully = true
             } catch {
                 try? self.run("ROLLBACK")
+                print("❎ ROLLED BACK WRITE TRANSACTION")
                 throw error
             }
-            print("END WRITE TRANSACTION")
 
             if transactionCompletedSuccessfully {
                 Task {
