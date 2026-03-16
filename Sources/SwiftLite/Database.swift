@@ -95,8 +95,6 @@ public actor Database: Observable
             
             // As per https://sqlite.org/foreignkeys.html: "Foreign key constraints are disabled by default (for backwards compatibility), so must be enabled separately for each database connection".
             try Self.setPragma(name: "foreign_keys", value: "ON", connectionHandle: pointer)
-            
-            try Self.setPragma(name: "journal_mode", value: "WAL", connectionHandle: pointer)
         } catch {
             sqlite3_close_v2(pointer)
             throw error

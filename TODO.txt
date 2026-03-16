@@ -1,0 +1,45 @@
+- Table upgrades
+- History
+- Sync
+
+
+- Show saving errors in SwiftUI
+	- Log them? The view might be gone already...
+	
+================================================
+Backlog
+================================================
+
+- Enable Autoupdating for referenced snapshots (in Models and related collections)?
+
+- Prevent recursion in fetching. 
+	- Inverse related collections already use Snapshots to prevent that
+	- A -> B -> A is still possible
+- Inverse collection: Allow adding objects
+- Inverse collections can't cascade deletion (because they're using Snapshots)
+	- Probably should find another way to delete anyway (not dependent in materialized graph but schema details instead)
+- Enable queries for nested models (using Subquery?), making them available in `QueryProxy`
+- Enable cascaded deletion for objects in inverse collections?
+- Build model graph in Database.register() to make sure the referenced tables exist before creating the referencing ones
+
+- ManyToMany: Support ordered items?
+- Could the plain String `referencingField` for `Inverse` a problem at runtime, or is this sufficiently checked by the KeyPath in the macro? 
+
+- Cache prepared statements?
+- Use multiple connections (pool) and WAL?
+
+- Investigate if GRDB could be used under the hood
+
+- Decide if snapshots can even be linked in models, because they can't cascade deletion or saving
+	=> Snapshots can't be edited, so cascading saves isn't necessary anyway
+	=> Cascading deletions are an issue, as is autoupdating
+	=> Find better ways to store/set a reference?
+
+- Tests and more tests
+	- Make roundtrip tests for every datatype with different payloads including some with non-UTF-8 text
+- Make models (or Snapshots?) auto-conform to `Codable`?
+- inline more calls?
+- Decide if `Foundation` is required. If not, use something other than `UUID`. If it is, remove the `canImport` conditionals.
+- Add a function to check the whole database (read every row into a `Model`)
+- Use `PRAGMA checksum_verification` and/or `PRAGMA page_checksum`?
+- When to do `PRAGMA integrity_check` or `PRAGMA quick_check`? 
