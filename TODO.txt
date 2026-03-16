@@ -1,6 +1,9 @@
-- Table upgrades
+- View improvements and Macro
 - History
+- Local sync
 - Sync
+- Integration into app
+- Data migration
 
 
 - Show saving errors in SwiftUI
