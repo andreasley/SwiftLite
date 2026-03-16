@@ -310,7 +310,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
     }
     
     private static func collectPropertyInfo(from classDecl: ClassDeclSyntax) throws -> PropertyInfo {
-        var storedProperties: [(name: String, type: String, hasDefault: Bool, defaultValue: String?, fallbackValue: String?)] = []
+        var storedProperties: [(name: String, type: String, hasDefault: Bool, defaultValue: String?, fallbackValue: String?, isIndexed: Bool, isUnique: Bool)] = []
         var relatedProperties: [(name: String, type: String, isOptional: Bool, onDelete: String?)] = []
         var relatedManyProperties: [(name: String, elementType: String, schemaType: String, onDelete: String?)] = []
         var inverseRelatedProperties: [(name: String, type: String, referencingField: String)] = []
@@ -344,6 +344,8 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             var isInverseRelatedMany = false
             var defaultValue: String? = nil
             var fallbackValue: String? = nil
+            var isIndexed = false
+            var isUnique = false
             var elementType: String? = nil
             var onDelete: String? = nil
             var referencingField: String? = nil
@@ -363,6 +365,14 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
                                 defaultValue = argument.expression.trimmedDescription
                             } else if argument.label?.text == "fallbackValue" {
                                 fallbackValue = argument.expression.trimmedDescription
+                            } else if argument.label?.text == "isIndexed" {
+                                // Parse boolean value
+                                let exprText = argument.expression.trimmedDescription
+                                isIndexed = exprText == "true"
+                            } else if argument.label?.text == "isUnique" {
+                                // Parse boolean value
+                                let exprText = argument.expression.trimmedDescription
+                                isUnique = exprText == "true"
                             }
                         }
                     }
@@ -413,7 +423,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             }
             
             if isStored {
-                storedProperties.append((name: propertyName, type: typeAnnotation, hasDefault: defaultValue != nil, defaultValue: defaultValue, fallbackValue: fallbackValue))
+                storedProperties.append((name: propertyName, type: typeAnnotation, hasDefault: defaultValue != nil, defaultValue: defaultValue, fallbackValue: fallbackValue, isIndexed: isIndexed, isUnique: isUnique))
             } else if isRelated {
                 let isOptional = typeAnnotation.hasSuffix("?")
                 relatedProperties.append((name: propertyName, type: typeAnnotation, isOptional: isOptional, onDelete: onDelete))
@@ -438,7 +448,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
     }
     
     private struct PropertyInfo {
-        let stored: [(name: String, type: String, hasDefault: Bool, defaultValue: String?, fallbackValue: String?)]
+        let stored: [(name: String, type: String, hasDefault: Bool, defaultValue: String?, fallbackValue: String?, isIndexed: Bool, isUnique: Bool)]
         let related: [(name: String, type: String, isOptional: Bool, onDelete: String?)]
         let relatedMany: [(name: String, elementType: String, schemaType: String, onDelete: String?)]
         let inverseRelated: [(name: String, type: String, referencingField: String)]
@@ -887,6 +897,14 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         for prop in propertyInfo.stored {
             columns.append("Columns.\(prop.name)")
             columnDefs.append("static let \(prop.name) = RequiredSchema.Column(name: \"\(prop.name)\", type: \(prop.type).self)")
+            
+            // Add index if isIndexed is true or isUnique is true
+            if prop.isIndexed {
+                indexes.append(".init(name: \"idx_\(prop.name)\", isUnique: \(prop.isUnique), columns: [Columns.\(prop.name)])")
+            } else if prop.isUnique {
+                // If only isUnique is true but isIndexed is false, still create an index (unique constraint requires an index)
+                indexes.append(".init(name: \"idx_\(prop.name)\", isUnique: true, columns: [Columns.\(prop.name)])")
+            }
         }
         
         for prop in propertyInfo.related {
