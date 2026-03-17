@@ -58,7 +58,8 @@ public macro InverseRelatedMany<T, U>(_ keyPath: KeyPath<T, U>) = #externalMacro
 /// Apply this macro to a SwiftUI View that contains `@EditableObject` properties:
 ///
 /// ```swift
-/// @AsyncLoadingView<DefaultStatusView>
+/// // Uses DefaultStatusView by default
+/// @AsyncLoadingView
 /// struct CarDetailView: View {
 ///     @EditableObject(autosaving: true) var car: Car
 ///     @EditableObject(autosaving: false) var engine: Engine
@@ -66,6 +67,13 @@ public macro InverseRelatedMany<T, U>(_ keyPath: KeyPath<T, U>) = #externalMacro
 ///     var body: some View {
 ///         // Your view implementation
 ///     }
+/// }
+///
+/// // Or specify a custom StatusView
+/// @AsyncLoadingView(statusView: MyCustomStatusView.self)
+/// struct EngineDetailView: View {
+///     @EditableObject(autosaving: true) var engine: Engine
+///     // ...
 /// }
 /// ```
 ///
@@ -82,22 +90,21 @@ public macro InverseRelatedMany<T, U>(_ keyPath: KeyPath<T, U>) = #externalMacro
 ///
 /// - Must be applied to a `struct` that conforms to `View`
 /// - Must have at least one `@EditableObject` property
-/// - Must specify a `StatusView` type parameter (e.g., `<DefaultStatusView>`)
 /// - All `@EditableObject` properties must use types that conform to `Model`
 ///
 /// ## Generated Code
 ///
-/// The macro generates an extension with:
-/// - `ItemsContainer`: An `@Observable` class conforming to `LoadableItemsContainer`
-/// - `loading()`: A static factory method accepting `DatabaseObjectReferenceConvertible` parameters
-/// - `PreloadView`: A view that handles loading states and lifecycle
+/// The macro generates:
+/// - `ItemsContainer`: An `@Observable` class (added to the struct) conforming to `LoadableItemsContainer`
+/// - `loading()`: A static factory method (in extension) accepting `DatabaseObjectReferenceConvertible` parameters
+/// - `PreloadView`: A view (in extension) that handles loading states and lifecycle
 ///
 /// - Parameters:
-///   - StatusView: The type of view to display loading/saving/error states
+///   - statusView: The type of view to display loading/saving/error states. Defaults to `DefaultStatusView.self`
 ///
 @attached(extension, names: arbitrary)
 @attached(member, names: arbitrary)
-public macro AsyncLoadingView(statusView: any StatusView.Type = DefaultStatusView.self) = #externalMacro(
+public macro AsyncLoadingView(statusView: Any.Type = DefaultStatusView.self) = #externalMacro(
     module: "SwiftLiteMacros",
     type: "AsyncLoadingViewMacro"
 )

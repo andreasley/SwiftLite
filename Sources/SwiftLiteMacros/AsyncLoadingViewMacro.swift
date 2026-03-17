@@ -12,7 +12,16 @@ import SwiftDiagnostics
 ///
 /// Usage:
 /// ```swift
-/// @AsyncLoadingView<DefaultStatusView>
+/// // With default status view (DefaultStatusView)
+/// @AsyncLoadingView
+/// struct MyView: View {
+///     @EditableObject(autosaving: true) var car: Car
+///     @EditableObject(autosaving: false) var engine: Engine
+///     // ...
+/// }
+///
+/// // With custom status view
+/// @AsyncLoadingView<CustomStatusView>
 /// struct MyView: View {
 ///     @EditableObject(autosaving: true) var car: Car
 ///     @EditableObject(autosaving: false) var engine: Engine
@@ -26,11 +35,10 @@ public struct AsyncLoadingViewMacro: MemberMacro, ExtensionMacro
     enum AsyncLoadingViewDiagnostic: String, DiagnosticMessage {
         case requiresView
         case noEditableObjects
-        case missingStatusViewType
         
         var severity: DiagnosticSeverity {
             switch self {
-            case .requiresView, .noEditableObjects, .missingStatusViewType:
+            case .requiresView, .noEditableObjects:
                 return .error
             }
         }
@@ -41,8 +49,6 @@ public struct AsyncLoadingViewMacro: MemberMacro, ExtensionMacro
                 return "@AsyncLoadingView can only be applied to View types"
             case .noEditableObjects:
                 return "@AsyncLoadingView requires at least one @EditableObject property"
-            case .missingStatusViewType:
-                return "@AsyncLoadingView requires a StatusView type parameter, e.g., @AsyncLoadingView<DefaultStatusView>"
             }
         }
         
@@ -108,15 +114,15 @@ public struct AsyncLoadingViewMacro: MemberMacro, ExtensionMacro
         return properties
     }
     
-    /// Extracts the StatusView type from the attribute
+    /// Extracts the StatusView type from the attribute, defaulting to DefaultStatusView
     private static func extractStatusViewType(
         from node: AttributeSyntax
-    ) -> String? {
+    ) -> String {
         // Check for generic argument like @AsyncLoadingView<DefaultStatusView>
         if let genericArgs = node.attributeName.as(IdentifierTypeSyntax.self)?.genericArgumentClause {
-            return genericArgs.arguments.first?.argument.trimmedDescription
+            return genericArgs.arguments.first?.argument.trimmedDescription ?? "DefaultStatusView"
         }
-        return nil
+        return "DefaultStatusView"
     }
     
     // MARK: - Code Generation
@@ -144,17 +150,34 @@ public struct AsyncLoadingViewMacro: MemberMacro, ExtensionMacro
             "\(prop.name) = try await \(prop.referenceName).resolve()"
         }.joined(separator: "\n            ")
         
-        let saveStatements = properties.map { prop in
-            "try await \(prop.name)?.save()"
-        }.joined(separator: "\n            ")
+        // Only save properties with autosaving: true
+        let autosavingProperties = properties.filter { $0.autosaving }
+        let saveStatements = autosavingProperties.isEmpty 
+            ? "// No autosaving properties to save"
+            : autosavingProperties.map { prop in
+                "try await \(prop.name)?.save()"
+            }.joined(separator: "\n            ")
         
         let unloadStatements = properties.map { prop in
             "\(prop.name) = nil"
         }.joined(separator: "\n            ")
         
-        let hasPendingChangesChecks = properties.map { prop in
-            "\(prop.name)?._hasPendingChanges"
-        }.joined(separator: ",\n                ")
+        // Only check pending changes for autosaving properties
+        let hasPendingChangesChecks = autosavingProperties.isEmpty
+            ? "false"
+            : autosavingProperties.map { prop in
+                "\(prop.name)?._hasPendingChanges"
+            }.joined(separator: ",\n                ")
+        
+        let hasPendingChangesBody = autosavingProperties.isEmpty
+            ? "return false"
+            : """
+            let hasChanges = [
+                    \(hasPendingChangesChecks),
+                ]
+                .contains(true)
+                return hasChanges
+            """
         
         let hasBeenDeletedChecks = properties.map { prop in
             "\(prop.name)?.hasBeenDeletedFromDatabase"
@@ -188,11 +211,7 @@ public struct AsyncLoadingViewMacro: MemberMacro, ExtensionMacro
             
             var anyItemHasPendingChanges: Bool
             {
-                let hasChanges = [
-                    \(hasPendingChangesChecks),
-                ]
-                .contains(true)
-                return hasChanges
+                \(hasPendingChangesBody)
             }
         
             var anyItemHasBeenDeleted: Bool
@@ -289,14 +308,8 @@ public struct AsyncLoadingViewMacro: MemberMacro, ExtensionMacro
         
         let viewName = structDecl.name.text
         
-        // Extract StatusView type
-        guard let statusViewType = extractStatusViewType(from: node) else {
-            context.diagnose(Diagnostic(
-                node: node,
-                message: AsyncLoadingViewDiagnostic.missingStatusViewType
-            ))
-            return []
-        }
+        // Extract StatusView type (defaults to DefaultStatusView)
+        let statusViewType = extractStatusViewType(from: node)
         
         // Extract @EditableObject properties
         let properties = extractEditableObjects(from: structDecl.memberBlock.members)
@@ -351,15 +364,6 @@ public struct AsyncLoadingViewMacro: MemberMacro, ExtensionMacro
             context.diagnose(Diagnostic(
                 node: node,
                 message: AsyncLoadingViewDiagnostic.requiresView
-            ))
-            return []
-        }
-        
-        // Extract StatusView type (for validation, even though we don't use it here)
-        guard let _ = extractStatusViewType(from: node) else {
-            context.diagnose(Diagnostic(
-                node: node,
-                message: AsyncLoadingViewDiagnostic.missingStatusViewType
             ))
             return []
         }

@@ -47,11 +47,9 @@ struct ContentView: View
                     case .car: //.byId(selectedModelId, db: db)
                         CarDetailView.loading(car: DatabaseObjectReference(id: selectedModelId, db: db))
                     case .engine:
-                        EmptyView()
-//                        EngineDetailView.loading(engine: DatabaseObjectReference(id: selectedModelId, db: db))
+                        EngineDetailView.loading(engine: DatabaseObjectReference(id: selectedModelId, db: db))
                     case .passenger:
-                        EmptyView()
-//                        PassengerDetailView.loading(passenger: DatabaseObjectReference(id: selectedModelId, db: db))
+                        PassengerDetailView.loading(passenger: DatabaseObjectReference(id: selectedModelId, db: db))
                     }
                 }.id(selectedModelId)
             }

@@ -3,6 +3,7 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 import SwiftSyntaxMacrosTestSupport
+import SwiftLiteMacros
 
 @Suite("AsyncLoadingView Macro Tests")
 struct AsyncLoadingViewMacroTests {
@@ -15,7 +16,7 @@ struct AsyncLoadingViewMacroTests {
     func singleEditableObject() {
         assertMacroExpansion(
             """
-            @AsyncLoadingView<DefaultStatusView>
+            @AsyncLoadingView(statusView: DefaultStatusView.self)
             struct CarDetailView: View {
                 @EditableObject(autosaving: true) var car: Car
                 
@@ -31,12 +32,7 @@ struct AsyncLoadingViewMacroTests {
                 var body: some View {
                     Text("Hello")
                 }
-            }
-            
-            @MainActor
-            extension CarDetailView {
-                typealias PreloadViewStatusView = DefaultStatusView
-                
+
                 @Observable
                 class ItemsContainer: LoadableItemsContainer {
                     let __reference_car: DatabaseObjectReference<Car>
@@ -74,6 +70,11 @@ struct AsyncLoadingViewMacroTests {
                         return hasChanges
                     }
                 }
+            }
+            
+            @MainActor
+            extension CarDetailView {
+                typealias PreloadViewStatusView = DefaultStatusView
                 
                 static func loading(car: any DatabaseObjectReferenceConvertible<Car>) -> PreloadView {
                     let items = ItemsContainer(__reference_car: car.getObjectReference())
@@ -105,7 +106,7 @@ struct AsyncLoadingViewMacroTests {
     func multipleEditableObjects() {
         assertMacroExpansion(
             """
-            @AsyncLoadingView<DefaultStatusView>
+            @AsyncLoadingView(statusView: DefaultStatusView.self)
             struct CarEngineView: View {
                 @EditableObject(autosaving: true) var car: Car
                 @EditableObject(autosaving: false) var engine: Engine
@@ -123,12 +124,7 @@ struct AsyncLoadingViewMacroTests {
                 var body: some View {
                     Text("Hello")
                 }
-            }
-            
-            @MainActor
-            extension CarEngineView {
-                typealias PreloadViewStatusView = DefaultStatusView
-                
+
                 @Observable
                 class ItemsContainer: LoadableItemsContainer {
                     let __reference_car: DatabaseObjectReference<Car>
@@ -148,7 +144,6 @@ struct AsyncLoadingViewMacroTests {
                     
                     func save() async throws {
                         try await car?.save()
-                        try await engine?.save()
                     }
                     
                     func unload() {
@@ -159,7 +154,6 @@ struct AsyncLoadingViewMacroTests {
                     var anyItemHasPendingChanges: Bool {
                         let hasChanges = [
                             car?._hasPendingChanges,
-                            engine?._hasPendingChanges,
                         ]
                         .contains(true)
                         return hasChanges
@@ -174,6 +168,11 @@ struct AsyncLoadingViewMacroTests {
                         return hasChanges
                     }
                 }
+            }
+            
+            @MainActor
+            extension CarEngineView {
+                typealias PreloadViewStatusView = DefaultStatusView
                 
                 static func loading(car: any DatabaseObjectReferenceConvertible<Car>, engine: any DatabaseObjectReferenceConvertible<Engine>) -> PreloadView {
                     let items = ItemsContainer(__reference_car: car.getObjectReference(), __reference_engine: engine.getObjectReference())
@@ -205,7 +204,7 @@ struct AsyncLoadingViewMacroTests {
     func customStatusView() {
         assertMacroExpansion(
             """
-            @AsyncLoadingView<MyCustomStatusView>
+            @AsyncLoadingView(statusView: MyCustomStatusView.self)
             struct CarDetailView: View {
                 @EditableObject(autosaving: true) var car: Car
                 
@@ -221,12 +220,7 @@ struct AsyncLoadingViewMacroTests {
                 var body: some View {
                     Text("Hello")
                 }
-            }
-            
-            @MainActor
-            extension CarDetailView {
-                typealias PreloadViewStatusView = MyCustomStatusView
-                
+
                 @Observable
                 class ItemsContainer: LoadableItemsContainer {
                     let __reference_car: DatabaseObjectReference<Car>
@@ -264,6 +258,11 @@ struct AsyncLoadingViewMacroTests {
                         return hasChanges
                     }
                 }
+            }
+            
+            @MainActor
+            extension CarDetailView {
+                typealias PreloadViewStatusView = MyCustomStatusView
                 
                 static func loading(car: any DatabaseObjectReferenceConvertible<Car>) -> PreloadView {
                     let items = ItemsContainer(__reference_car: car.getObjectReference())
@@ -295,7 +294,7 @@ struct AsyncLoadingViewMacroTests {
     func noEditableObjectsError() {
         assertMacroExpansion(
             """
-            @AsyncLoadingView<DefaultStatusView>
+            @AsyncLoadingView(statusView: DefaultStatusView.self)
             struct CarDetailView: View {
                 @State var name: String = ""
                 
@@ -325,8 +324,8 @@ struct AsyncLoadingViewMacroTests {
         )
     }
     
-    @Test("Produces error when missing StatusView type")
-    func missingStatusViewTypeError() {
+    @Test("Uses DefaultStatusView when no statusView parameter provided")
+    func defaultStatusView() {
         assertMacroExpansion(
             """
             @AsyncLoadingView
@@ -345,50 +344,7 @@ struct AsyncLoadingViewMacroTests {
                 var body: some View {
                     Text("Hello")
                 }
-            }
-            """,
-            diagnostics: [
-                DiagnosticSpec(
-                    message: "@AsyncLoadingView requires a StatusView type parameter, e.g., @AsyncLoadingView<DefaultStatusView>",
-                    line: 1,
-                    column: 1,
-                    severity: .error
-                )
-            ],
-            macros: testMacros
-        )
-    }
-    
-    @Test("Ignores non-EditableObject properties")
-    func ignoresOtherProperties() {
-        assertMacroExpansion(
-            """
-            @AsyncLoadingView<DefaultStatusView>
-            struct CarDetailView: View {
-                @EditableObject(autosaving: true) var car: Car
-                @State var isEditing: Bool = false
-                @Environment(\\.dismiss) var dismiss
-                
-                var body: some View {
-                    Text("Hello")
-                }
-            }
-            """,
-            expandedSource: """
-            struct CarDetailView: View {
-                @EditableObject(autosaving: true) var car: Car
-                @State var isEditing: Bool = false
-                @Environment(\\.dismiss) var dismiss
-                
-                var body: some View {
-                    Text("Hello")
-                }
-            }
-            
-            @MainActor
-            extension CarDetailView {
-                typealias PreloadViewStatusView = DefaultStatusView
-                
+
                 @Observable
                 class ItemsContainer: LoadableItemsContainer {
                     let __reference_car: DatabaseObjectReference<Car>
@@ -426,6 +382,11 @@ struct AsyncLoadingViewMacroTests {
                         return hasChanges
                     }
                 }
+            }
+            
+            @MainActor
+            extension CarDetailView {
+                typealias PreloadViewStatusView = DefaultStatusView
                 
                 static func loading(car: any DatabaseObjectReferenceConvertible<Car>) -> PreloadView {
                     let items = ItemsContainer(__reference_car: car.getObjectReference())
@@ -442,6 +403,186 @@ struct AsyncLoadingViewMacroTests {
                                 ContentUnavailableView("One of the objects in this view has been deleted", systemImage: "trash")
                             } else if let car = items.car {
                                 CarDetailView(car: .init(wrappedValue: car, autosaving: true))
+                            }
+                        }
+                        .handleModelLifecycle(items: items, statusView: DefaultStatusView.self)
+                    }
+                }
+            }
+            """,
+            macros: testMacros
+        )
+    }
+    
+    @Test("Ignores non-EditableObject properties")
+    func ignoresOtherProperties() {
+        assertMacroExpansion(
+            """
+            @AsyncLoadingView(statusView: DefaultStatusView.self)
+            struct CarDetailView: View {
+                @EditableObject(autosaving: true) var car: Car
+                @State var isEditing: Bool = false
+                @Environment(\\.dismiss) var dismiss
+                
+                var body: some View {
+                    Text("Hello")
+                }
+            }
+            """,
+            expandedSource: """
+            struct CarDetailView: View {
+                @EditableObject(autosaving: true) var car: Car
+                @State var isEditing: Bool = false
+                @Environment(\\.dismiss) var dismiss
+                
+                var body: some View {
+                    Text("Hello")
+                }
+
+                @Observable
+                class ItemsContainer: LoadableItemsContainer {
+                    let __reference_car: DatabaseObjectReference<Car>
+                    private(set) var car: Car?
+            
+                    init(__reference_car: DatabaseObjectReference<Car>) {
+                        self.__reference_car = __reference_car
+                    }
+            
+                    func load() async throws {
+                        car = try await __reference_car.resolve()
+                    }
+                    
+                    func save() async throws {
+                        try await car?.save()
+                    }
+                    
+                    func unload() {
+                        car = nil
+                    }
+                    
+                    var anyItemHasPendingChanges: Bool {
+                        let hasChanges = [
+                            car?._hasPendingChanges,
+                        ]
+                        .contains(true)
+                        return hasChanges
+                    }
+            
+                    var anyItemHasBeenDeleted: Bool {
+                        let hasChanges = [
+                            car?.hasBeenDeletedFromDatabase,
+                        ]
+                        .contains(true)
+                        return hasChanges
+                    }
+                }
+            }
+            
+            @MainActor
+            extension CarDetailView {
+                typealias PreloadViewStatusView = DefaultStatusView
+                
+                static func loading(car: any DatabaseObjectReferenceConvertible<Car>) -> PreloadView {
+                    let items = ItemsContainer(__reference_car: car.getObjectReference())
+                    return PreloadView(items: items)
+                }
+                
+                struct PreloadView: View {
+                    @State var items: ItemsContainer
+            
+                    @ViewBuilder
+                    var body: some View {
+                        Group {
+                            if items.anyItemHasBeenDeleted {
+                                ContentUnavailableView("One of the objects in this view has been deleted", systemImage: "trash")
+                            } else if let car = items.car {
+                                CarDetailView(car: .init(wrappedValue: car, autosaving: true))
+                            }
+                        }
+                        .handleModelLifecycle(items: items, statusView: DefaultStatusView.self)
+                    }
+                }
+            }
+            """,
+            macros: testMacros
+        )
+    }
+    
+    @Test("Handles all EditableObjects with autosaving: false")
+    func allNonAutosavingObjects() {
+        assertMacroExpansion(
+            """
+            @AsyncLoadingView
+            struct EngineDetailView: View {
+                @EditableObject(autosaving: false) var engine: Engine
+                
+                var body: some View {
+                    Text("Hello")
+                }
+            }
+            """,
+            expandedSource: """
+            struct EngineDetailView: View {
+                @EditableObject(autosaving: false) var engine: Engine
+                
+                var body: some View {
+                    Text("Hello")
+                }
+
+                @Observable
+                class ItemsContainer: LoadableItemsContainer {
+                    let __reference_engine: DatabaseObjectReference<Engine>
+                    private(set) var engine: Engine?
+            
+                    init(__reference_engine: DatabaseObjectReference<Engine>) {
+                        self.__reference_engine = __reference_engine
+                    }
+            
+                    func load() async throws {
+                        engine = try await __reference_engine.resolve()
+                    }
+                    
+                    func save() async throws {
+                        // No autosaving properties to save
+                    }
+                    
+                    func unload() {
+                        engine = nil
+                    }
+                    
+                    var anyItemHasPendingChanges: Bool {
+                        return false
+                    }
+            
+                    var anyItemHasBeenDeleted: Bool {
+                        let hasChanges = [
+                            engine?.hasBeenDeletedFromDatabase,
+                        ]
+                        .contains(true)
+                        return hasChanges
+                    }
+                }
+            }
+            
+            @MainActor
+            extension EngineDetailView {
+                typealias PreloadViewStatusView = DefaultStatusView
+                
+                static func loading(engine: any DatabaseObjectReferenceConvertible<Engine>) -> PreloadView {
+                    let items = ItemsContainer(__reference_engine: engine.getObjectReference())
+                    return PreloadView(items: items)
+                }
+                
+                struct PreloadView: View {
+                    @State var items: ItemsContainer
+            
+                    @ViewBuilder
+                    var body: some View {
+                        Group {
+                            if items.anyItemHasBeenDeleted {
+                                ContentUnavailableView("One of the objects in this view has been deleted", systemImage: "trash")
+                            } else if let engine = items.engine {
+                                EngineDetailView(engine: .init(wrappedValue: engine, autosaving: false))
                             }
                         }
                         .handleModelLifecycle(items: items, statusView: DefaultStatusView.self)
