@@ -1,4 +1,6 @@
 import Foundation
+import SwiftLite
+import Testing
 
 // MARK: - Database Logging System for Distributed Sync
 //
@@ -44,9 +46,11 @@ func queryLogExample() async throws {
     let dbURL = URL(fileURLWithPath: "/path/to/database.sqlite")
     let database = try await Database(storage: .file(dbURL))
     
+    let logger = try #require(await database.logger)
+
     // Get all log entries from the last 24 hours
     let yesterday = Date().addingTimeInterval(-86400)
-    let entries = try await database.getLogEntries(from: yesterday)
+    let entries = try await logger.getEntries(from: yesterday)
     
     for entry in entries {
         print("[\(entry.timestamp)] \(entry.operationType.rawValue)")
@@ -72,22 +76,24 @@ func queryLogExample() async throws {
 func filteredLogExample() async throws {
     let database = try await Database(storage: .file(URL(fileURLWithPath: "/path/to/db.sqlite")))
     
+    let logger = try #require(await database.logger)
+
     // Get entries for a specific table
-    let userTableEntries = try await database.getLogEntries(
+    let userTableEntries = try await logger.getEntries(
         tableName: "User",
         limit: 100
     )
     
     // Get entries for a specific transaction
     let transactionId = UUID()
-    let transactionEntries = try await database.getLogEntries(
+    let transactionEntries = try await logger.getEntries(
         transactionId: transactionId
     )
     
     // Get entries in a date range
     let startDate = Date().addingTimeInterval(-3600) // 1 hour ago
     let endDate = Date()
-    let recentEntries = try await database.getLogEntries(
+    let recentEntries = try await logger.getEntries(
         from: startDate,
         to: endDate
     )
@@ -95,44 +101,16 @@ func filteredLogExample() async throws {
     try await database.close()
 }
 
-// MARK: - Tracking Transactions
-
-func transactionTrackingExample() async throws {
-    let database = try await Database(storage: .file(URL(fileURLWithPath: "/path/to/db.sqlite")))
-    
-    // Get all transaction IDs from the last week
-    let weekAgo = Date().addingTimeInterval(-604800)
-    let transactionIds = try await database.getLogTransactions(from: weekAgo)
-    
-    print("Found \(transactionIds.count) transactions in the last week")
-    
-    // Fetch details for each transaction
-    for transactionId in transactionIds {
-        let entries = try await database.getLogEntries(transactionId: transactionId)
-        
-        // Check transaction type
-        if let beginEntry = entries.first(where: { $0.operationType == .transactionBegin }) {
-            print("Transaction \(transactionId): \(beginEntry.metadata ?? "unknown type")")
-        }
-        
-        // Check if committed or rolled back
-        let wasCommitted = entries.contains { $0.operationType == .transactionCommit }
-        let wasRolledBack = entries.contains { $0.operationType == .transactionRollback }
-        
-        print("  Status: \(wasCommitted ? "✅ Committed" : wasRolledBack ? "❌ Rolled back" : "⚠️ Unknown")")
-        print("  Operations: \(entries.count)")
-    }
-    
-    try await database.close()
-}
 
 // MARK: - Analyzing Schema Changes
 
 func schemaChangeExample() async throws {
     let database = try await Database(storage: .file(URL(fileURLWithPath: "/path/to/db.sqlite")))
     
+    let logger = try #require(await database.logger)
+
     // Get all schema changes
-    let allEntries = try await database.getLogEntries()
+    let allEntries = try await logger.getEntries()
     let schemaChanges = allEntries.filter { entry in
         switch entry.operationType {
         case .tableCreated, .columnAdded, .indexCreated, .indexDropped, .foreignKeyAdded:
@@ -164,9 +142,11 @@ func schemaChangeExample() async throws {
 func dataChangeExample() async throws {
     let database = try await Database(storage: .file(URL(fileURLWithPath: "/path/to/db.sqlite")))
     
+    let logger = try #require(await database.logger)
+
     // Get all data modifications for a specific object
     let objectId = UUID() // Replace with actual object ID
-    let objectChanges = try await database.getLogEntries()
+    let objectChanges = try await logger.getEntries()
         .filter { $0.objectId == objectId }
     
     print("Changes for object \(objectId):")
@@ -192,7 +172,7 @@ func directLoggerExample() async throws {
     let database = try await Database(storage: .file(URL(fileURLWithPath: "/path/to/db.sqlite")))
     
     // Access the logger directly for advanced operations
-    guard let logger = await database.getLogger() else {
+    guard let _ = await database.logger else {
         print("Logging is not enabled")
         return
     }
@@ -217,29 +197,19 @@ class SyncEngine {
     
     /// Synchronize changes since last sync
     func sync() async throws {
+
+        let logger = try #require(await database.logger)
+
         // 1. Get all changes since last sync
-        let changes = try await database.getLogEntries(from: lastSyncTimestamp)
+        let changes = try await logger.getEntries(from: lastSyncTimestamp)
         
         // 2. Group by transaction for atomic sync
         let transactions = Dictionary(grouping: changes, by: { $0.transactionId })
         
         // 3. Only sync committed transactions
         for (transactionId, entries) in transactions {
-            let wasCommitted = entries.contains { $0.operationType == .transactionCommit }
-            guard wasCommitted else { continue }
-            
-            // Filter out transaction control entries
-            let dataEntries = entries.filter { entry in
-                switch entry.operationType {
-                case .rowCreated, .rowDeleted, .rowUpdated:
-                    return true
-                default:
-                    return false
-                }
-            }
-            
             // 4. Send to sync service
-            try await sendToSyncService(transactionId: transactionId, entries: dataEntries)
+            try await sendToSyncService(transactionId: transactionId, entries: entries)
         }
         
         // 5. Update last sync timestamp

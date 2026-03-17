@@ -4,6 +4,7 @@ import SQLite3
 /// Manages a separate SQLite database for logging all database operations.
 /// This log is essential for distributed sync, providing a complete audit trail
 /// of all schema changes and data modifications with timestamps and transaction IDs.
+/// Only successful transactions are logged - failed/rolled back transactions are not recorded.
 public actor DatabaseLogger
 {
     public enum Error: Swift.Error, CustomStringConvertible {
@@ -37,12 +38,7 @@ public actor DatabaseLogger
         // Data operations
         case rowCreated = "row_created"
         case rowDeleted = "row_deleted"
-        case rowUpdated = "row_updated"
-        
-        // Transaction operations
-        case transactionBegin = "transaction_begin"
-        case transactionCommit = "transaction_commit"
-        case transactionRollback = "transaction_rollback"
+        case fieldUpdated = "field_updated"
     }
     
     /// Represents a single log entry in the database history
@@ -237,31 +233,6 @@ public actor DatabaseLogger
         }
     }
     
-    /// Log a transaction begin event
-    public func logTransactionBegin(transactionId: UUID, type: String) throws {
-        try log(LogEntry(
-            transactionId: transactionId,
-            operationType: .transactionBegin,
-            metadata: type
-        ))
-    }
-    
-    /// Log a transaction commit event
-    public func logTransactionCommit(transactionId: UUID) throws {
-        try log(LogEntry(
-            transactionId: transactionId,
-            operationType: .transactionCommit
-        ))
-    }
-    
-    /// Log a transaction rollback event
-    public func logTransactionRollback(transactionId: UUID) throws {
-        try log(LogEntry(
-            transactionId: transactionId,
-            operationType: .transactionRollback
-        ))
-    }
-    
     /// Log schema change operations
     public func logSchemaChange(
         transactionId: UUID,
@@ -287,47 +258,58 @@ public actor DatabaseLogger
         ))
     }
     
-    /// Log data change from a ChangedObject
+    /// Log data change from a ChangedObject (granular field-level logging)
     public func logDataChange(
         transactionId: UUID,
         change: ChangedObject
     ) throws {
-        let operationType: OperationType = switch change.status {
-        case .created: .rowCreated
-        case .deleted: .rowDeleted
-        case .updated: .rowUpdated
-        }
-        
-        if change.status == .updated, let updatedFields = change.updatedFields {
-            // Log each field change separately for detailed tracking
-            for (fieldName, newValue) in updatedFields {
-                try log(LogEntry(
-                    transactionId: transactionId,
-                    operationType: operationType,
-                    tableName: change.table,
-                    objectId: change.objectId,
-                    columnName: fieldName,
-                    newValue: sqlValueToString(newValue)
-                ))
-            }
-        } else {
-            // For creates and deletes, log a single entry
-            var metadataJSON: String?
+        switch change.status {
+        case .created:
+            // Log the row creation
+            try log(LogEntry(
+                transactionId: transactionId,
+                operationType: .rowCreated,
+                tableName: change.table,
+                objectId: change.objectId
+            ))
+            
+            // Log each field value as a separate field update
             if let updatedFields = change.updatedFields {
-                let fieldDict = updatedFields.mapValues { sqlValueToString($0) }
-                if let jsonData = try? JSONSerialization.data(withJSONObject: fieldDict),
-                   let jsonString = String(data: jsonData, encoding: .utf8) {
-                    metadataJSON = jsonString
+                for (fieldName, value) in updatedFields {
+                    try log(LogEntry(
+                        transactionId: transactionId,
+                        operationType: .fieldUpdated,
+                        tableName: change.table,
+                        objectId: change.objectId,
+                        columnName: fieldName,
+                        newValue: sqlValueToString(value)
+                    ))
                 }
             }
             
+        case .deleted:
+            // Log the row deletion
             try log(LogEntry(
                 transactionId: transactionId,
-                operationType: operationType,
+                operationType: .rowDeleted,
                 tableName: change.table,
-                objectId: change.objectId,
-                metadata: metadataJSON
+                objectId: change.objectId
             ))
+            
+        case .updated:
+            // Log each field change separately
+            if let updatedFields = change.updatedFields {
+                for (fieldName, newValue) in updatedFields {
+                    try log(LogEntry(
+                        transactionId: transactionId,
+                        operationType: .fieldUpdated,
+                        tableName: change.table,
+                        objectId: change.objectId,
+                        columnName: fieldName,
+                        newValue: sqlValueToString(newValue)
+                    ))
+                }
+            }
         }
     }
     

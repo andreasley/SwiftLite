@@ -235,49 +235,12 @@ public struct DatabaseLogUtilities {
         let allEntries = try await logger.getEntries()
         let transactions = try await logger.getTransactions()
         
-        // Check that all transactions have begin/commit or begin/rollback
-        for transactionId in transactions {
-            let transactionEntries = allEntries.filter { $0.transactionId == transactionId }
-            
-            let hasBegin = transactionEntries.contains { $0.operationType == .transactionBegin }
-            let hasCommit = transactionEntries.contains { $0.operationType == .transactionCommit }
-            let hasRollback = transactionEntries.contains { $0.operationType == .transactionRollback }
-            
-            if !hasBegin {
-                issues.append("Transaction \(transactionId) is missing begin entry")
-            }
-            
-            if !hasCommit && !hasRollback {
-                issues.append("Transaction \(transactionId) is missing commit or rollback entry")
-            }
-            
-            if hasCommit && hasRollback {
-                issues.append("Transaction \(transactionId) has both commit and rollback entries")
-            }
-        }
-        
         // Check for orphaned entries (entries with transaction ID not in transactions list)
         let transactionSet = Set(transactions)
         let orphanedEntries = allEntries.filter { !transactionSet.contains($0.transactionId) }
         
         if !orphanedEntries.isEmpty {
             issues.append("Found \(orphanedEntries.count) orphaned entries with unknown transaction IDs")
-        }
-        
-        // Check temporal ordering within transactions
-        for transactionId in transactions {
-            let transactionEntries = allEntries
-                .filter { $0.transactionId == transactionId }
-                .sorted { $0.timestamp < $1.timestamp }
-            
-            if let beginEntry = transactionEntries.first(where: { $0.operationType == .transactionBegin }),
-               let endEntry = transactionEntries.first(where: { 
-                   $0.operationType == .transactionCommit || $0.operationType == .transactionRollback 
-               }) {
-                if beginEntry.timestamp > endEntry.timestamp {
-                    issues.append("Transaction \(transactionId) has end before begin")
-                }
-            }
         }
         
         return issues
@@ -325,26 +288,6 @@ public struct DatabaseLogUtilities {
             report += "- \(table): \(count) operations\n"
         }
         
-        report += "\n## Transaction Status\n\n"
-        var committed = 0
-        var rolledBack = 0
-        var incomplete = 0
-        
-        for transactionId in transactions {
-            let transactionEntries = entries.filter { $0.transactionId == transactionId }
-            if transactionEntries.contains(where: { $0.operationType == .transactionCommit }) {
-                committed += 1
-            } else if transactionEntries.contains(where: { $0.operationType == .transactionRollback }) {
-                rolledBack += 1
-            } else {
-                incomplete += 1
-            }
-        }
-        
-        report += "- Committed: \(committed)\n"
-        report += "- Rolled Back: \(rolledBack)\n"
-        report += "- Incomplete: \(incomplete)\n"
-        
         return report
     }
 }
@@ -358,7 +301,7 @@ func maintenanceExample() async throws {
         .appendingPathExtension("sqlite")
     
     let database = try await Database(storage: .file(dbURL))
-    guard let logger = await database.getLogger() else { return }
+    guard let logger = await database.logger else { return }
     
     // Get statistics
     let stats = try await DatabaseLogUtilities.getStatistics(logger: logger, logFileURL: logURL)

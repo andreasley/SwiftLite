@@ -61,7 +61,7 @@ public actor Database: Observable
     public internal(set) var isClosed = false
     
     // Logging for distributed sync
-    private var logger: DatabaseLogger?
+    public private(set) var logger: DatabaseLogger?
     private var currentTransactionId: UUID?
 
     public init(storage: StorageType, cacheSizeLimit: CacheSize? = nil, enableLogging: Bool = true) async throws
@@ -171,8 +171,6 @@ public actor Database: Observable
             currentTransactionId = transactionId
             
             print("▶️ BEGINNING SCHEMA UPDATE TRANSACTION")
-            try? await logger?.logTransactionBegin(transactionId: transactionId, type: "schema_update")
-            
             try self.run("BEGIN")
             do {
                 for table in requiredTables {
@@ -190,12 +188,13 @@ public actor Database: Observable
 
                 }
                 try self.run("COMMIT")
-                try? await logger?.logTransactionCommit(transactionId: transactionId)
                 print("✅ COMMITTED SCHEMA UPDATE TRANSACTION")
+                // Transaction succeeded - logging happened during operations
             } catch {
                 try? self.run("ROLLBACK")
-                try? await logger?.logTransactionRollback(transactionId: transactionId)
                 print("✴️ ROLLED BACK SCHEMA UPDATE TRANSACTION")
+                // Failed transaction - don't log, just clean up
+                currentTransactionId = nil
                 throw error
             }
             
@@ -416,12 +415,7 @@ public actor Database: Observable
         var results = [T]()
         
         try await gate.run {
-            let transactionId = UUID()
-            await self.setCurrentTransactionId(transactionId)
-            
             print("▶️ BEGINNING READ TRANSACTION")
-            try? await logger?.logTransactionBegin(transactionId: transactionId, type: "read")
-            
             let associatedData = ReadAssociatedData(db: self)
             
             try await ReadAssociatedData.$current.withValue(associatedData) {
@@ -429,17 +423,13 @@ public actor Database: Observable
                 do {
                     results = try await body()
                     try await self.run("COMMIT")
-                    try? await logger?.logTransactionCommit(transactionId: transactionId)
                     print("✅ COMMITTED READ TRANSACTION")
                 } catch {
                     try? await self.run("ROLLBACK")
-                    try? await logger?.logTransactionRollback(transactionId: transactionId)
                     print("✴️ ROLLED BACK READ TRANSACTION")
                     throw error
                 }
             }
-            
-            await self.setCurrentTransactionId(nil)
         }
         
         // Start autoupdating here, because at this point, the Model objects should be back on actor they'll live in (even if that's not where they were created).
@@ -456,10 +446,6 @@ public actor Database: Observable
         
         return results
     }
-    
-    private func setCurrentTransactionId(_ id: UUID?) {
-        currentTransactionId = id
-    }
 
     public func save(changeset: FrozenChangeset) async throws
     {
@@ -468,14 +454,10 @@ public actor Database: Observable
             currentTransactionId = transactionId
             
             print("▶️ BEGINNING WRITE TRANSACTION")
-            try? await logger?.logTransactionBegin(transactionId: transactionId, type: "write")
-            
             var transactionCompletedSuccessfully = false
             try self.run("BEGIN")
             do {
                 try self.setPragma(name: "defer_foreign_keys", value: "ON") // to wait with enforcement until `COMMIT`
-
-                // TODO: Log changes and mark them for synchronization
 
                 for object in changeset.changes {
                     let byObjectId = SQLCondition(field: "id", value: object.objectId.convertToSQLValue())
@@ -485,34 +467,28 @@ public actor Database: Observable
                         guard let updatedFields = object.updatedFields else { continue }
                         let preset = SQLStatementPreset.Insert(table: object.table, updatedFields: updatedFields)
                         try self.execute(preset.sqlStatement)
-                        
-                        // Log the creation
-                        try? await logger?.logDataChange(transactionId: transactionId, change: object)
-                        
                     case .deleted:
                         let preset = SQLStatementPreset.Delete(table: object.table, conditions: [byObjectId])
                         try self.execute(preset.sqlStatement)
-                        
-                        // Log the deletion
-                        try? await logger?.logDataChange(transactionId: transactionId, change: object)
-                        
                     case .updated:
                         guard let updatedFields = object.updatedFields else { continue }
                         let preset = SQLStatementPreset.Update(table: object.table, updatedFields: updatedFields, condition: byObjectId)
                         try self.execute(preset.sqlStatement)
-                        
-                        // Log the update
-                        try? await logger?.logDataChange(transactionId: transactionId, change: object)
                     }
                 }
                 try self.run("COMMIT")
-                try? await logger?.logTransactionCommit(transactionId: transactionId)
                 print("✅ COMMITTED WRITE TRANSACTION")
                 transactionCompletedSuccessfully = true
+                
+                // Transaction succeeded - now log all the changes
+                for object in changeset.changes {
+                    try? await logger?.logDataChange(transactionId: transactionId, change: object)
+                }
             } catch {
                 try? self.run("ROLLBACK")
-                try? await logger?.logTransactionRollback(transactionId: transactionId)
                 print("✴️ ROLLED BACK WRITE TRANSACTION")
+                // Failed transaction - don't log anything
+                currentTransactionId = nil
                 throw error
             }
 
@@ -664,24 +640,24 @@ public actor Database: Observable
         print(createTableStatement)
         try self.run(createTableStatement)
         
-        // Log table creation
+        // Log table creation (granular: just the table itself)
         if let transactionId = currentTransactionId {
-            let columnInfo = table.columns.map { ["name": $0.name, "storageClass": $0.storageClass.rawValue] }
-            let foreignKeyInfo = table.foreignKeys.map { [
-                "column": $0.column,
-                "referencedTable": $0.referencedTable,
-                "referencedColumn": $0.referencedColumn
-            ] }
-            
             try? await logger?.logSchemaChange(
                 transactionId: transactionId,
                 operationType: .tableCreated,
-                tableName: table.name,
-                metadata: [
-                    "columns": columnInfo,
-                    "foreignKeys": foreignKeyInfo
-                ]
+                tableName: table.name
             )
+            
+            // Log each column addition separately
+            for column in table.columns {
+                try? await logger?.logSchemaChange(
+                    transactionId: transactionId,
+                    operationType: .columnAdded,
+                    tableName: table.name,
+                    columnName: column.name,
+                    metadata: ["storageClass": column.storageClass.rawValue]
+                )
+            }
             
             // Log foreign key additions
             for foreignKey in table.foreignKeys {
@@ -811,42 +787,6 @@ public actor Database: Observable
     public func registerNotificationProxy(_ proxy: ActorNotificationProxy)
     {
         notificationProxies.append(proxy)
-    }
-    
-    /// Access the logger for custom logging operations
-    public func getLogger() -> DatabaseLogger? {
-        return logger
-    }
-    
-    /// Get entries from the log within a specified date range
-    public func getLogEntries(
-        from startDate: Date? = nil,
-        to endDate: Date? = nil,
-        transactionId: UUID? = nil,
-        tableName: String? = nil,
-        limit: Int? = nil
-    ) async throws -> [DatabaseLogger.LogEntry] {
-        guard let logger else {
-            return []
-        }
-        return try await logger.getEntries(
-            from: startDate,
-            to: endDate,
-            transactionId: transactionId,
-            tableName: tableName,
-            limit: limit
-        )
-    }
-    
-    /// Get all transaction IDs within a date range
-    public func getLogTransactions(
-        from startDate: Date? = nil,
-        to endDate: Date? = nil
-    ) async throws -> [UUID] {
-        guard let logger else {
-            return []
-        }
-        return try await logger.getTransactions(from: startDate, to: endDate)
     }
     
     isolated deinit
