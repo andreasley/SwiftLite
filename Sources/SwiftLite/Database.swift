@@ -59,12 +59,17 @@ public actor Database: Observable
     let gate = TransactionGate()
 
     public internal(set) var isClosed = false
+    
+    // Logging for distributed sync
+    private var logger: DatabaseLogger?
+    private var currentTransactionId: UUID?
 
-    public init(storage: StorageType, cacheSizeLimit: CacheSize? = nil) throws
+    public init(storage: StorageType, cacheSizeLimit: CacheSize? = nil, enableLogging: Bool = true) async throws
     {
         var pointer: OpaquePointer?
         var flags = [SQLITE_OPEN_READWRITE, SQLITE_OPEN_CREATE, SQLITE_OPEN_FULLMUTEX] // see https://sqlite.org/c3ref/open.html
         var filename: String?
+        var logFileURL: URL?
         
         if case .file(let url) = storage {
             guard url.isFileURL else {
@@ -73,9 +78,16 @@ public actor Database: Observable
             let filenameFromUrl = url.absoluteString
             filename = filenameFromUrl
             print("Opening database at \(filenameFromUrl)")
+            
+            // Create log file URL (same directory, with .log.sqlite extension)
+            if enableLogging {
+                let logFileName = url.deletingPathExtension().lastPathComponent + ".log.sqlite"
+                logFileURL = url.deletingLastPathComponent().appendingPathComponent(logFileName)
+            }
         } else if case .inMemory = storage {
             flags.append(SQLITE_OPEN_MEMORY)
             print("Opening database in memory")
+            // In-memory databases don't get logging
         }
         
         let openStatus = sqlite3_open_v2(filename, &pointer, flags.reduce(0, |), nil)
@@ -101,6 +113,16 @@ public actor Database: Observable
         }
 
         self.connectionHandle = pointer
+        
+        // Initialize logger if enabled and we have a file URL
+        if enableLogging, let logFileURL {
+            do {
+                self.logger = try await DatabaseLogger(logFileURL: logFileURL)
+            } catch {
+                print("⚠️ Failed to initialize database logger: \(error)")
+                // Continue without logging - don't fail database initialization
+            }
+        }
     }
 
     func setPragma(name: String, value: String) throws
@@ -145,7 +167,12 @@ public actor Database: Observable
         }
         
         try await gate.run {
+            let transactionId = UUID()
+            currentTransactionId = transactionId
+            
             print("▶️ BEGINNING SCHEMA UPDATE TRANSACTION")
+            try? await logger?.logTransactionBegin(transactionId: transactionId, type: "schema_update")
+            
             try self.run("BEGIN")
             do {
                 for table in requiredTables {
@@ -155,21 +182,24 @@ public actor Database: Observable
                         print("exists; comparing...")
                         tablesWithoutMatchingModels.remove(existingTableForModel)
                         // compare schema
-                        try updateTableIfNecessary(existingTable: existingTableForModel, table: table)
+                        try await updateTableIfNecessary(existingTable: existingTableForModel, table: table)
                     } else {
                         print("doesn't exist; creating...")
-                        try createTable(table)
+                        try await createTable(table)
                     }
 
                 }
                 try self.run("COMMIT")
+                try? await logger?.logTransactionCommit(transactionId: transactionId)
                 print("✅ COMMITTED SCHEMA UPDATE TRANSACTION")
             } catch {
                 try? self.run("ROLLBACK")
+                try? await logger?.logTransactionRollback(transactionId: transactionId)
                 print("✴️ ROLLED BACK SCHEMA UPDATE TRANSACTION")
                 throw error
             }
-
+            
+            currentTransactionId = nil
         }
         
         for tablesWithoutMatchingModel in tablesWithoutMatchingModels {
@@ -386,7 +416,12 @@ public actor Database: Observable
         var results = [T]()
         
         try await gate.run {
+            let transactionId = UUID()
+            await self.setCurrentTransactionId(transactionId)
+            
             print("▶️ BEGINNING READ TRANSACTION")
+            try? await logger?.logTransactionBegin(transactionId: transactionId, type: "read")
+            
             let associatedData = ReadAssociatedData(db: self)
             
             try await ReadAssociatedData.$current.withValue(associatedData) {
@@ -394,13 +429,17 @@ public actor Database: Observable
                 do {
                     results = try await body()
                     try await self.run("COMMIT")
+                    try? await logger?.logTransactionCommit(transactionId: transactionId)
                     print("✅ COMMITTED READ TRANSACTION")
                 } catch {
                     try? await self.run("ROLLBACK")
+                    try? await logger?.logTransactionRollback(transactionId: transactionId)
                     print("✴️ ROLLED BACK READ TRANSACTION")
                     throw error
                 }
             }
+            
+            await self.setCurrentTransactionId(nil)
         }
         
         // Start autoupdating here, because at this point, the Model objects should be back on actor they'll live in (even if that's not where they were created).
@@ -417,11 +456,20 @@ public actor Database: Observable
         
         return results
     }
+    
+    private func setCurrentTransactionId(_ id: UUID?) {
+        currentTransactionId = id
+    }
 
     public func save(changeset: FrozenChangeset) async throws
     {
         try await gate.run {
+            let transactionId = UUID()
+            currentTransactionId = transactionId
+            
             print("▶️ BEGINNING WRITE TRANSACTION")
+            try? await logger?.logTransactionBegin(transactionId: transactionId, type: "write")
+            
             var transactionCompletedSuccessfully = false
             try self.run("BEGIN")
             do {
@@ -437,24 +485,39 @@ public actor Database: Observable
                         guard let updatedFields = object.updatedFields else { continue }
                         let preset = SQLStatementPreset.Insert(table: object.table, updatedFields: updatedFields)
                         try self.execute(preset.sqlStatement)
+                        
+                        // Log the creation
+                        try? await logger?.logDataChange(transactionId: transactionId, change: object)
+                        
                     case .deleted:
                         let preset = SQLStatementPreset.Delete(table: object.table, conditions: [byObjectId])
                         try self.execute(preset.sqlStatement)
+                        
+                        // Log the deletion
+                        try? await logger?.logDataChange(transactionId: transactionId, change: object)
+                        
                     case .updated:
                         guard let updatedFields = object.updatedFields else { continue }
                         let preset = SQLStatementPreset.Update(table: object.table, updatedFields: updatedFields, condition: byObjectId)
                         try self.execute(preset.sqlStatement)
+                        
+                        // Log the update
+                        try? await logger?.logDataChange(transactionId: transactionId, change: object)
                     }
                 }
                 try self.run("COMMIT")
+                try? await logger?.logTransactionCommit(transactionId: transactionId)
                 print("✅ COMMITTED WRITE TRANSACTION")
                 transactionCompletedSuccessfully = true
             } catch {
                 try? self.run("ROLLBACK")
+                try? await logger?.logTransactionRollback(transactionId: transactionId)
                 print("✴️ ROLLED BACK WRITE TRANSACTION")
                 throw error
             }
 
+            currentTransactionId = nil
+            
             if transactionCompletedSuccessfully {
                 Task {
                     for proxy in self.notificationProxies {
@@ -465,7 +528,7 @@ public actor Database: Observable
         }
     }
 
-    func updateTableIfNecessary(existingTable: ExistingSchema.Table, table: RequiredSchema.Table) throws
+    func updateTableIfNecessary(existingTable: ExistingSchema.Table, table: RequiredSchema.Table) async throws
     {
         // Get existing schema details
         let existingColumns = try getColumns(tableName: table.name)
@@ -543,32 +606,117 @@ public actor Database: Observable
                 print("➕ Adding column '\(column.name)' to table '\(table.name)'")
                 let alterStatement = "ALTER TABLE \"\(table.name)\" ADD COLUMN \"\(column.name)\" \(column.storageClass.rawValue.uppercased())"
                 try run(alterStatement)
+                
+                // Log column addition
+                if let transactionId = currentTransactionId {
+                    try? await logger?.logSchemaChange(
+                        transactionId: transactionId,
+                        operationType: .columnAdded,
+                        tableName: table.name,
+                        columnName: column.name,
+                        metadata: ["storageClass": column.storageClass.rawValue]
+                    )
+                }
             }
             
             // Update indexes
             for index in indexesToRemove {
                 print("🗑️ Dropping index '\(index.name)'")
                 try run("DROP INDEX \"\(index.name)\"")
+                
+                // Log index removal
+                if let transactionId = currentTransactionId {
+                    try? await logger?.logSchemaChange(
+                        transactionId: transactionId,
+                        operationType: .indexDropped,
+                        tableName: table.name,
+                        metadata: ["indexName": index.name]
+                    )
+                }
             }
             
             for index in indexesToAdd {
                 print("➕ Creating index '\(index.name)'")
                 let createIndexStatement = "CREATE \(index.isUnique ? "UNIQUE " : "")INDEX \"\(index.name)\" ON \"\(table.name)\"(\(index.columns.joined(separator: ", ")))"
                 try run(createIndexStatement)
+                
+                // Log index creation
+                if let transactionId = currentTransactionId {
+                    try? await logger?.logSchemaChange(
+                        transactionId: transactionId,
+                        operationType: .indexCreated,
+                        tableName: table.name,
+                        metadata: [
+                            "indexName": index.name,
+                            "isUnique": index.isUnique,
+                            "columns": index.columns
+                        ]
+                    )
+                }
             }
         }
     }
     
-    func createTable(_ table: RequiredSchema.Table) throws
+    func createTable(_ table: RequiredSchema.Table) async throws
     {
         let createTableStatement = createTableStatement(for: table)
         let createIndexStatements = createIndexStatements(for: table)
         print(createTableStatement)
         try self.run(createTableStatement)
+        
+        // Log table creation
+        if let transactionId = currentTransactionId {
+            let columnInfo = table.columns.map { ["name": $0.name, "storageClass": $0.storageClass.rawValue] }
+            let foreignKeyInfo = table.foreignKeys.map { [
+                "column": $0.column,
+                "referencedTable": $0.referencedTable,
+                "referencedColumn": $0.referencedColumn
+            ] }
+            
+            try? await logger?.logSchemaChange(
+                transactionId: transactionId,
+                operationType: .tableCreated,
+                tableName: table.name,
+                metadata: [
+                    "columns": columnInfo,
+                    "foreignKeys": foreignKeyInfo
+                ]
+            )
+            
+            // Log foreign key additions
+            for foreignKey in table.foreignKeys {
+                try? await logger?.logSchemaChange(
+                    transactionId: transactionId,
+                    operationType: .foreignKeyAdded,
+                    tableName: table.name,
+                    columnName: foreignKey.column,
+                    metadata: [
+                        "referencedTable": foreignKey.referencedTable,
+                        "referencedColumn": foreignKey.referencedColumn
+                    ]
+                )
+            }
+        }
 
         for createIndexStatement in createIndexStatements {
             print(createIndexStatement)
             try self.run(createIndexStatement)
+        }
+        
+        // Log index creations
+        if let transactionId = currentTransactionId {
+            for index in table.indexes {
+                try? await logger?.logSchemaChange(
+                    transactionId: transactionId,
+                    operationType: .indexCreated,
+                    tableName: table.name,
+                    metadata: [
+                        "indexName": index.name,
+                        "isUnique": index.isUnique,
+                        "columns": index.columns
+                    ]
+                )
+            }
         }
     }
     
@@ -646,6 +794,11 @@ public actor Database: Observable
     {
         guard !isClosed else { return }
         
+        Task {
+            // Close the logger first
+            try? await logger?.close()
+        }
+        
         let result = sqlite3_close(self.connectionHandle)
         
         guard result == SQLiteStatus.ok else {
@@ -660,10 +813,51 @@ public actor Database: Observable
         notificationProxies.append(proxy)
     }
     
+    /// Access the logger for custom logging operations
+    public func getLogger() -> DatabaseLogger? {
+        return logger
+    }
+    
+    /// Get entries from the log within a specified date range
+    public func getLogEntries(
+        from startDate: Date? = nil,
+        to endDate: Date? = nil,
+        transactionId: UUID? = nil,
+        tableName: String? = nil,
+        limit: Int? = nil
+    ) async throws -> [DatabaseLogger.LogEntry] {
+        guard let logger else {
+            return []
+        }
+        return try await logger.getEntries(
+            from: startDate,
+            to: endDate,
+            transactionId: transactionId,
+            tableName: tableName,
+            limit: limit
+        )
+    }
+    
+    /// Get all transaction IDs within a date range
+    public func getLogTransactions(
+        from startDate: Date? = nil,
+        to endDate: Date? = nil
+    ) async throws -> [UUID] {
+        guard let logger else {
+            return []
+        }
+        return try await logger.getTransactions(from: startDate, to: endDate)
+    }
+    
     isolated deinit
     {
         if !isClosed {
             sqlite3_close(self.connectionHandle)
+        }
+        
+        let logger = self.logger
+        Task {
+            try? await logger?.close()
         }
     }
 }

@@ -1,0 +1,525 @@
+import Foundation
+import SQLite3
+
+/// Manages a separate SQLite database for logging all database operations.
+/// This log is essential for distributed sync, providing a complete audit trail
+/// of all schema changes and data modifications with timestamps and transaction IDs.
+public actor DatabaseLogger
+{
+    public enum Error: Swift.Error, CustomStringConvertible {
+        case failedToOpen(SQLiteStatus)
+        case failedToClose(SQLiteStatus)
+        case failedToInitialize(String)
+        case failedToLog(String)
+        
+        public var description: String {
+            switch self {
+            case .failedToOpen(let status):
+                return "Failed to open log database: \(status.description)"
+            case .failedToClose(let status):
+                return "Failed to close log database: \(status.description)"
+            case .failedToInitialize(let message):
+                return "Failed to initialize log database: \(message)"
+            case .failedToLog(let message):
+                return "Failed to log operation: \(message)"
+            }
+        }
+    }
+    
+    public enum OperationType: String, Sendable {
+        // Schema operations
+        case tableCreated = "table_created"
+        case columnAdded = "column_added"
+        case indexCreated = "index_created"
+        case indexDropped = "index_dropped"
+        case foreignKeyAdded = "foreign_key_added"
+        
+        // Data operations
+        case rowCreated = "row_created"
+        case rowDeleted = "row_deleted"
+        case rowUpdated = "row_updated"
+        
+        // Transaction operations
+        case transactionBegin = "transaction_begin"
+        case transactionCommit = "transaction_commit"
+        case transactionRollback = "transaction_rollback"
+    }
+    
+    /// Represents a single log entry in the database history
+    public struct LogEntry: Sendable {
+        public let id: UUID
+        public let timestamp: Date
+        public let transactionId: UUID
+        public let operationType: OperationType
+        public let tableName: String?
+        public let objectId: UUID?
+        public let columnName: String?
+        public let oldValue: String?
+        public let newValue: String?
+        public let metadata: String? // JSON-encoded additional data
+        
+        public init(
+            id: UUID = UUID(),
+            timestamp: Date = Date(),
+            transactionId: UUID,
+            operationType: OperationType,
+            tableName: String? = nil,
+            objectId: UUID? = nil,
+            columnName: String? = nil,
+            oldValue: String? = nil,
+            newValue: String? = nil,
+            metadata: String? = nil
+        ) {
+            self.id = id
+            self.timestamp = timestamp
+            self.transactionId = transactionId
+            self.operationType = operationType
+            self.tableName = tableName
+            self.objectId = objectId
+            self.columnName = columnName
+            self.oldValue = oldValue
+            self.newValue = newValue
+            self.metadata = metadata
+        }
+    }
+    
+    private let connectionHandle: OpaquePointer
+    private var isClosed = false
+    private let logFileURL: URL
+    
+    /// Initialize the logger with a separate SQLite database
+    /// - Parameter logFileURL: Location for the log database file
+    public init(logFileURL: URL) async throws {
+        guard logFileURL.isFileURL else {
+            throw Error.failedToInitialize("Log URL must be a file URL")
+        }
+        
+        self.logFileURL = logFileURL
+        
+        var pointer: OpaquePointer?
+        let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX
+        
+        let openStatus = sqlite3_open_v2(logFileURL.path, &pointer, flags, nil)
+        
+        guard let pointer, openStatus == SQLiteStatus.ok else {
+            throw Error.failedToOpen(SQLiteStatus(openStatus))
+        }
+        
+        self.connectionHandle = pointer
+        
+        // Initialize the log schema
+        try initializeSchema()
+        
+        print("📝 Database logger initialized at \(logFileURL.path)")
+    }
+    
+    /// Creates the log table schema if it doesn't exist
+    private func initializeSchema() throws {
+        let createTableSQL = """
+        CREATE TABLE IF NOT EXISTS operation_log (
+            id TEXT PRIMARY KEY NOT NULL,
+            timestamp REAL NOT NULL,
+            transaction_id TEXT NOT NULL,
+            operation_type TEXT NOT NULL,
+            table_name TEXT,
+            object_id TEXT,
+            column_name TEXT,
+            old_value TEXT,
+            new_value TEXT,
+            metadata TEXT
+        ) STRICT;
+        """
+        
+        let createIndexSQL = [
+            "CREATE INDEX IF NOT EXISTS idx_timestamp ON operation_log(timestamp);",
+            "CREATE INDEX IF NOT EXISTS idx_transaction_id ON operation_log(transaction_id);",
+            "CREATE INDEX IF NOT EXISTS idx_operation_type ON operation_log(operation_type);",
+            "CREATE INDEX IF NOT EXISTS idx_table_name ON operation_log(table_name);",
+            "CREATE INDEX IF NOT EXISTS idx_object_id ON operation_log(object_id);"
+        ]
+        
+        try execute(createTableSQL)
+        
+        for indexSQL in createIndexSQL {
+            try execute(indexSQL)
+        }
+    }
+    
+    /// Execute a SQL statement without parameters
+    private func execute(_ sql: String) throws {
+        let result = sqlite3_exec(connectionHandle, sql, nil, nil, nil)
+        guard result == SQLiteStatus.ok else {
+            let errmsg = String(cString: sqlite3_errmsg(connectionHandle))
+            throw Error.failedToInitialize(errmsg)
+        }
+    }
+    
+    /// Log a single operation
+    public func log(_ entry: LogEntry) throws {
+        let sql = """
+        INSERT INTO operation_log (
+            id, timestamp, transaction_id, operation_type,
+            table_name, object_id, column_name, old_value, new_value, metadata
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        
+        var statement: OpaquePointer?
+        
+        let prepareResult = sqlite3_prepare_v2(connectionHandle, sql, -1, &statement, nil)
+        defer { sqlite3_finalize(statement) }
+        
+        guard let statement, prepareResult == SQLiteStatus.ok else {
+            let errmsg = String(cString: sqlite3_errmsg(connectionHandle))
+            throw Error.failedToLog(errmsg)
+        }
+        
+        // Bind values
+        sqlite3_bind_text(statement, 1, entry.id.uuidString, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_double(statement, 2, entry.timestamp.timeIntervalSince1970)
+        sqlite3_bind_text(statement, 3, entry.transactionId.uuidString, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(statement, 4, entry.operationType.rawValue, -1, SQLITE_TRANSIENT)
+        
+        if let tableName = entry.tableName {
+            sqlite3_bind_text(statement, 5, tableName, -1, SQLITE_TRANSIENT)
+        } else {
+            sqlite3_bind_null(statement, 5)
+        }
+        
+        if let objectId = entry.objectId {
+            sqlite3_bind_text(statement, 6, objectId.uuidString, -1, SQLITE_TRANSIENT)
+        } else {
+            sqlite3_bind_null(statement, 6)
+        }
+        
+        if let columnName = entry.columnName {
+            sqlite3_bind_text(statement, 7, columnName, -1, SQLITE_TRANSIENT)
+        } else {
+            sqlite3_bind_null(statement, 7)
+        }
+        
+        if let oldValue = entry.oldValue {
+            sqlite3_bind_text(statement, 8, oldValue, -1, SQLITE_TRANSIENT)
+        } else {
+            sqlite3_bind_null(statement, 8)
+        }
+        
+        if let newValue = entry.newValue {
+            sqlite3_bind_text(statement, 9, newValue, -1, SQLITE_TRANSIENT)
+        } else {
+            sqlite3_bind_null(statement, 9)
+        }
+        
+        if let metadata = entry.metadata {
+            sqlite3_bind_text(statement, 10, metadata, -1, SQLITE_TRANSIENT)
+        } else {
+            sqlite3_bind_null(statement, 10)
+        }
+        
+        let stepResult = sqlite3_step(statement)
+        guard stepResult == SQLITE_DONE else {
+            let errmsg = String(cString: sqlite3_errmsg(connectionHandle))
+            throw Error.failedToLog(errmsg)
+        }
+    }
+    
+    /// Log multiple operations in a batch (more efficient for large changesets)
+    public func logBatch(_ entries: [LogEntry]) throws {
+        try execute("BEGIN")
+        
+        do {
+            for entry in entries {
+                try log(entry)
+            }
+            try execute("COMMIT")
+        } catch {
+            try? execute("ROLLBACK")
+            throw error
+        }
+    }
+    
+    /// Log a transaction begin event
+    public func logTransactionBegin(transactionId: UUID, type: String) throws {
+        try log(LogEntry(
+            transactionId: transactionId,
+            operationType: .transactionBegin,
+            metadata: type
+        ))
+    }
+    
+    /// Log a transaction commit event
+    public func logTransactionCommit(transactionId: UUID) throws {
+        try log(LogEntry(
+            transactionId: transactionId,
+            operationType: .transactionCommit
+        ))
+    }
+    
+    /// Log a transaction rollback event
+    public func logTransactionRollback(transactionId: UUID) throws {
+        try log(LogEntry(
+            transactionId: transactionId,
+            operationType: .transactionRollback
+        ))
+    }
+    
+    /// Log schema change operations
+    public func logSchemaChange(
+        transactionId: UUID,
+        operationType: OperationType,
+        tableName: String,
+        columnName: String? = nil,
+        metadata: [String: Any]? = nil
+    ) throws {
+        var metadataJSON: String?
+        if let metadata {
+            if let jsonData = try? JSONSerialization.data(withJSONObject: metadata),
+               let jsonString = String(data: jsonData, encoding: .utf8) {
+                metadataJSON = jsonString
+            }
+        }
+        
+        try log(LogEntry(
+            transactionId: transactionId,
+            operationType: operationType,
+            tableName: tableName,
+            columnName: columnName,
+            metadata: metadataJSON
+        ))
+    }
+    
+    /// Log data change from a ChangedObject
+    public func logDataChange(
+        transactionId: UUID,
+        change: ChangedObject
+    ) throws {
+        let operationType: OperationType = switch change.status {
+        case .created: .rowCreated
+        case .deleted: .rowDeleted
+        case .updated: .rowUpdated
+        }
+        
+        if change.status == .updated, let updatedFields = change.updatedFields {
+            // Log each field change separately for detailed tracking
+            for (fieldName, newValue) in updatedFields {
+                try log(LogEntry(
+                    transactionId: transactionId,
+                    operationType: operationType,
+                    tableName: change.table,
+                    objectId: change.objectId,
+                    columnName: fieldName,
+                    newValue: sqlValueToString(newValue)
+                ))
+            }
+        } else {
+            // For creates and deletes, log a single entry
+            var metadataJSON: String?
+            if let updatedFields = change.updatedFields {
+                let fieldDict = updatedFields.mapValues { sqlValueToString($0) }
+                if let jsonData = try? JSONSerialization.data(withJSONObject: fieldDict),
+                   let jsonString = String(data: jsonData, encoding: .utf8) {
+                    metadataJSON = jsonString
+                }
+            }
+            
+            try log(LogEntry(
+                transactionId: transactionId,
+                operationType: operationType,
+                tableName: change.table,
+                objectId: change.objectId,
+                metadata: metadataJSON
+            ))
+        }
+    }
+    
+    /// Retrieve log entries within a date range
+    public func getEntries(
+        from startDate: Date? = nil,
+        to endDate: Date? = nil,
+        transactionId: UUID? = nil,
+        tableName: String? = nil,
+        limit: Int? = nil
+    ) throws -> [LogEntry] {
+        var sql = "SELECT * FROM operation_log WHERE 1=1"
+        var bindIndex: Int32 = 1
+        
+        if startDate != nil {
+            sql += " AND timestamp >= ?"
+        }
+        if endDate != nil {
+            sql += " AND timestamp <= ?"
+        }
+        if transactionId != nil {
+            sql += " AND transaction_id = ?"
+        }
+        if tableName != nil {
+            sql += " AND table_name = ?"
+        }
+        
+        sql += " ORDER BY timestamp ASC"
+        
+        if let limit {
+            sql += " LIMIT \(limit)"
+        }
+        
+        var statement: OpaquePointer?
+        let prepareResult = sqlite3_prepare_v2(connectionHandle, sql, -1, &statement, nil)
+        defer { sqlite3_finalize(statement) }
+        
+        guard let statement, prepareResult == SQLiteStatus.ok else {
+            let errmsg = String(cString: sqlite3_errmsg(connectionHandle))
+            throw Error.failedToLog(errmsg)
+        }
+        
+        // Bind parameters
+        if let startDate {
+            sqlite3_bind_double(statement, bindIndex, startDate.timeIntervalSince1970)
+            bindIndex += 1
+        }
+        if let endDate {
+            sqlite3_bind_double(statement, bindIndex, endDate.timeIntervalSince1970)
+            bindIndex += 1
+        }
+        if let transactionId {
+            sqlite3_bind_text(statement, bindIndex, transactionId.uuidString, -1, SQLITE_TRANSIENT)
+            bindIndex += 1
+        }
+        if let tableName {
+            sqlite3_bind_text(statement, bindIndex, tableName, -1, SQLITE_TRANSIENT)
+            bindIndex += 1
+        }
+        
+        var entries: [LogEntry] = []
+        
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let id = UUID(uuidString: String(cString: sqlite3_column_text(statement, 0))),
+                  let transactionId = UUID(uuidString: String(cString: sqlite3_column_text(statement, 2))),
+                  let operationType = OperationType(rawValue: String(cString: sqlite3_column_text(statement, 3)))
+            else {
+                continue
+            }
+            
+            let timestamp = Date(timeIntervalSince1970: sqlite3_column_double(statement, 1))
+            
+            let tableName = sqlite3_column_type(statement, 4) != SQLITE_NULL
+                ? String(cString: sqlite3_column_text(statement, 4))
+                : nil
+            
+            let objectId = sqlite3_column_type(statement, 5) != SQLITE_NULL
+                ? UUID(uuidString: String(cString: sqlite3_column_text(statement, 5)))
+                : nil
+            
+            let columnName = sqlite3_column_type(statement, 6) != SQLITE_NULL
+                ? String(cString: sqlite3_column_text(statement, 6))
+                : nil
+            
+            let oldValue = sqlite3_column_type(statement, 7) != SQLITE_NULL
+                ? String(cString: sqlite3_column_text(statement, 7))
+                : nil
+            
+            let newValue = sqlite3_column_type(statement, 8) != SQLITE_NULL
+                ? String(cString: sqlite3_column_text(statement, 8))
+                : nil
+            
+            let metadata = sqlite3_column_type(statement, 9) != SQLITE_NULL
+                ? String(cString: sqlite3_column_text(statement, 9))
+                : nil
+            
+            entries.append(LogEntry(
+                id: id,
+                timestamp: timestamp,
+                transactionId: transactionId,
+                operationType: operationType,
+                tableName: tableName,
+                objectId: objectId,
+                columnName: columnName,
+                oldValue: oldValue,
+                newValue: newValue,
+                metadata: metadata
+            ))
+        }
+        
+        return entries
+    }
+    
+    /// Get all transactions within a date range
+    public func getTransactions(
+        from startDate: Date? = nil,
+        to endDate: Date? = nil
+    ) throws -> [UUID] {
+        var sql = "SELECT DISTINCT transaction_id FROM operation_log WHERE 1=1"
+        var bindIndex: Int32 = 1
+        
+        if startDate != nil {
+            sql += " AND timestamp >= ?"
+        }
+        if endDate != nil {
+            sql += " AND timestamp <= ?"
+        }
+        
+        sql += " ORDER BY timestamp ASC"
+        
+        var statement: OpaquePointer?
+        let prepareResult = sqlite3_prepare_v2(connectionHandle, sql, -1, &statement, nil)
+        defer { sqlite3_finalize(statement) }
+        
+        guard let statement, prepareResult == SQLiteStatus.ok else {
+            let errmsg = String(cString: sqlite3_errmsg(connectionHandle))
+            throw Error.failedToLog(errmsg)
+        }
+        
+        if let startDate {
+            sqlite3_bind_double(statement, bindIndex, startDate.timeIntervalSince1970)
+            bindIndex += 1
+        }
+        if let endDate {
+            sqlite3_bind_double(statement, bindIndex, endDate.timeIntervalSince1970)
+            bindIndex += 1
+        }
+        
+        var transactionIds: [UUID] = []
+        
+        while sqlite3_step(statement) == SQLITE_ROW {
+            if let transactionId = UUID(uuidString: String(cString: sqlite3_column_text(statement, 0))) {
+                transactionIds.append(transactionId)
+            }
+        }
+        
+        return transactionIds
+    }
+    
+    /// Helper to convert SQLValue to string for logging
+    private func sqlValueToString(_ value: SQLValue) -> String {
+        switch value {
+        case .string(let string):
+            return string
+        case .int(let int):
+            return String(int)
+        case .double(let double):
+            return String(double)
+        case .data(let data):
+            return data.base64EncodedString()
+        case .null:
+            return "NULL"
+        }
+    }
+    
+    /// Close the log database
+    public func close() throws {
+        guard !isClosed else { return }
+        
+        let result = sqlite3_close(connectionHandle)
+        
+        guard result == SQLiteStatus.ok else {
+            throw Error.failedToClose(SQLiteStatus(result))
+        }
+        
+        isClosed = true
+        print("📝 Database logger closed")
+    }
+    
+    isolated deinit {
+        if !isClosed {
+            sqlite3_close(connectionHandle)
+        }
+    }
+}
