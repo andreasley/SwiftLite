@@ -4,6 +4,8 @@ public enum LoadingStatus: Equatable {
     case initial
     case loading
     case loaded
+    case unsaved
+    case saving
     case error(Swift.Error)
     
     var isError: Bool {

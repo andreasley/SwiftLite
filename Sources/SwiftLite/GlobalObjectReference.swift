@@ -1,6 +1,6 @@
 import Foundation
 
-public nonisolated struct GlobalObjectReference<T>: ObjectReference where T: SwiftLite.Model
+public nonisolated struct GlobalObjectReference<T>: UnqualifiedObjectReference where T: SwiftLite.Model
 {
     public typealias Model = T
     

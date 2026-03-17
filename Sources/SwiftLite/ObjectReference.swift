@@ -1,15 +1,17 @@
 import Foundation
 
-public protocol ObjectReference<Model>
+public protocol ObjectReference<Model>: UnqualifiedObjectReference, DatabaseObjectReferenceConvertible where Model: SwiftLite.Model
 {
-    associatedtype Model: SwiftLite.Model
+    associatedtype Model
+    
     var id: Model.ID { get }
+    var db: Database { get }
 }
 
 public nonisolated extension ObjectReference
 {
-    static func global(id: Model.ID) -> any ObjectReference<Model>
+    static func id(id: Model.ID, db: Database) -> DatabaseObjectReference<Model>
     {
-        GlobalObjectReference(id: id)
+        DatabaseObjectReference<Model>(id: id, db: db)
     }
 }

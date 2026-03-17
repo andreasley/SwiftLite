@@ -1,7 +1,7 @@
 import Foundation
 
 // The default read-only type returned from the database
-public nonisolated protocol ModelSnapshot: Fetchable, Sendable, SQLValueConvertible, DatabaseObjectReferenceConvertible where Model: SwiftLite.Model
+public nonisolated protocol ModelSnapshot: Fetchable, Sendable, SQLValueConvertible where Model: SwiftLite.Model
 {
     associatedtype Model
     

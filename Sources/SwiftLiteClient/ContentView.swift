@@ -44,12 +44,14 @@ struct ContentView: View
             if let selectedEntity, let selectedModelId {
                 Group {
                     switch selectedEntity {
-                    case .car:
-                        CarDetailView.loading(car: GlobalObjectReference(id: selectedModelId))
+                    case .car: //.byId(selectedModelId, db: db)
+                        CarDetailView.loading(car: DatabaseObjectReference(id: selectedModelId, db: db))
                     case .engine:
-                        EngineDetailView.loading(engine: GlobalObjectReference(id: selectedModelId))
+                        EmptyView()
+//                        EngineDetailView.loading(engine: DatabaseObjectReference(id: selectedModelId, db: db))
                     case .passenger:
-                        PassengerDetailView.loading(passenger: GlobalObjectReference(id: selectedModelId))
+                        EmptyView()
+//                        PassengerDetailView.loading(passenger: DatabaseObjectReference(id: selectedModelId, db: db))
                     }
                 }.id(selectedModelId)
             }
