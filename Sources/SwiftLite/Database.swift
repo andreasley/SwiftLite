@@ -26,6 +26,7 @@ public actor Database: Observable
         case failedToFindResultValue
         case failedToFindReadTransaction
         case failedToMigrateSchema
+        case unexpectedStatementValuesForRun
 
         var description: String {
             return switch self {
@@ -49,6 +50,8 @@ public actor Database: Observable
                 "Failed to find a read transaction"
             case .failedToMigrateSchema:
                 "Failed to migrate schema"
+            case .unexpectedStatementValuesForRun:
+                "The SQL statement passed to run unexpectedly contained values"
             }
         }
     }
@@ -117,7 +120,13 @@ public actor Database: Observable
         // Initialize logger if enabled and we have a file URL
         if enableLogging, let logFileURL {
             do {
-                self.logger = try await DatabaseLogger(logFileURL: logFileURL)
+                let logger = try await DatabaseLogger(logFileURL: logFileURL)
+                self.logger = logger
+                let existingEntries = try await logger.getEntries()
+                let grouped = Dictionary(grouping: existingEntries) { $0.transactionId }
+                for (transactionId, entries) in grouped.sorted(by: { $0.value.first!.timestamp < $1.value.first!.timestamp }) {
+                    try await self.processTransaction(entries: entries, transactionId: transactionId)
+                }
             } catch {
                 print("⚠️ Failed to initialize database logger: \(error)")
                 // Continue without logging - don't fail database initialization
@@ -194,6 +203,14 @@ public actor Database: Observable
         for tablesWithoutMatchingModel in tablesWithoutMatchingModels {
             print("Ignoring user-defined table that doesn't map to any model: \(tablesWithoutMatchingModel.name)")
         }
+    }
+    
+    public func run(_ sqlStatement: SQLStatement) throws
+    {
+        if let values = sqlStatement.values {
+            guard values.isEmpty else { throw Error.unexpectedStatementValuesForRun }
+        }
+        try run(sqlStatement.text)
     }
 
     public func run(_ statementText: String) throws
@@ -856,9 +873,14 @@ public actor Database: Observable
                 switch entry.operationType {
                 case DatabaseLogger.OperationType.tableCreated:
                     print("📋 Replaying: Table created - \(tableName)")
-                    // Table creation is complex and requires full schema info
-                    // For now, we'll just note it - actual table creation should happen via register()
-                    // This entry serves as an audit trail
+                    let createTableStatement = """
+                    CREATE TABLE "\(tableName)" (
+                        "id" TEXT,
+                        PRIMARY KEY(id)
+                    ) STRICT, WITHOUT ROWID;
+                    """
+                    try run(createTableStatement)
+
                     
                 case DatabaseLogger.OperationType.columnAdded:
                     guard let columnName = entry.columnName else {
@@ -983,7 +1005,7 @@ public actor Database: Observable
                         table: tableName,
                         conditions: [SQLCondition(field: "id", value: .string(objectId.uuidString))]
                     )
-                    try? execute(deleteStatement.sqlStatement) // Use try? to avoid errors if row doesn't exist
+                    try run(deleteStatement.sqlStatement)
                     
                 } else if hasRowCreated {
                     // Create operation - collect all field values
@@ -998,7 +1020,7 @@ public actor Database: Observable
                     print("📋 Replaying: Row created - \(tableName)[\(objectId)] with \(fields.count) fields")
                     
                     let insertStatement = SQLStatementPreset.Insert(table: tableName, updatedFields: fields)
-                    try? execute(insertStatement.sqlStatement) // Use try? to handle conflicts
+                    try execute(insertStatement.sqlStatement)
                     
                 } else if !fieldUpdates.isEmpty {
                     // Update operation - apply field changes
@@ -1018,7 +1040,7 @@ public actor Database: Observable
                             updatedFields: fields,
                             condition: SQLCondition(field: "id", value: .string(objectId.uuidString))
                         )
-                        try? execute(updateStatement.sqlStatement) // Use try? to avoid errors if row doesn't exist
+                        try execute(updateStatement.sqlStatement)
                     }
                 }
             }

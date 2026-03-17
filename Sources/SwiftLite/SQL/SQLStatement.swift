@@ -137,7 +137,7 @@ public nonisolated enum SQLStatementPreset
         {
             self.name = name
 
-            let text = "PRAGMA \(name);"
+            let text = "PRAGMA \(name)"
             
             self.sqlStatement = SQLStatement(text: text)
         }

@@ -384,11 +384,11 @@ public actor DatabaseLogger
                 : nil
             
             let newValue = sqlite3_column_type(statement, 7) != SQLITE_NULL
-                ? String(cString: sqlite3_column_text(statement, 8))
+                ? String(cString: sqlite3_column_text(statement, 7))
                 : nil
             
             let metadata = sqlite3_column_type(statement, 8) != SQLITE_NULL
-                ? String(cString: sqlite3_column_text(statement, 9))
+                ? String(cString: sqlite3_column_text(statement, 8))
                 : nil
             
             entries.append(LogEntry(
