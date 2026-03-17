@@ -13,5 +13,6 @@ struct SwiftLitePlugin: CompilerPlugin {
         EditableValueMacro.self,
         InverseRelatedMacro.self,
         InverseRelatedManyMacro.self,
+        AsyncLoadingViewMacro.self,
     ]
 }

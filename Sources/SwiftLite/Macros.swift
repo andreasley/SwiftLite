@@ -7,7 +7,7 @@
 @freestanding(expression)
 public macro stringify<T>(_ value: T) -> (T, String) = #externalMacro(module: "SwiftLiteMacros", type: "StringifyMacro")
 
-// TODO: Limit names to actually used ones
+
 @attached(memberAttribute)
 @attached(member, names: named(id), named(_metadata), named(_editableData), named(init), named(EditableData))
 @attached(extension, conformances: SwiftLite.Model, names: named(_beginAutoupdating), named(_hasPendingChanges), named(_beginSaving), named(_endSaving), named(_update), named(_cascadeDeletion), named(Schema), named(FallbackValues), named(DefaultValues), named(QueryProxy), named(Snapshot), arbitrary)
@@ -17,27 +17,87 @@ public macro Model() = #externalMacro(module: "SwiftLiteMacros", type: "ModelMac
 @attached(peer)
 public macro Stored(columName: String? = nil, defaultValue: Any? = nil, fallbackValue: Any? = nil, isUnique: Bool = false, isIndexed: Bool = true) = #externalMacro(module: "SwiftLiteMacros", type: "StoredMacro")
 
+
 @attached(peer)
 public macro Related(onDelete: DeletionPolicy = .ignore) = #externalMacro(module: "SwiftLiteMacros", type: "RelatedMacro")
+
 
 @attached(peer)
 public macro Transient() = #externalMacro(module: "SwiftLiteMacros", type: "TransientMacro")
 
+
 @attached(peer)
 public macro File() = #externalMacro(module: "SwiftLiteMacros", type: "FileMacro")
+
 
 @attached(accessor, names: named(get), named(set))
 public macro EditableValue() = #externalMacro(module: "SwiftLiteMacros", type: "EditableValueMacro")
 
 
-
 @attached(accessor, names: named(get))
 public macro RelatedMany<T>(_ type: T.Type, onDelete: DeletionPolicy = .ignore) = #externalMacro(module: "SwiftLiteMacros", type: "RelatedManyMacro")
 
+
 @attached(accessor, names: named(get))
 public macro InverseRelated<T, U>(_ keyPath: KeyPath<T, U>) = #externalMacro(module: "SwiftLiteMacros", type: "InverseRelatedMacro")
+
 
 @attached(accessor, names: named(get))
 public macro InverseRelatedMany<T, U>(_ keyPath: KeyPath<T, U>) = #externalMacro(module: "SwiftLiteMacros", type: "InverseRelatedManyMacro")
 
 
+/// Generates async loading infrastructure for a SwiftUI View with @EditableObject properties.
+///
+/// This macro analyzes the `@EditableObject` properties in your View and automatically generates:
+/// - An `ItemsContainer` class that manages loading, saving, and lifecycle of database objects
+/// - A `loading()` static method for creating the view with database object references
+/// - A `PreloadView` struct that handles the async loading and displays status
+///
+/// ## Usage
+///
+/// Apply this macro to a SwiftUI View that contains `@EditableObject` properties:
+///
+/// ```swift
+/// @AsyncLoadingView<DefaultStatusView>
+/// struct CarDetailView: View {
+///     @EditableObject(autosaving: true) var car: Car
+///     @EditableObject(autosaving: false) var engine: Engine
+///
+///     var body: some View {
+///         // Your view implementation
+///     }
+/// }
+/// ```
+///
+/// Then use the generated `loading()` method to create the view:
+///
+/// ```swift
+/// CarDetailView.loading(
+///     car: carReference,
+///     engine: engineReference
+/// )
+/// ```
+///
+/// ## Requirements
+///
+/// - Must be applied to a `struct` that conforms to `View`
+/// - Must have at least one `@EditableObject` property
+/// - Must specify a `StatusView` type parameter (e.g., `<DefaultStatusView>`)
+/// - All `@EditableObject` properties must use types that conform to `Model`
+///
+/// ## Generated Code
+///
+/// The macro generates an extension with:
+/// - `ItemsContainer`: An `@Observable` class conforming to `LoadableItemsContainer`
+/// - `loading()`: A static factory method accepting `DatabaseObjectReferenceConvertible` parameters
+/// - `PreloadView`: A view that handles loading states and lifecycle
+///
+/// - Parameters:
+///   - StatusView: The type of view to display loading/saving/error states
+///
+@attached(extension, names: arbitrary)
+@attached(member, names: arbitrary)
+public macro AsyncLoadingView(statusView: any StatusView.Type = DefaultStatusView.self) = #externalMacro(
+    module: "SwiftLiteMacros",
+    type: "AsyncLoadingViewMacro"
+)

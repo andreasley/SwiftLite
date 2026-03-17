@@ -10,7 +10,6 @@ import SQLite3
 import SwiftLiteMacros
 
 let testMacros: [String: Macro.Type] = [
-    "stringify": StringifyMacro.self,
     "Model": ModelMacro.self,
     "Stored": StoredMacro.self,
 ]
