@@ -157,13 +157,13 @@ func demonstrateGranularLogging() async throws {
     
     // QUERY 3: Reconstruct object at specific timestamp
     // ──────────────────────────────────────────────────
-    func getObjectState(objectId: UUID, at timestamp: Date) async throws -> [String: String] {
+    func getObjectState(objectId: UUID, at timestamp: Date) async throws -> [String: SQLValue] {
         let entries = try await logger.getEntries(to: timestamp)
             .filter { $0.objectId == objectId }
             .sorted { $0.timestamp < $1.timestamp }
         
         var deleted = false
-        var fields: [String: String] = [:]
+        var fields: [String: SQLValue] = [:]
         
         for entry in entries {
             switch entry.operationType {
@@ -187,7 +187,7 @@ func demonstrateGranularLogging() async throws {
     
     // QUERY 4: Get field change history with timestamps
     // ──────────────────────────────────────────────────
-    func getFieldHistory(objectId: UUID, field: String) async throws -> [(Date, String)] {
+    func getFieldHistory(objectId: UUID, field: String) async throws -> [(Date, SQLValue)] {
         let entries = try await logger.getEntries()
             .filter {
                 $0.objectId == objectId && 

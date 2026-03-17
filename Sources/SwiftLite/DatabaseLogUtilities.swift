@@ -154,7 +154,19 @@ public struct DatabaseLogUtilities {
                 obj["columnName"] = columnName
             }
             if let newValue = entry.newValue {
-                obj["newValue"] = newValue
+                // Encode SQLValue to a dictionary for JSON export
+                switch newValue {
+                case .string(let str):
+                    obj["newValue"] = ["string": str]
+                case .int(let int):
+                    obj["newValue"] = ["int": int]
+                case .double(let double):
+                    obj["newValue"] = ["double": double]
+                case .data(let data):
+                    obj["newValue"] = ["data": data.base64EncodedString()]
+                case .null:
+                    obj["newValue"] = ["null": NSNull()]
+                }
             }
             if let metadata = entry.metadata {
                 obj["metadata"] = metadata
@@ -202,7 +214,28 @@ public struct DatabaseLogUtilities {
             let tableName = obj["tableName"] as? String
             let objectId = (obj["objectId"] as? String).flatMap { UUID(uuidString: $0) }
             let columnName = obj["columnName"] as? String
-            let newValue = obj["newValue"] as? String
+            
+            // Decode SQLValue from dictionary
+            let newValue: SQLValue?
+            if let valueDict = obj["newValue"] as? [String: Any] {
+                if let str = valueDict["string"] as? String {
+                    newValue = .string(str)
+                } else if let int = valueDict["int"] as? Int64 {
+                    newValue = .int(int)
+                } else if let double = valueDict["double"] as? Double {
+                    newValue = .double(double)
+                } else if let base64 = valueDict["data"] as? String,
+                          let data = Data(base64Encoded: base64) {
+                    newValue = .data(data)
+                } else if valueDict["null"] != nil {
+                    newValue = .null
+                } else {
+                    newValue = nil
+                }
+            } else {
+                newValue = nil
+            }
+            
             let metadata = obj["metadata"] as? String
             
             entries.append(DatabaseLogger.LogEntry(

@@ -1,6 +1,6 @@
 import Foundation
 
-public nonisolated enum SQLValue: Equatable, Hashable, Sendable {
+public nonisolated enum SQLValue: Equatable, Hashable, Sendable, Codable {
     case string(String)
     case int(Int64)
     case double(Double)

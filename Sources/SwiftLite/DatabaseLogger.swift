@@ -41,7 +41,7 @@ public actor DatabaseLogger
     }
     
     /// Represents a single log entry in the database history
-    public struct LogEntry: Sendable {
+    public struct LogEntry: Equatable, Hashable, Sendable {
         public let id: UUID
         public let timestamp: Date
         public let transactionId: UUID
@@ -49,7 +49,7 @@ public actor DatabaseLogger
         public let tableName: String?
         public let objectId: UUID?
         public let columnName: String?
-        public let newValue: String?
+        public let newValue: SQLValue?
         public let metadata: String? // JSON-encoded additional data
         
         public init(
@@ -60,7 +60,7 @@ public actor DatabaseLogger
             tableName: String? = nil,
             objectId: UUID? = nil,
             columnName: String? = nil,
-            newValue: String? = nil,
+            newValue: SQLValue? = nil,
             metadata: String? = nil
         ) {
             self.id = id
@@ -188,8 +188,15 @@ public actor DatabaseLogger
             sqlite3_bind_null(statement, 7)
         }
         
+        // Encode SQLValue to JSON string for storage
         if let newValue = entry.newValue {
-            sqlite3_bind_text(statement, 8, newValue, -1, SQLITE_TRANSIENT)
+            let encoder = JSONEncoder()
+            if let jsonData = try? encoder.encode(newValue),
+               let jsonString = String(data: jsonData, encoding: .utf8) {
+                sqlite3_bind_text(statement, 8, jsonString, -1, SQLITE_TRANSIENT)
+            } else {
+                sqlite3_bind_null(statement, 8)
+            }
         } else {
             sqlite3_bind_null(statement, 8)
         }
@@ -271,7 +278,7 @@ public actor DatabaseLogger
                         tableName: change.table,
                         objectId: change.objectId,
                         columnName: fieldName,
-                        newValue: sqlValueToString(value)
+                        newValue: value
                     ))
                 }
             }
@@ -295,7 +302,7 @@ public actor DatabaseLogger
                         tableName: change.table,
                         objectId: change.objectId,
                         columnName: fieldName,
-                        newValue: sqlValueToString(newValue)
+                        newValue: newValue
                     ))
                 }
             }
@@ -383,9 +390,20 @@ public actor DatabaseLogger
                 ? String(cString: sqlite3_column_text(statement, 6))
                 : nil
             
-            let newValue = sqlite3_column_type(statement, 7) != SQLITE_NULL
-                ? String(cString: sqlite3_column_text(statement, 7))
-                : nil
+            // Decode JSON string back to SQLValue
+            let newValue: SQLValue?
+            if sqlite3_column_type(statement, 7) != SQLITE_NULL {
+                let jsonString = String(cString: sqlite3_column_text(statement, 7))
+                let decoder = JSONDecoder()
+                if let jsonData = jsonString.data(using: .utf8),
+                   let sqlValue = try? decoder.decode(SQLValue.self, from: jsonData) {
+                    newValue = sqlValue
+                } else {
+                    newValue = nil
+                }
+            } else {
+                newValue = nil
+            }
             
             let metadata = sqlite3_column_type(statement, 8) != SQLITE_NULL
                 ? String(cString: sqlite3_column_text(statement, 8))
@@ -451,22 +469,6 @@ public actor DatabaseLogger
         }
         
         return transactionIds
-    }
-    
-    /// Helper to convert SQLValue to string for logging
-    private func sqlValueToString(_ value: SQLValue) -> String {
-        switch value {
-        case .string(let string):
-            return string
-        case .int(let int):
-            return String(int)
-        case .double(let double):
-            return String(double)
-        case .data(let data):
-            return data.base64EncodedString()
-        case .null:
-            return "NULL"
-        }
     }
     
     /// Close the log database

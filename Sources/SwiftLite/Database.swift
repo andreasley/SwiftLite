@@ -1014,7 +1014,7 @@ public actor Database: Observable
                     for fieldUpdate in fieldUpdates {
                         guard let columnName = fieldUpdate.columnName,
                               let newValue = fieldUpdate.newValue else { continue }
-                        fields[columnName] = parseValueString(newValue)
+                        fields[columnName] = newValue
                     }
                     
                     print("📋 Replaying: Row created - \(tableName)[\(objectId)] with \(fields.count) fields")
@@ -1029,7 +1029,7 @@ public actor Database: Observable
                     for fieldUpdate in fieldUpdates {
                         guard let columnName = fieldUpdate.columnName,
                               let newValue = fieldUpdate.newValue else { continue }
-                        fields[columnName] = parseValueString(newValue)
+                        fields[columnName] = newValue
                     }
                     
                     if !fields.isEmpty {
@@ -1053,34 +1053,7 @@ public actor Database: Observable
             throw error
         }
     }
-    
-    /// Parse a string value back into SQLValue
-    /// This reverses the sqlValueToString operation in DatabaseLogger
-    private func parseValueString(_ valueString: String) -> SQLValue {
-        // Try to parse as different types
-        if valueString == "NULL" {
-            return .null
-        }
         
-        // Try as integer
-        if let intValue = Int64(valueString) {
-            return .int(intValue)
-        }
-        
-        // Try as double
-        if let doubleValue = Double(valueString) {
-            return .double(doubleValue)
-        }
-        
-        // Try as base64-encoded data
-        if let data = Data(base64Encoded: valueString) {
-            return .data(data)
-        }
-        
-        // Default to string
-        return .string(valueString)
-    }
-    
     isolated deinit
     {
         if !isClosed {
