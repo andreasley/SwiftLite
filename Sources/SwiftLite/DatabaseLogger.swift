@@ -116,7 +116,6 @@ public actor DatabaseLogger
             table_name TEXT,
             object_id TEXT,
             column_name TEXT,
-            new_value TEXT,
             metadata TEXT
         ) STRICT;
         """
@@ -150,8 +149,8 @@ public actor DatabaseLogger
         let sql = """
         INSERT INTO operation_log (
             id, timestamp, transaction_id, operation_type,
-            table_name, object_id, column_name, new_value, metadata
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            table_name, object_id, column_name, metadata
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """
         
         var statement: OpaquePointer?
@@ -188,23 +187,28 @@ public actor DatabaseLogger
             sqlite3_bind_null(statement, 7)
         }
         
-        // Encode SQLValue to JSON string for storage
-        if let newValue = entry.newValue {
-            let encoder = JSONEncoder()
-            if let jsonData = try? encoder.encode(newValue),
-               let jsonString = String(data: jsonData, encoding: .utf8) {
-                sqlite3_bind_text(statement, 8, jsonString, -1, SQLITE_TRANSIENT)
+        // For field_updated operations, store the value in metadata column
+        // For other operations, use metadata for its original purpose (schema metadata, etc.)
+        if entry.operationType == .fieldUpdated {
+            // Store the SQLValue in metadata column
+            if let newValue = entry.newValue {
+                let encoder = JSONEncoder()
+                if let jsonData = try? encoder.encode(newValue),
+                   let jsonString = String(data: jsonData, encoding: .utf8) {
+                    sqlite3_bind_text(statement, 8, jsonString, -1, SQLITE_TRANSIENT)
+                } else {
+                    sqlite3_bind_null(statement, 8)
+                }
             } else {
                 sqlite3_bind_null(statement, 8)
             }
         } else {
-            sqlite3_bind_null(statement, 8)
-        }
-        
-        if let metadata = entry.metadata {
-            sqlite3_bind_text(statement, 9, metadata, -1, SQLITE_TRANSIENT)
-        } else {
-            sqlite3_bind_null(statement, 9)
+            // metadata contains schema metadata or other info
+            if let metadata = entry.metadata {
+                sqlite3_bind_text(statement, 8, metadata, -1, SQLITE_TRANSIENT)
+            } else {
+                sqlite3_bind_null(statement, 8)
+            }
         }
         
         let stepResult = sqlite3_step(statement)
@@ -390,24 +394,34 @@ public actor DatabaseLogger
                 ? String(cString: sqlite3_column_text(statement, 6))
                 : nil
             
-            // Decode JSON string back to SQLValue
+            // For field_updated operations, read from metadata column
+            // For other operations, metadata contains schema metadata or other info
             let newValue: SQLValue?
-            if sqlite3_column_type(statement, 7) != SQLITE_NULL {
-                let jsonString = String(cString: sqlite3_column_text(statement, 7))
-                let decoder = JSONDecoder()
-                if let jsonData = jsonString.data(using: .utf8),
-                   let sqlValue = try? decoder.decode(SQLValue.self, from: jsonData) {
-                    newValue = sqlValue
+            let metadata: String?
+            
+            if operationType == .fieldUpdated {
+                // Read value from metadata column (column index 7)
+                if sqlite3_column_type(statement, 7) != SQLITE_NULL {
+                    let jsonString = String(cString: sqlite3_column_text(statement, 7))
+                    let decoder = JSONDecoder()
+                    if let jsonData = jsonString.data(using: .utf8),
+                       let sqlValue = try? decoder.decode(SQLValue.self, from: jsonData) {
+                        newValue = sqlValue
+                    } else {
+                        newValue = nil
+                    }
                 } else {
                     newValue = nil
                 }
+                metadata = nil // metadata is used for the value, not for metadata itself
             } else {
+                // For other operation types, use original behavior
                 newValue = nil
+                
+                metadata = sqlite3_column_type(statement, 7) != SQLITE_NULL
+                    ? String(cString: sqlite3_column_text(statement, 7))
+                    : nil
             }
-            
-            let metadata = sqlite3_column_type(statement, 8) != SQLITE_NULL
-                ? String(cString: sqlite3_column_text(statement, 8))
-                : nil
             
             entries.append(LogEntry(
                 id: id,
