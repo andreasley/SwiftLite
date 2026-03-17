@@ -30,6 +30,21 @@ struct CarDetailView: View
                     car.passengers.append(Passenger(db: db, name: Date.now.description))
                 }
             }
+            Section {
+                List(car.cargo) { cargo in
+                    HStack {
+                        CargoView(cargo: cargo)
+                        Spacer()
+                        Button("Delete") {
+                            car.cargo.remove(cargo)
+                        }
+                    }
+                }
+            } footer: {
+                Button("Add cargo") {
+                    car.cargo.append(Cargo(db: db, name: "Stuff"))
+                }
+            }
         }
         .formStyle(.grouped)
     }
@@ -40,6 +55,15 @@ struct CarDetailView: View
         
         var body: some View {
             TextField("Name", text: $passenger.name)
+        }
+    }
+
+    struct CargoView: View
+    {
+        @State var cargo: Cargo
+        
+        var body: some View {
+            TextField("Name", text: $cargo.name)
         }
     }
 

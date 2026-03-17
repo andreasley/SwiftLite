@@ -6,6 +6,9 @@ import Foundation
     @Stored(defaultValue: "")
     var name: String
 
+//    @Stored(defaultValue: "")
+//    var remarks: String
+
     @InverseRelatedMany(\Car.passengers)
     var cars: RelatedCollection<Car.Snapshot>
 }

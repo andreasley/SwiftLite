@@ -6,19 +6,25 @@ import Foundation
     var combinedName: String {
         name + "zzz"
     }
-
+    
     @Stored(defaultValue: UUID())
     let publicId: UUID
-
+    
     @Related
     var engine: Engine.Snapshot
-
+    
     @Related(onDelete: .cascade)
     var interior: Interior?
-
+    
     @RelatedMany(Passenger.self, onDelete: .cascade)
     var passengers: RelatedCollection<Passenger>
 
+    @RelatedMany(Cargo.self, onDelete: .cascade)
+    var cargo: RelatedCollection<Cargo>
+
     @Stored(defaultValue: "asd")
     var name: String
+    
+    @Stored(defaultValue: 0, fallbackValue: 0)
+    var price: Decimal
 }
