@@ -113,7 +113,7 @@ func schemaChangeExample() async throws {
     let allEntries = try await logger.getEntries()
     let schemaChanges = allEntries.filter { entry in
         switch entry.operationType {
-        case .tableCreated, .columnAdded, .indexCreated, .indexDropped, .foreignKeyAdded:
+        case .tableCreated, .columnAdded, .indexCreated, .indexDropped:
             return true
         default:
             return false
@@ -154,9 +154,6 @@ func dataChangeExample() async throws {
         print("  [\(change.timestamp)] \(change.operationType.rawValue)")
         if let columnName = change.columnName {
             print("    Field: \(columnName)")
-            if let oldValue = change.oldValue {
-                print("    Old Value: \(oldValue)")
-            }
             if let newValue = change.newValue {
                 print("    New Value: \(newValue)")
             }

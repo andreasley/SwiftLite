@@ -76,7 +76,7 @@ import Foundation
  ───────────────────────────────────────────────────────────────────────────
  1. transaction_begin      txId=ghi-789, metadata="schema_update"
  2. table_created          txId=ghi-789, table=Post
-                          metadata='{"columns":[...5 columns...],"foreignKeys":[...]}'
+                          metadata='{"columns":[...5 columns...]}'
  3. index_created          txId=ghi-789, table=Post
                           metadata='{"indexName":"idx_user_id",...}'
  4. foreign_key_added      txId=ghi-789, table=Post, column=user_id
@@ -257,7 +257,7 @@ func demonstrateGranularLogging() async throws {
     // ─────────────────────────────────
     let schemaChanges = try await logger.getEntries()
         .filter { entry in
-            [.tableCreated, .columnAdded, .indexCreated, .indexDropped, .foreignKeyAdded]
+            [.tableCreated, .columnAdded, .indexCreated, .indexDropped]
                 .contains(entry.operationType)
         }
         .sorted { $0.timestamp < $1.timestamp }

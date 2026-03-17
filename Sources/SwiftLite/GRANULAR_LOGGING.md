@@ -74,7 +74,6 @@ public enum OperationType: String, Sendable {
     case columnAdded = "column_added"
     case indexCreated = "index_created"
     case indexDropped = "index_dropped"
-    case foreignKeyAdded = "foreign_key_added"
     
     // Data operations
     case rowCreated = "row_created"

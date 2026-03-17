@@ -1,4 +1,5 @@
 - History
+	- Surface errors and stop sync/history and potentially Database access (or just fatalError?)
 - Local sync
 - Sync
 - Integration into app

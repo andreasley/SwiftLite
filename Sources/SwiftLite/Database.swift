@@ -640,26 +640,20 @@ public actor Database: Observable
             
             // Log each column addition separately
             for column in table.columns {
+                var metadata: [String: String] = ["storageClass": column.storageClass.rawValue]
+                
+                // Include referenced table if this column has a foreign key
+                if let referencedTable = column.referencedTable {
+                    metadata["referencedTable"] = referencedTable
+                    metadata["referencedColumn"] = "id"
+                }
+                
                 try? await logger?.logSchemaChange(
                     transactionId: transactionId,
                     operationType: .columnAdded,
                     tableName: table.name,
                     columnName: column.name,
-                    metadata: ["storageClass": column.storageClass.rawValue]
-                )
-            }
-            
-            // Log foreign key additions
-            for foreignKey in table.foreignKeys {
-                try? await logger?.logSchemaChange(
-                    transactionId: transactionId,
-                    operationType: .foreignKeyAdded,
-                    tableName: table.name,
-                    columnName: foreignKey.column,
-                    metadata: [
-                        "referencedTable": foreignKey.referencedTable,
-                        "referencedColumn": foreignKey.referencedColumn
-                    ]
+                    metadata: metadata
                 )
             }
         }
@@ -726,26 +720,25 @@ public actor Database: Observable
     func createTableStatement(for table: RequiredSchema.Table) -> String
     {
         var columns = [String]()
-        var foreignKeys = [String]()
 
         for column in table.columns
         {
-            let columnDefinition = "\"\(column.name)\" \(column.storageClass.rawValue.uppercased())"
-            columns.append(columnDefinition)
-        }
-        
-        for foreignKey in table.foreignKeys {
-            let statement = "FOREIGN KEY (\(foreignKey.column)) REFERENCES \(foreignKey.referencedTable) (\(foreignKey.referencedColumn))"
-            foreignKeys.append(statement)
+            
+            // Check if this column has a foreign key reference
+            if let referencedTable = column.referencedTable {
+                let columnDefinition = "\"\(column.name)\" \(column.storageClass.rawValue.uppercased()) REFERENCES \(referencedTable) (id)"
+                columns.append(columnDefinition)
+            } else {
+                let columnDefinition = "\"\(column.name)\" \(column.storageClass.rawValue.uppercased())"
+                columns.append(columnDefinition)
+            }
         }
 
         let columnDefinitions = columns.joined(separator: ",\n    ")
-        let foreignKeyDefinitions = (foreignKeys + [""]).joined(separator: ",\n    ")
 
         let createTableStatement = """
         CREATE TABLE "\(table.name)" (
             \(columnDefinitions),
-            \(foreignKeyDefinitions)
             PRIMARY KEY(id)
         ) STRICT, WITHOUT ROWID;
         """
@@ -814,7 +807,10 @@ public actor Database: Observable
             // Group by operation type to handle schema changes first
             let schemaEntries = entries.filter { entry in
                 switch entry.operationType {
-                case .tableCreated, .columnAdded, .indexCreated, .indexDropped, .foreignKeyAdded:
+                case .tableCreated,
+                     .columnAdded,
+                     .indexCreated,
+                     .indexDropped:
                     return true
                 default:
                     return false
@@ -823,7 +819,9 @@ public actor Database: Observable
             
             let dataEntries = entries.filter { entry in
                 switch entry.operationType {
-                case .rowCreated, .rowDeleted, .fieldUpdated:
+                case .rowCreated, 
+                     .rowDeleted, 
+                     .fieldUpdated:
                     return true
                 default:
                     return false
@@ -856,13 +854,13 @@ public actor Database: Observable
                 }
                 
                 switch entry.operationType {
-                case .tableCreated:
+                case DatabaseLogger.OperationType.tableCreated:
                     print("📋 Replaying: Table created - \(tableName)")
                     // Table creation is complex and requires full schema info
                     // For now, we'll just note it - actual table creation should happen via register()
                     // This entry serves as an audit trail
                     
-                case .columnAdded:
+                case DatabaseLogger.OperationType.columnAdded:
                     guard let columnName = entry.columnName else {
                         print("⚠️ Skipping column addition without column name")
                         continue
@@ -888,7 +886,7 @@ public actor Database: Observable
                         print("ℹ️ Column \(tableName).\(columnName) already exists, skipping")
                     }
                     
-                case .indexCreated:
+                case DatabaseLogger.OperationType.indexCreated:
                     guard let metadataJSON = entry.metadata,
                           let metadataData = metadataJSON.data(using: .utf8),
                           let metadata = try? JSONSerialization.jsonObject(with: metadataData) as? [String: Any],
@@ -912,7 +910,7 @@ public actor Database: Observable
                         print("ℹ️ Index \(indexName) already exists, skipping")
                     }
                     
-                case .indexDropped:
+                case DatabaseLogger.OperationType.indexDropped:
                     guard let metadataJSON = entry.metadata,
                           let metadataData = metadataJSON.data(using: .utf8),
                           let metadata = try? JSONSerialization.jsonObject(with: metadataData) as? [String: Any],
@@ -930,12 +928,6 @@ public actor Database: Observable
                     } else {
                         print("ℹ️ Index \(indexName) doesn't exist, skipping")
                     }
-                    
-                case .foreignKeyAdded:
-                    print("📋 Replaying: Foreign key added - \(tableName).\(entry.columnName ?? "unknown")")
-                    // Foreign keys can't be added via ALTER TABLE in SQLite
-                    // They must be defined during table creation
-                    // This entry serves as an audit trail
                     
                 default:
                     break
@@ -959,20 +951,30 @@ public actor Database: Observable
             try self.setPragma(name: "defer_foreign_keys", value: "ON")
             
             // Group data entries by object ID to reconstruct operations
-            let groupedByObject = Dictionary(grouping: entries) { ($0.tableName, $0.objectId) }
+            // Use a custom key type that conforms to Hashable
+            struct ObjectKey: Hashable {
+                let tableName: String
+                let objectId: UUID
+            }
             
-            for ((tableName, objectId), objectEntries) in groupedByObject {
-                guard let tableName = tableName, let objectId = objectId else {
-                    print("⚠️ Skipping data entry without table name or object ID")
-                    continue
+            let groupedByObject = Dictionary(grouping: entries.compactMap { entry -> (ObjectKey, DatabaseLogger.LogEntry)? in
+                guard let tableName = entry.tableName, let objectId = entry.objectId else {
+                    return nil
                 }
+                return (ObjectKey(tableName: tableName, objectId: objectId), entry)
+            }) { $0.0 }
+            
+            for (key, keyedEntries) in groupedByObject {
+                let tableName = key.tableName
+                let objectId = key.objectId
+                let objectEntries = keyedEntries.map { $0.1 }
                 
                 let sortedObjectEntries = objectEntries.sorted { $0.timestamp < $1.timestamp }
                 
                 // Determine the operation type
-                let hasRowCreated = sortedObjectEntries.contains { $0.operationType == .rowCreated }
-                let hasRowDeleted = sortedObjectEntries.contains { $0.operationType == .rowDeleted }
-                let fieldUpdates = sortedObjectEntries.filter { $0.operationType == .fieldUpdated }
+                let hasRowCreated = sortedObjectEntries.contains { $0.operationType == DatabaseLogger.OperationType.rowCreated }
+                let hasRowDeleted = sortedObjectEntries.contains { $0.operationType == DatabaseLogger.OperationType.rowDeleted }
+                let fieldUpdates = sortedObjectEntries.filter { $0.operationType == DatabaseLogger.OperationType.fieldUpdated }
                 
                 if hasRowDeleted {
                     // Delete operation

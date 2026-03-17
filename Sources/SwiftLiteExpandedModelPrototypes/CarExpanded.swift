@@ -163,8 +163,8 @@ nonisolated extension CarExpanded: Model
             static let id = RequiredSchema.Column(name: "id", type: UUID.self)
             static let publicId = RequiredSchema.Column(name: "publicId", type: UUID.self)
             static let name = RequiredSchema.Column(name: "name", type: String.self)
-            static let engine = RequiredSchema.Column(name: "engine", type: Engine.self)
-            static let interior = RequiredSchema.Column(name: "interior", type: Interior.self)
+            static let engine = RequiredSchema.Column(name: "engine", type: Engine.self, referencedTable: Engine.Model.Schema.table.name)
+            static let interior = RequiredSchema.Column(name: "interior", type: Interior.self, referencedTable: Interior.Model.Schema.table.name)
         }
 
         static let table = RequiredSchema.Table(name: "Car", columns: [
@@ -177,9 +177,6 @@ nonisolated extension CarExpanded: Model
             .init(name: "idx_publicId", isUnique: true, columns: [Columns.publicId]),
             .init(name: "idx_engine", isUnique: false, columns: [Columns.engine]),
             .init(name: "idx_interior", isUnique: false, columns: [Columns.interior]),
-        ], foreignKeys: [
-            .init(column: "engine", referencedTable: "Engine"),
-            .init(column: "interior", referencedTable: "Interior"),
         ])
     }
     

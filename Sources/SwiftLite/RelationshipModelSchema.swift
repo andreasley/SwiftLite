@@ -23,21 +23,22 @@ public nonisolated enum RelationshipModelSchemaDefaults
     {
         RequiredSchema.Table(name: name, columns: [
             Columns.id,
-            Columns.parent,
-            Columns.element,
+            Columns.parent(referencedTable: parentTable),
+            Columns.element(referencedTable: elementTable),
         ], indexes: [
-            RequiredSchema.Index(name: "idx_\(name)_parent", isUnique: false, columns: [Columns.parent]),
-            RequiredSchema.Index(name: "idx_\(name)_element", isUnique: false, columns: [Columns.element]),
-        ], foreignKeys: [
-            RequiredSchema.ForeignKey(column: "parent", referencedTable: parentTable),
-            RequiredSchema.ForeignKey(column: "element", referencedTable: elementTable),
+            RequiredSchema.Index(name: "idx_\(name)_parent", isUnique: false, columns: [Columns.parent(referencedTable: parentTable)]),
+            RequiredSchema.Index(name: "idx_\(name)_element", isUnique: false, columns: [Columns.element(referencedTable: elementTable)]),
         ])
     }
     
     public nonisolated struct Columns
     {
         static let id = RequiredSchema.Column(name: "id", type: UUID.self)
-        static let parent = RequiredSchema.Column(name: "parent", type: UUID.self)
-        static let element = RequiredSchema.Column(name: "element", type: UUID.self)
+        static func parent(referencedTable: String) -> RequiredSchema.Column {
+            RequiredSchema.Column(name: "parent", type: UUID.self, referencedTable: referencedTable)
+        }
+        static func element(referencedTable: String) -> RequiredSchema.Column {
+            RequiredSchema.Column(name: "element", type: UUID.self, referencedTable: referencedTable)
+        }
     }
 }

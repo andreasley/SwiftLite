@@ -7,15 +7,13 @@ public nonisolated enum RequiredSchema
         public let name: String
         public let columns: [Column]
         public let indexes: [Index]
-        public let foreignKeys: [ForeignKey]
         public let defaultSelectStatement: SQLStatementPreset.Select
         
-        public init(name: String, columns: [Column], indexes: [Index] = [], foreignKeys: [ForeignKey] = [])
+        public init(name: String, columns: [Column], indexes: [Index] = [])
         {
             self.name = name
             self.columns = columns
             self.indexes = indexes
-            self.foreignKeys = foreignKeys
             self.defaultSelectStatement = .init(table: name, columns: columns.map(\.name))
         }
     }
@@ -24,17 +22,20 @@ public nonisolated enum RequiredSchema
     {
         public let name: String
         public let storageClass: StorageClass
+        public let referencedTable: String?
 
-        public init(name: String, type: Any.Type)
+        public init(name: String, type: Any.Type, referencedTable: String? = nil)
         {
             self.name = name
             self.storageClass = StorageClass(for: type)
+            self.referencedTable = referencedTable
         }
 
-        public init(name: String, storageClass: StorageClass)
+        public init(name: String, storageClass: StorageClass, referencedTable: String? = nil)
         {
             self.name = name
             self.storageClass = storageClass
+            self.referencedTable = referencedTable
         }
     }
     
@@ -49,20 +50,6 @@ public nonisolated enum RequiredSchema
             self.name = name
             self.isUnique = isUnique
             self.columns = columns.map { $0.name }
-        }
-    }
-    
-    public struct ForeignKey: Sendable, Hashable, Equatable
-    {
-        public let column: String
-        public let referencedTable: String
-        public let referencedColumn: String
-        
-        public init(column: String, referencedTable: String, referencedColumn: String = "id")
-        {
-            self.column = column
-            self.referencedTable = referencedTable
-            self.referencedColumn = referencedColumn
         }
     }
 }

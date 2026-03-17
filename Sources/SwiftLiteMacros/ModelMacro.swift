@@ -892,7 +892,6 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         var columns = ["Columns.id"]
         var columnDefs = ["static let id = RequiredSchema.Column(name: \"id\", type: UUID.self)"]
         var indexes = [String]()
-        var foreignKeys = [String]()
         
         for prop in propertyInfo.stored {
             columns.append("Columns.\(prop.name)")
@@ -910,9 +909,8 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         for prop in propertyInfo.related {
             let baseType = prop.type.replacingOccurrences(of: "?", with: "")
             columns.append("Columns.\(prop.name)")
-            columnDefs.append("static let \(prop.name) = RequiredSchema.Column(name: \"\(prop.name)\", type: \(baseType).self)")
+            columnDefs.append("static let \(prop.name) = RequiredSchema.Column(name: \"\(prop.name)\", type: \(baseType).self, referencedTable: \(baseType).Model.Schema.table.name)")
             indexes.append(".init(name: \"idx_\(className)_\(prop.name)\", isUnique: false, columns: [Columns.\(prop.name)])")
-            foreignKeys.append(".init(column: \"\(prop.name)\", referencedTable: \(baseType).Model.Schema.table.name)")
         }
         
         return """
@@ -931,8 +929,6 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
                 \(raw: columns.joined(separator: ",\n        "))
             ], indexes: [
                 \(raw: indexes.joined(separator: ",\n        "))
-            ], foreignKeys: [
-                \(raw: foreignKeys.joined(separator: ",\n        "))
             ])
         }
         """

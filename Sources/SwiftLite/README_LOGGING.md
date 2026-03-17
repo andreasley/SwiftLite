@@ -209,8 +209,7 @@ try logger.logSchemaChange(
     operationType: .tableCreated,
     tableName: "User",
     metadata: [
-        "columns": [...],
-        "foreignKeys": [...]
+        "columns": [...]
     ]
 )
 ```
