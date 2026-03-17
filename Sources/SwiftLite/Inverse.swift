@@ -43,11 +43,11 @@ public nonisolated class Inverse<ReferencingModel: ModelSnapshot, ReferencedMode
         collection.items.contains { $0._hasPendingChanges }
     }
     
-    public func _beginSaving(transaction: DatabaseTask.WriteTransaction, changeset: Changeset) throws
+    public func _beginSaving(changeset: Changeset) throws
     {
     }
     
-    public func _endSaving(success: Bool, transaction: DatabaseTask.WriteTransaction)
+    public func _endSaving(success: Bool, transactionId: UUID)
     {
     }
     

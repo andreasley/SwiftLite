@@ -422,19 +422,6 @@ public actor Database: Observable
         return results
     }
 
-    public func prepareWriteTransaction(_ body: @escaping (DatabaseTask.WriteTransaction) async throws -> Void, isolation: isolated (any Actor)? = #isolation) async throws
-    {
-        guard DatabaseTask.currentWriteTransaction == nil else {
-            throw DatabaseTask.Error.alreadyInTransaction
-        }
-
-        let writeTransaction = DatabaseTask.WriteTransaction(db: self, id: UUID())
-        try await DatabaseTask.$currentWriteTransaction.withValue(writeTransaction) {
-            _ = isolation // ensure this runs in the same isolation as `prepareWriteTransaction` was called in
-            try await body(writeTransaction)
-        }
-    }
-
     public func save(changeset: FrozenChangeset) async throws
     {
         try await gate.run {

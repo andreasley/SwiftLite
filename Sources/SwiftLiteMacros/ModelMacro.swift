@@ -764,26 +764,26 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         """)
         
         // _beginSaving
-        var beginSavingCalls = ["try _metadata._beginSaving(transaction: transaction, changeset: changeset)"]
+        var beginSavingCalls = ["try _metadata._beginSaving(changeset: changeset)"]
         for prop in propertyInfo.related {
             if prop.isOptional {
-                beginSavingCalls.append("try \(prop.name)?._beginSaving(transaction: transaction, changeset: changeset)")
+                beginSavingCalls.append("try \(prop.name)?._beginSaving(changeset: changeset)")
             } else {
-                beginSavingCalls.append("try \(prop.name)._beginSaving(transaction: transaction, changeset: changeset)")
+                beginSavingCalls.append("try \(prop.name)._beginSaving(changeset: changeset)")
             }
         }
         for prop in propertyInfo.relatedMany {
-            beginSavingCalls.append("try _editableData.\(prop.name)._beginSaving(transaction: transaction, changeset: changeset)")
+            beginSavingCalls.append("try _editableData.\(prop.name)._beginSaving(changeset: changeset)")
         }
         for prop in propertyInfo.inverseRelated {
-            beginSavingCalls.append("try _editableData.\(prop.name)._beginSaving(transaction: transaction, changeset: changeset)")
+            beginSavingCalls.append("try _editableData.\(prop.name)._beginSaving(changeset: changeset)")
         }
         for prop in propertyInfo.inverseRelatedMany {
-            beginSavingCalls.append("try _editableData.\(prop.name)._beginSaving(transaction: transaction, changeset: changeset)")
+            beginSavingCalls.append("try _editableData.\(prop.name)._beginSaving(changeset: changeset)")
         }
         
         methods.append("""
-        func _beginSaving(transaction: DatabaseTask.WriteTransaction, changeset: Changeset) throws
+        func _beginSaving(changeset: Changeset) throws
         {
             \(beginSavingCalls.joined(separator: "\n    "))
         }
@@ -791,27 +791,27 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         
         // _endSaving
         var endSavingCalls = [
-            "_metadata._endSaving(success: success, transaction: transaction)"
+            "_metadata._endSaving(success: success, transactionId: transactionId)"
         ]
         for prop in propertyInfo.related {
             if prop.isOptional {
-                endSavingCalls.append("\(prop.name)?._endSaving(success: success, transaction: transaction)")
+                endSavingCalls.append("\(prop.name)?._endSaving(success: success, transactionId: transactionId)")
             } else {
-                endSavingCalls.append("\(prop.name)._endSaving(success: success, transaction: transaction)")
+                endSavingCalls.append("\(prop.name)._endSaving(success: success, transactionId: transactionId)")
             }
         }
         for prop in propertyInfo.relatedMany {
-            endSavingCalls.append("_editableData.\(prop.name)._endSaving(success: success, transaction: transaction)")
+            endSavingCalls.append("_editableData.\(prop.name)._endSaving(success: success, transactionId: transactionId)")
         }
         for prop in propertyInfo.inverseRelated {
-            endSavingCalls.append("_editableData.\(prop.name)._endSaving(success: success, transaction: transaction)")
+            endSavingCalls.append("_editableData.\(prop.name)._endSaving(success: success, transactionId: transactionId)")
         }
         for prop in propertyInfo.inverseRelatedMany {
-            endSavingCalls.append("_editableData.\(prop.name)._endSaving(success: success, transaction: transaction)")
+            endSavingCalls.append("_editableData.\(prop.name)._endSaving(success: success, transactionId: transactionId)")
         }
         
         methods.append("""
-        func _endSaving(success: Bool, transaction: DatabaseTask.WriteTransaction)
+        func _endSaving(success: Bool, transactionId: UUID)
         {
             let wasNew = _metadata.objectStatus == .new
             \(endSavingCalls.joined(separator: "\n    "))

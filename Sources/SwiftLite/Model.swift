@@ -19,18 +19,21 @@ public nonisolated extension Model
 {
     nonisolated(nonsending) func save() async throws
     {
+        let isolation = #isolation
         self._metadata.autosaveTask?.cancel()
         
         guard _hasPendingChanges else { return }
-
-        try await _metadata.db.prepareWriteTransaction { transaction in
+        
+        let associatedData = WriteAssociatedData(db: _metadata.db)
+        try await WriteAssociatedData.$current.withValue(associatedData) {
+            _ = isolation // ensure this runs in the same isolation as `.withValue` was called in
             var success = false
             let changeset = Changeset()
-            try self._beginSaving(transaction: transaction, changeset: changeset)
-            defer { self._endSaving(success: success, transaction: transaction) }
+            try self._beginSaving(changeset: changeset)
+            defer { self._endSaving(success: success, transactionId: associatedData.transactionId) }
             if changeset.needsSaving {
                 let frozenChangeset = FrozenChangeset(changes: changeset.changes)
-                try await transaction.db.save(changeset: frozenChangeset)
+                try await associatedData.db.save(changeset: frozenChangeset)
             }
             success = true
         }

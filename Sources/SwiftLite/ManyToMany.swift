@@ -57,14 +57,14 @@ public nonisolated class ManyToMany<Schema: RelationshipModelSchema>: Saveable
         }
     }
 
-    public func _beginSaving(transaction: DatabaseTask.WriteTransaction, changeset: Changeset) throws
+    public func _beginSaving(changeset: Changeset) throws
     {
-        try junctions.forEach { try $0._beginSaving(transaction: transaction, changeset: changeset) }
+        try junctions.forEach { try $0._beginSaving(changeset: changeset) }
     }
     
-    public func _endSaving(success: Bool, transaction: DatabaseTask.WriteTransaction)
+    public func _endSaving(success: Bool, transactionId: UUID)
     {
-        junctions.forEach { $0._endSaving(success: success, transaction: transaction) }
+        junctions.forEach { $0._endSaving(success: success, transactionId: transactionId) }
         junctions.removeAll { $0._metadata.objectStatus == .deleted }
     }
     
@@ -203,16 +203,16 @@ public nonisolated extension ManyToMany
             _metadata._hasPendingChanges || element._hasPendingChanges
         }
 
-        public func _beginSaving(transaction: DatabaseTask.WriteTransaction, changeset: Changeset) throws
+        public func _beginSaving(changeset: Changeset) throws
         {
-            try _metadata._beginSaving(transaction: transaction, changeset: changeset)
-            try element._beginSaving(transaction: transaction, changeset: changeset)
+            try _metadata._beginSaving(changeset: changeset)
+            try element._beginSaving(changeset: changeset)
         }
         
-        public func _endSaving(success: Bool, transaction: DatabaseTask.WriteTransaction)
+        public func _endSaving(success: Bool, transactionId: UUID)
         {
-            _metadata._endSaving(success: success, transaction: transaction)
-            element._endSaving(success: success, transaction: transaction)
+            _metadata._endSaving(success: success, transactionId: transactionId)
+            element._endSaving(success: success, transactionId: transactionId)
         }
 
         public nonisolated struct QueryProxy: WithNamedKeyPaths

@@ -43,15 +43,15 @@ nonisolated extension UpdatedValues
     public func getChangeset() throws -> [String: SQLValue]?
     {
         guard changes.count > 0 else { return nil }
-        let transaction = try DatabaseTask.getWriteTransaction()
-        changes.forEach { $0.value.transactionId = transaction.id }
+        let associatedData = try WriteAssociatedData.getCurrent()
+        changes.forEach { $0.value.transactionId = associatedData.transactionId }
         return changes.compactMapValues { $0.value }
     }
     
-    public func didProcessChangeset(success: Bool, transaction: DatabaseTask.WriteTransaction)
+    public func didProcessChangeset(success: Bool, transactionId: UUID)
     {
         if success {
-            changes = changes.filter { $0.value.transactionId != transaction.id }
+            changes = changes.filter { $0.value.transactionId != transactionId }
         } else {
             changes.forEach { $0.value.transactionId = nil }
         }

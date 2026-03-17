@@ -7,31 +7,8 @@ public nonisolated struct DatabaseTask: Sendable
         case transactionNotFound
     }
     
-    @TaskLocal static var currentWriteTransaction: WriteTransaction?
     @TaskLocal static var currentReadTransaction: ReadTransaction?
     
-    nonisolated public struct WriteTransaction: Sendable, Equatable, Hashable
-    {
-        let db: Database
-        let id: UUID
-        
-        public func hash(into hasher: inout Hasher)
-        {
-            hasher.combine(id)
-            hasher.combine(ObjectIdentifier(db))
-        }
-        
-        public static func == (lhs: DatabaseTask.WriteTransaction, rhs: DatabaseTask.WriteTransaction) -> Bool
-        {
-            lhs.id == rhs.id && ObjectIdentifier(lhs.db) == ObjectIdentifier(rhs.db)
-        }
-    }
-    
-    static func getWriteTransaction() throws -> WriteTransaction
-    {
-        guard let currentWriteTransaction else { throw Error.transactionNotFound }
-        return currentWriteTransaction
-    }
     
     nonisolated public final class ReadTransaction: @unchecked Sendable
     {

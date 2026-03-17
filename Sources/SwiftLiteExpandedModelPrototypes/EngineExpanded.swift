@@ -73,17 +73,17 @@ nonisolated extension EngineExpanded: Model
         return hasChanges
     }
 
-    func _beginSaving(transaction: DatabaseTask.WriteTransaction, changeset: Changeset) throws
+    func _beginSaving(changeset: Changeset) throws
     {
-        try _metadata._beginSaving(transaction: transaction, changeset: changeset)
-        try _editableData.cars._beginSaving(transaction: transaction, changeset: changeset)
+        try _metadata._beginSaving(changeset: changeset)
+        try _editableData.cars._beginSaving(changeset: changeset)
     }
     
-    func _endSaving(success: Bool, transaction: DatabaseTask.WriteTransaction)
+    func _endSaving(success: Bool, transactionId: UUID)
     {
         let wasNew = _metadata.objectStatus == .new
-        _metadata._endSaving(success: success, transaction: transaction)
-        _editableData.cars._endSaving(success: success, transaction: transaction)
+        _metadata._endSaving(success: success, transactionId: transactionId)
+        _editableData.cars._endSaving(success: success, transactionId: transactionId)
         if wasNew {
             _beginAutoupdatingIfOnMainActor()
         }

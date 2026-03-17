@@ -32,7 +32,7 @@ public nonisolated final class ModelMetadata: DatabaseEntityMetadata, WithTracke
     public var lastRead: Date?
     var lastWrite: Date? = nil
     var lastSavingTransactionId: UUID? = nil
-    var currentSavingTransaction: DatabaseTask.WriteTransaction? = nil
+    var currentWriteAssociatedData: WriteAssociatedData? = nil
     
     @ObservationIgnored
     var objectChangedNotificationToken: DeregisteringNotificationToken?
@@ -81,21 +81,22 @@ public nonisolated final class ModelMetadata: DatabaseEntityMetadata, WithTracke
         return ChangedObject(table: table, objectId: id, status: status, updatedFields: changes, transactionId: transactionId)
     }
     
-    public func _beginSaving(transaction: DatabaseTask.WriteTransaction, changeset: Changeset) throws
+    public func _beginSaving(changeset: Changeset) throws
     {
-        guard transaction.db == self.db else { throw ModelSavingError.wrongDatabase }
+        let associatedData = try WriteAssociatedData.getCurrent()
+        guard associatedData.db == self.db else { throw ModelSavingError.wrongDatabase }
 
-        guard currentSavingTransaction == nil else { throw ModelSavingError.alreadySaving }
-        currentSavingTransaction = transaction
-        try changeset.append(collectForSaving(transactionId: transaction.id))
+        guard currentWriteAssociatedData == nil else { throw ModelSavingError.alreadySaving }
+        currentWriteAssociatedData = associatedData
+        try changeset.append(collectForSaving(transactionId: associatedData.transactionId))
     }
     
-    public func _endSaving(success: Bool, transaction: DatabaseTask.WriteTransaction)
+    public func _endSaving(success: Bool, transactionId: UUID)
     {
-        guard currentSavingTransaction == transaction else { return } // can this even happen?
-        currentSavingTransaction = nil
-        lastSavingTransactionId = transaction.id
-        changedValues.didProcessChangeset(success: success, transaction: transaction)
+        guard currentWriteAssociatedData?.transactionId == transactionId else { return } // can this even happen?
+        currentWriteAssociatedData = nil
+        lastSavingTransactionId = transactionId
+        changedValues.didProcessChangeset(success: success, transactionId: transactionId)
         self.objectStatus = .stored
         self.lastWrite  = .now
     }

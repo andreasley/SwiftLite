@@ -1,3 +1,5 @@
+import Foundation
+
 public nonisolated protocol AnyInverseManyToMany<S> where S: ModelSnapshot
 {
     associatedtype S
@@ -5,8 +7,8 @@ public nonisolated protocol AnyInverseManyToMany<S> where S: ModelSnapshot
     var collection: RelatedCollection<S> { get }
     var _hasPendingChanges: Bool { get }
 
-    func _beginSaving(transaction: DatabaseTask.WriteTransaction, changeset: Changeset) throws
-    func _endSaving(success: Bool, transaction: DatabaseTask.WriteTransaction)
+    func _beginSaving(changeset: Changeset) throws
+    func _endSaving(success: Bool, transactionId: UUID)
 
     @MainActor func _beginAutoupdating()
 }
