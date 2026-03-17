@@ -6,7 +6,6 @@ public nonisolated protocol RelationshipModelSchema<Parent, Element>: ModelSchem
     associatedtype Element: SwiftLite.Model
     
     typealias Columns = RelationshipModelSchemaDefaults.Columns
-    typealias Indexes = RelationshipModelSchemaDefaults.Indexes
 
     static var deletionPolicy: DeletionPolicy { get }
 }
@@ -27,8 +26,8 @@ public nonisolated enum RelationshipModelSchemaDefaults
             Columns.parent,
             Columns.element,
         ], indexes: [
-            Indexes.idx_parent,
-            Indexes.idx_element,
+            RequiredSchema.Index(name: "idx_\(name)_parent", isUnique: false, columns: [Columns.parent]),
+            RequiredSchema.Index(name: "idx_\(name)_element", isUnique: false, columns: [Columns.element]),
         ], foreignKeys: [
             RequiredSchema.ForeignKey(column: "parent", referencedTable: parentTable),
             RequiredSchema.ForeignKey(column: "element", referencedTable: elementTable),
@@ -40,11 +39,5 @@ public nonisolated enum RelationshipModelSchemaDefaults
         static let id = RequiredSchema.Column(name: "id", type: UUID.self)
         static let parent = RequiredSchema.Column(name: "parent", type: UUID.self)
         static let element = RequiredSchema.Column(name: "element", type: UUID.self)
-    }
-    
-    public nonisolated struct Indexes
-    {
-        static let idx_parent = RequiredSchema.Index(name: "idx_parent", isUnique: false, columns: [Columns.parent])
-        static let idx_element = RequiredSchema.Index(name: "idx_element", isUnique: false, columns: [Columns.element])
     }
 }

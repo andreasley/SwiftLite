@@ -900,10 +900,10 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             
             // Add index if isIndexed is true or isUnique is true
             if prop.isIndexed {
-                indexes.append(".init(name: \"idx_\(prop.name)\", isUnique: \(prop.isUnique), columns: [Columns.\(prop.name)])")
+                indexes.append(".init(name: \"idx_\(className)_\(prop.name)\", isUnique: \(prop.isUnique), columns: [Columns.\(prop.name)])")
             } else if prop.isUnique {
                 // If only isUnique is true but isIndexed is false, still create an index (unique constraint requires an index)
-                indexes.append(".init(name: \"idx_\(prop.name)\", isUnique: true, columns: [Columns.\(prop.name)])")
+                indexes.append(".init(name: \"idx_\(className)_\(prop.name)\", isUnique: true, columns: [Columns.\(prop.name)])")
             }
         }
         
@@ -911,7 +911,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             let baseType = prop.type.replacingOccurrences(of: "?", with: "")
             columns.append("Columns.\(prop.name)")
             columnDefs.append("static let \(prop.name) = RequiredSchema.Column(name: \"\(prop.name)\", type: \(baseType).self)")
-            indexes.append(".init(name: \"idx_\(prop.name)\", isUnique: false, columns: [Columns.\(prop.name)])")
+            indexes.append(".init(name: \"idx_\(className)_\(prop.name)\", isUnique: false, columns: [Columns.\(prop.name)])")
             foreignKeys.append(".init(column: \"\(prop.name)\", referencedTable: \(baseType).Model.Schema.table.name)")
         }
         
