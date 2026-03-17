@@ -153,9 +153,6 @@ public struct DatabaseLogUtilities {
             if let columnName = entry.columnName {
                 obj["columnName"] = columnName
             }
-            if let oldValue = entry.oldValue {
-                obj["oldValue"] = oldValue
-            }
             if let newValue = entry.newValue {
                 obj["newValue"] = newValue
             }
@@ -205,7 +202,6 @@ public struct DatabaseLogUtilities {
             let tableName = obj["tableName"] as? String
             let objectId = (obj["objectId"] as? String).flatMap { UUID(uuidString: $0) }
             let columnName = obj["columnName"] as? String
-            let oldValue = obj["oldValue"] as? String
             let newValue = obj["newValue"] as? String
             let metadata = obj["metadata"] as? String
             
@@ -217,7 +213,6 @@ public struct DatabaseLogUtilities {
                 tableName: tableName,
                 objectId: objectId,
                 columnName: columnName,
-                oldValue: oldValue,
                 newValue: newValue,
                 metadata: metadata
             ))

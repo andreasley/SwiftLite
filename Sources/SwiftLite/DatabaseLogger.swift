@@ -50,7 +50,6 @@ public actor DatabaseLogger
         public let tableName: String?
         public let objectId: UUID?
         public let columnName: String?
-        public let oldValue: String?
         public let newValue: String?
         public let metadata: String? // JSON-encoded additional data
         
@@ -62,7 +61,6 @@ public actor DatabaseLogger
             tableName: String? = nil,
             objectId: UUID? = nil,
             columnName: String? = nil,
-            oldValue: String? = nil,
             newValue: String? = nil,
             metadata: String? = nil
         ) {
@@ -73,7 +71,6 @@ public actor DatabaseLogger
             self.tableName = tableName
             self.objectId = objectId
             self.columnName = columnName
-            self.oldValue = oldValue
             self.newValue = newValue
             self.metadata = metadata
         }
@@ -120,7 +117,6 @@ public actor DatabaseLogger
             table_name TEXT,
             object_id TEXT,
             column_name TEXT,
-            old_value TEXT,
             new_value TEXT,
             metadata TEXT
         ) STRICT;
@@ -155,8 +151,8 @@ public actor DatabaseLogger
         let sql = """
         INSERT INTO operation_log (
             id, timestamp, transaction_id, operation_type,
-            table_name, object_id, column_name, old_value, new_value, metadata
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            table_name, object_id, column_name, new_value, metadata
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         
         var statement: OpaquePointer?
@@ -193,22 +189,16 @@ public actor DatabaseLogger
             sqlite3_bind_null(statement, 7)
         }
         
-        if let oldValue = entry.oldValue {
-            sqlite3_bind_text(statement, 8, oldValue, -1, SQLITE_TRANSIENT)
+        if let newValue = entry.newValue {
+            sqlite3_bind_text(statement, 8, newValue, -1, SQLITE_TRANSIENT)
         } else {
             sqlite3_bind_null(statement, 8)
         }
         
-        if let newValue = entry.newValue {
-            sqlite3_bind_text(statement, 9, newValue, -1, SQLITE_TRANSIENT)
+        if let metadata = entry.metadata {
+            sqlite3_bind_text(statement, 9, metadata, -1, SQLITE_TRANSIENT)
         } else {
             sqlite3_bind_null(statement, 9)
-        }
-        
-        if let metadata = entry.metadata {
-            sqlite3_bind_text(statement, 10, metadata, -1, SQLITE_TRANSIENT)
-        } else {
-            sqlite3_bind_null(statement, 10)
         }
         
         let stepResult = sqlite3_step(statement)
@@ -394,15 +384,11 @@ public actor DatabaseLogger
                 ? String(cString: sqlite3_column_text(statement, 6))
                 : nil
             
-            let oldValue = sqlite3_column_type(statement, 7) != SQLITE_NULL
-                ? String(cString: sqlite3_column_text(statement, 7))
-                : nil
-            
-            let newValue = sqlite3_column_type(statement, 8) != SQLITE_NULL
+            let newValue = sqlite3_column_type(statement, 7) != SQLITE_NULL
                 ? String(cString: sqlite3_column_text(statement, 8))
                 : nil
             
-            let metadata = sqlite3_column_type(statement, 9) != SQLITE_NULL
+            let metadata = sqlite3_column_type(statement, 8) != SQLITE_NULL
                 ? String(cString: sqlite3_column_text(statement, 9))
                 : nil
             
@@ -414,7 +400,6 @@ public actor DatabaseLogger
                 tableName: tableName,
                 objectId: objectId,
                 columnName: columnName,
-                oldValue: oldValue,
                 newValue: newValue,
                 metadata: metadata
             ))
