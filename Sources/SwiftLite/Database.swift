@@ -290,16 +290,16 @@ public actor Database: Observable
             var objects = [T]()
             objects.reserveCapacity(rows.count)
             
-            guard let readTransaction = DatabaseTask.currentReadTransaction else { throw Error.failedToFindReadTransaction }
+            let associatedData = try ReadAssociatedData.getCurrent()
 
             for row in rows {
                 let id: UUID = try row.get("id")
-                if let existingObject = readTransaction.getCached(T.self, id: id) {
+                if let existingObject = associatedData.getCached(T.self, id: id) {
                     objects.append(existingObject)
                 } else {
                     let object = try await T(db: self, row: row)
                     objects.append(object)
-                    readTransaction.addCached(T.self, id: id, object: object)
+                    associatedData.addCached(T.self, id: id, object: object)
                 }
             }
 
@@ -379,7 +379,7 @@ public actor Database: Observable
 
     nonisolated(nonsending) func withReadTransaction<T: Fetchable>(_ body: @escaping () async throws -> sending [T]) async throws -> [T]
     {
-        guard DatabaseTask.currentReadTransaction == nil else {
+        guard ReadAssociatedData.current == nil else {
             return try await body()
         }
         
@@ -387,9 +387,9 @@ public actor Database: Observable
         
         try await gate.run {
             print("▶️ BEGINNING READ TRANSACTION")
-            let readTransaction = DatabaseTask.ReadTransaction(db: self)
+            let associatedData = ReadAssociatedData(db: self)
             
-            try await DatabaseTask.$currentReadTransaction.withValue(readTransaction) {
+            try await ReadAssociatedData.$current.withValue(associatedData) {
                 try await self.run("BEGIN")
                 do {
                     results = try await body()
@@ -405,18 +405,14 @@ public actor Database: Observable
         
         // Start autoupdating here, because at this point, the Model objects should be back on actor they'll live in (even if that's not where they were created).
 
-        // seems to be the only thing that works to check if we're on the UI actor; #isolation == MainActor.shared returns false
-        let isMainThread = { Thread.isMainThread }()
+        let isMainActor = #isolation === MainActor.shared
         
-        func unsafeBeginAutoupdatingOnMainActor(_ models: [AutoupdatingModel]) {
-            nonisolated(unsafe) let unsafeModels = models
-            MainActor.assumeIsolated {
+
+        if isMainActor, let autoupdatingModels = results as? [AutoupdatingModel] {
+            nonisolated(unsafe) let unsafeModels = autoupdatingModels
+            await MainActor.run {
                 unsafeModels.forEach { $0._beginAutoupdating() }
             }
-        }
-
-        if isMainThread, let autoupdatingModels = results as? [AutoupdatingModel] {
-            unsafeBeginAutoupdatingOnMainActor(autoupdatingModels)
         }
         
         return results
