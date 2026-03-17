@@ -143,17 +143,7 @@ public actor Database: Observable
 
     public func register<each T: Model>(models: repeat (each T).Type) async throws
     {
-        // TODO:
-        // 1. Build model graph (to find referenced model types and dependencies)
-        // 2. Check if table(s) exists already
-        //  if yes:
-        //      1. Compare schema (names and types should match; not sure about "STRICT" and "WITHOUT ROWID"; column order is irrelevant)
-        //          if schema matches, continue
-        //          if schema doesn't match, execute migration to new schema (traversing the graph upwards)
-        //  if no:
-        //      1. create table (traversing the graph upwards)
-        
-        // TODO: Store registered models; run check when querying if the model in question was registered
+        // TODO: Store registered models and run check when querying if the model in question was registered?
         
         let existingTables = try getUserDefinedTables()
         var tablesWithoutMatchingModels = Set(existingTables)
