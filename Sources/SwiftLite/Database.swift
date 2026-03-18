@@ -8,6 +8,7 @@ public actor Database: Observable
     public enum StorageType {
         case file(URL)
         case inMemory
+        case distributed(any SyncTransport)
     }
     
     public enum CacheSize {
@@ -26,33 +27,41 @@ public actor Database: Observable
     public private(set) var logger: DatabaseLogger?
     internal var currentTransactionId: UUID?
 
-    public init(storage: StorageType, cacheSizeLimit: CacheSize? = nil, enableLogging: Bool = true) async throws
+    public nonisolated init(storage: StorageType, cacheSizeLimit: CacheSize? = nil) async throws
     {
-        var pointer: OpaquePointer?
         var flags = [SQLITE_OPEN_READWRITE, SQLITE_OPEN_CREATE, SQLITE_OPEN_FULLMUTEX] // see https://sqlite.org/c3ref/open.html
-        var filename: String?
-        var logFileURL: URL?
+        var databaseFilePath: String?
         
-        if case .file(let url) = storage {
-            guard url.isFileURL else {
-                throw Error.notAFileUrl(url)
-            }
-            let filenameFromUrl = url.absoluteString
-            filename = filenameFromUrl
-            print("Opening database at \(filenameFromUrl)")
-            
-            // Create log file URL (same directory, with .log.sqlite extension)
-            if enableLogging {
-                let logFileName = url.deletingPathExtension().lastPathComponent + ".log.sqlite"
-                logFileURL = url.deletingLastPathComponent().appendingPathComponent(logFileName)
-            }
-        } else if case .inMemory = storage {
+        if case .inMemory = storage {
             flags.append(SQLITE_OPEN_MEMORY)
             print("Opening database in memory")
             // In-memory databases don't get logging
+        } else {
+            let url: URL
+            if case .file(let preferredUrl) = storage {
+                guard preferredUrl.isFileURL else { throw Error.notAFileUrl(preferredUrl) }
+                url = preferredUrl
+                try url.createParentDirectoryIfNotExists()
+                databaseFilePath = url.path(percentEncoded: false)
+                print("Opening database at \(url.absoluteString)")
+            } else if case .distributed(let transport) = storage {
+                url = await transport.localDatabaseUrl
+                await transport.connect()
+                // As long as the log file exists, the datbase file can be created by replaying the log file. However, if the log file is missing, this must be a new (or broken) database that can't be opened if the sync endpoint isn't online.
+                if await transport.status != .connected, await !transport.localDatabaseLogUrl.exists {
+                    throw Error.syncIsOfflineAndNoLocalDatabaseExists
+                }
+                try url.createParentDirectoryIfNotExists()
+                databaseFilePath = url.path(percentEncoded: false)
+                self.logger = try await DatabaseLogger(transport: transport)
+                print("Opening local database at \(url.absoluteString) for distributed database \(transport.databaseIdentifier)")
+            } else {
+                throw Error.unhandledStorageType
+            }
         }
         
-        let openStatus = sqlite3_open_v2(filename, &pointer, flags.reduce(0, |), nil)
+        var pointer: OpaquePointer?
+        let openStatus = sqlite3_open_v2(databaseFilePath, &pointer, flags.reduce(0, |), nil)
         
         guard let pointer, openStatus == SQLiteStatus.ok else {
             throw Error.failedToOpen(SQLiteStatus(openStatus))
@@ -76,19 +85,13 @@ public actor Database: Observable
 
         self.connectionHandle = pointer
         
-        // Initialize logger if enabled and we have a file URL
-        if enableLogging, let logFileURL {
-            do {
-                let logger = try await DatabaseLogger(logFileURL: logFileURL)
-                self.logger = logger
-                let existingEntries = try await logger.getEntries()
-                let grouped = Dictionary(grouping: existingEntries) { $0.transactionId }
-                for (transactionId, entries) in grouped.sorted(by: { $0.value.first!.timestamp < $1.value.first!.timestamp }) {
-                    try await self.processTransaction(entries: entries, transactionId: transactionId)
-                }
-            } catch {
-                print("⚠️ Failed to initialize database logger: \(error)")
-                // Continue without logging - don't fail database initialization
+        if let logger {
+            // Catch up on any log entries that aren't yet replayed in the local database.
+            // This includes entries for initial sync.
+            let existingEntries = try await logger.getEntries()
+            let grouped = Dictionary(grouping: existingEntries) { $0.transactionId }
+            for (transactionId, entries) in grouped.sorted(by: { $0.value.first!.timestamp < $1.value.first!.timestamp }) {
+                try await self.processTransaction(entries: entries, transactionId: transactionId)
             }
         }
     }

@@ -79,9 +79,15 @@ public actor DatabaseLogger
     private var isClosed = false
     private let logFileURL: URL
     
+    public init(transport: SyncTransport) async throws
+    {
+        try await self.init(logFileURL: transport.localDatabaseLogUrl)
+    }
+
+    
     /// Initialize the logger with a separate SQLite database
     /// - Parameter logFileURL: Location for the log database file
-    public init(logFileURL: URL) async throws {
+    internal init(logFileURL: URL) async throws {
         guard logFileURL.isFileURL else {
             throw Error.failedToInitialize("Log URL must be a file URL")
         }

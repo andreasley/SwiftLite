@@ -13,6 +13,7 @@
 Backlog
 ================================================
 
+- Use SQLite savepoints instead of transactions for nested reads?
 - Changing values and then changing them back to the previous value (before saving) still triggers a save, despite the value matching the previous one. 
 	- This could be prevented by storing the previous/initial value and comparing
 	- Not sure if worth implementing
