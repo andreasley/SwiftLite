@@ -52,15 +52,15 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
                         FixIt(
                             message: MacroExpansionFixItMessage("Change 'struct' to 'final class'"),
                             changes: [
-                                .replace(
+                                FixIt.Change.replace(
                                     oldNode: Syntax(structDecl.structKeyword),
                                     newNode: Syntax(TokenSyntax.keyword(.class, trailingTrivia: structDecl.structKeyword.trailingTrivia))
                                 ),
-                                .replace(
+                                FixIt.Change.replace(
                                     oldNode: Syntax(structDecl.modifiers),
-                                    newNode: Syntax(structDecl.modifiers.appending(
+                                    newNode: Syntax(structDecl.modifiers + [
                                         DeclModifierSyntax(name: .keyword(.final), trailingTrivia: .space)
-                                    ))
+                                    ])
                                 )
                             ]
                         )
@@ -75,15 +75,15 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
                         FixIt(
                             message: MacroExpansionFixItMessage("Change 'enum' to 'final class'"),
                             changes: [
-                                .replace(
+                                FixIt.Change.replace(
                                     oldNode: Syntax(enumDecl.enumKeyword),
                                     newNode: Syntax(TokenSyntax.keyword(.class, trailingTrivia: enumDecl.enumKeyword.trailingTrivia))
                                 ),
-                                .replace(
+                                FixIt.Change.replace(
                                     oldNode: Syntax(enumDecl.modifiers),
-                                    newNode: Syntax(enumDecl.modifiers.appending(
+                                    newNode: Syntax(enumDecl.modifiers + [
                                         DeclModifierSyntax(name: .keyword(.final), trailingTrivia: .space)
-                                    ))
+                                    ])
                                 )
                             ]
                         )
@@ -98,15 +98,15 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
                         FixIt(
                             message: MacroExpansionFixItMessage("Change 'actor' to 'final class'"),
                             changes: [
-                                .replace(
+                                FixIt.Change.replace(
                                     oldNode: Syntax(actorDecl.actorKeyword),
                                     newNode: Syntax(TokenSyntax.keyword(.class, trailingTrivia: actorDecl.actorKeyword.trailingTrivia))
                                 ),
-                                .replace(
+                                FixIt.Change.replace(
                                     oldNode: Syntax(actorDecl.modifiers),
-                                    newNode: Syntax(actorDecl.modifiers.appending(
+                                    newNode: Syntax(actorDecl.modifiers + [
                                         DeclModifierSyntax(name: .keyword(.final), trailingTrivia: .space)
-                                    ))
+                                    ])
                                 )
                             ]
                         )
@@ -149,11 +149,11 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
                 FixIt(
                     message: MacroExpansionFixItMessage("Add 'final' modifier"),
                     changes: [
-                        .replace(
+                        FixIt.Change.replace(
                             oldNode: Syntax(classDecl.modifiers),
-                            newNode: Syntax(classDecl.modifiers.appending(
+                            newNode: Syntax(classDecl.modifiers + [
                                 DeclModifierSyntax(name: .keyword(.final), trailingTrivia: .space)
-                            ))
+                            ])
                         )
                     ]
                 )
@@ -209,11 +209,11 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             let storedFixIt = FixIt(
                 message: MacroExpansionFixItMessage("Add @Stored attribute"),
                 changes: [
-                    .replace(
+                    FixIt.Change.replace(
                         oldNode: Syntax(varDecl.attributes),
-                        newNode: Syntax(varDecl.attributes.appending(
+                        newNode: Syntax(varDecl.attributes + [
                             .attribute(AttributeSyntax(attributeName: IdentifierTypeSyntax(name: .identifier("Stored"))))
-                        ))
+                        ])
                     )
                 ]
             )
@@ -221,11 +221,11 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             let transientFixIt = FixIt(
                 message: MacroExpansionFixItMessage("Add @Transient attribute"),
                 changes: [
-                    .replace(
+                    FixIt.Change.replace(
                         oldNode: Syntax(varDecl.attributes),
-                        newNode: Syntax(varDecl.attributes.appending(
+                        newNode: Syntax(varDecl.attributes + [
                             .attribute(AttributeSyntax(attributeName: IdentifierTypeSyntax(name: .identifier("Transient"))))
-                        ))
+                        ])
                     )
                 ]
             )
