@@ -13,11 +13,10 @@ public struct ModelLifecycleHandler<S: StatusView>: ViewModifier
     {
         ZStack(alignment: .topLeading) {
             content
-                .overlay {
-                    S.init(status: status, items: items)
-                }
+            S.init(status: status, items: items)
         }
         .onChange(of: items.anyItemHasPendingChanges) { oldValue, newValue in
+            guard !status.isError else { return }
             if newValue {
                 setStatus(.unsaved)
             } else {
@@ -81,7 +80,7 @@ public struct ModelLifecycleHandler<S: StatusView>: ViewModifier
                 try await items.load()
                 setStatus(.loaded)
             } catch {
-                setStatus(.error(error))
+                setStatus(.loadingError(error))
             }
             self.loadingTask = nil
         }
@@ -89,6 +88,8 @@ public struct ModelLifecycleHandler<S: StatusView>: ViewModifier
     
     func startSavingAll()
     {
+        guard items.anyItemHasPendingChanges else { return }
+        
         // Use `Task.immediate` here, because otherwise the Task will not run when called after receiving `NSApplication.willTerminateNotification`
         Task.immediate {
             do {
@@ -96,13 +97,18 @@ public struct ModelLifecycleHandler<S: StatusView>: ViewModifier
                 try await items.save()
                 setStatus(.loaded)
             } catch {
-                setStatus(.error(error))
+                setStatus(.savingError(error))
             }
         }
     }
 
     func startSavingAllAndUnloading()
     {
+        guard items.anyItemHasPendingChanges else {
+            items.unload()
+            return
+        }
+
         Task {
             do {
                 setStatus(.saving)
@@ -110,7 +116,7 @@ public struct ModelLifecycleHandler<S: StatusView>: ViewModifier
                 setStatus(.loaded)
                 items.unload()
             } catch {
-                setStatus(.error(error))
+                setStatus(.savingError(error))
                 // TODO: Escalate this somehow? The view might be hidden now.
             }
         }

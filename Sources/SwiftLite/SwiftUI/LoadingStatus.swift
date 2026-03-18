@@ -3,14 +3,46 @@ import Foundation
 public enum LoadingStatus: Equatable {
     case initial
     case loading
+    case loadingError(Swift.Error)
     case loaded
     case unsaved
     case saving
-    case error(Swift.Error)
+    case savingError(Swift.Error)
     
+    var error: Swift.Error? {
+        switch self {
+        case .loadingError(let error), .savingError(let error):
+            return error
+        default:
+            return nil
+        }
+    }
+
+    var isIdle: Bool {
+        switch self {
+        case .initial, .loaded:
+            return true
+        default:
+            return false
+        }
+    }
+
     var isError: Bool {
-        if case .error = self { return true }
-        return false
+        switch self {
+        case .loadingError, .savingError:
+            return true
+        default:
+            return false
+        }
+    }
+    
+    var isWorking: Bool {
+        switch self {
+        case .loading, .saving:
+            return true
+        default:
+            return false
+        }
     }
 
     public static func == (lhs: Self, rhs: Self) -> Bool {
@@ -19,7 +51,9 @@ public enum LoadingStatus: Equatable {
              (.loading, .loading),
              (.loaded, .loaded):
             return true
-        case (.error(let lhsError), .error(let rhsError)):
+        case (.savingError(let lhsError), .savingError(let rhsError)):
+            return lhsError.localizedDescription == rhsError.localizedDescription
+        case (.loadingError(let lhsError), .loadingError(let rhsError)):
             return lhsError.localizedDescription == rhsError.localizedDescription
         default:
             return false

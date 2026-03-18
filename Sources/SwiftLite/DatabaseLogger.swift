@@ -7,13 +7,13 @@ import SQLite3
 /// Only successful transactions are logged - failed/rolled back transactions are not recorded.
 public actor DatabaseLogger
 {
-    public enum Error: Swift.Error, CustomStringConvertible {
+    public enum Error: LocalizedError {
         case failedToOpen(SQLiteStatus)
         case failedToClose(SQLiteStatus)
         case failedToInitialize(String)
         case failedToLog(String)
         
-        public var description: String {
+        public var errorDescription: String? {
             switch self {
             case .failedToOpen(let status):
                 return "Failed to open log database: \(status.description)"

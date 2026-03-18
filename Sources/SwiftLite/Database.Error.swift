@@ -2,7 +2,7 @@ import Foundation
 
 extension Database
 {
-    enum Error: Swift.Error, CustomStringConvertible, Sendable, Equatable {
+    enum Error: LocalizedError, Sendable, Equatable {
         case queryFailed(sqlStatement: SQLStatement, status: SQLiteStatus, errorMessage: String)
         case failedToOpen(SQLiteStatus)
         case failedToClose(SQLiteStatus)
@@ -15,7 +15,7 @@ extension Database
         case failedToMigrateSchema
         case unexpectedStatementValuesForRun
 
-        var description: String {
+        var errorDescription: String? {
             return switch self {
             case .queryFailed(let configuration, let status, let errorMessage):
                 "Query `\(configuration.text)` failed: \(status.description) (\(errorMessage))"
@@ -30,7 +30,7 @@ extension Database
             case .failedToFindStatement:
                 "Failed to find the SQLite statement pointer"
             case .sqliteError(code: let code):
-                "SQLite error code: \(code)"
+                "SQLite error: \(SQLiteStatus(rawValue: code)?.description ?? "Code \(code)")"
             case .failedToFindResultValue:
                 "Failed to find result value"
             case .failedToFindReadTransaction:

@@ -70,7 +70,7 @@ public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
 
                 status = .loaded
             } catch {
-                status = .error(error)
+                status = .loadingError(error)
             }
         }
     }

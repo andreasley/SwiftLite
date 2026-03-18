@@ -107,7 +107,7 @@ public struct DatabaseLogUtilities {
     public static func vacuum(logFileURL: URL) throws {
         // Open a temporary connection to vacuum
         var pointer: OpaquePointer?
-        var flags = [SQLITE_OPEN_READWRITE, SQLITE_OPEN_CREATE, SQLITE_OPEN_FULLMUTEX] // see https://sqlite.org/c3ref/open.html
+        let flags = [SQLITE_OPEN_READWRITE, SQLITE_OPEN_CREATE, SQLITE_OPEN_FULLMUTEX] // see https://sqlite.org/c3ref/open.html
 
         let openStatus = sqlite3_open_v2(logFileURL.path, &pointer, flags.reduce(0, |), nil)
         
