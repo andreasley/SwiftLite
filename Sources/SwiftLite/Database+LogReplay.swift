@@ -91,7 +91,7 @@ extension Database
                 case DatabaseLogger.OperationType.tableCreated:
                     print("📋 Replaying: Table created - \(tableName)")
                     let createTableStatement = """
-                    CREATE TABLE "\(tableName)" (
+                    CREATE TABLE IF NOT EXISTS "\(tableName)" (
                         "id" TEXT,
                         PRIMARY KEY(id)
                     ) STRICT, WITHOUT ROWID;
@@ -143,7 +143,7 @@ extension Database
                     let existingIndexes = try getIndexes(tableName: tableName)
                     if !existingIndexes.contains(where: { $0.name == indexName }) {
                         let uniqueKeyword = isUnique ? "UNIQUE " : ""
-                        let createIndexStatement = "CREATE \(uniqueKeyword)INDEX \"\(indexName)\" ON \"\(tableName)\"(\(columns.joined(separator: ", ")))"
+                        let createIndexStatement = "CREATE \(uniqueKeyword)INDEX IF NOT EXISTS \"\(indexName)\" ON \"\(tableName)\"(\(columns.joined(separator: ", ")))"
                         try run(createIndexStatement)
                     } else {
                         print("ℹ️ Index \(indexName) already exists, skipping")
