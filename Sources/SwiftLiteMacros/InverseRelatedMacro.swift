@@ -84,7 +84,7 @@ public struct InverseRelatedMacro: AccessorMacro
             }
         }
         
-        guard let referencingField = referencingField else { throw Error.invalidKeyPath }
+        guard referencingField != nil else { throw Error.invalidKeyPath }
         
         // Generate the expected collection type: RelatedCollection<RootType.Snapshot>
         let expectedTypeName = "RelatedCollection<\(rootType).Snapshot>"

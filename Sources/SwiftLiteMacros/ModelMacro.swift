@@ -626,7 +626,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         
         // Extract stored properties from row
         for prop in propertyInfo.stored {
-            if let fallbackValue = prop.fallbackValue {
+            if prop.fallbackValue != nil {
                 bodyLines.append("let \(prop.name): \(prop.type) = try row.get(\"\(prop.name)\", fallback: FallbackValues.\(prop.name))")
             } else {
                 bodyLines.append("let \(prop.name): \(prop.type) = try row.get(\"\(prop.name)\")")
@@ -1135,7 +1135,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         
         for prop in propertyInfo.stored {
             storedProps.append("let \(prop.name): \(prop.type)")
-            if let fallbackValue = prop.fallbackValue {
+            if prop.fallbackValue != nil {
                 rowExtractions.append("self.\(prop.name) = try row.get(\"\(prop.name)\", fallback: FallbackValues.\(prop.name))")
             } else {
                 rowExtractions.append("self.\(prop.name) = try row.get(\"\(prop.name)\")")
