@@ -77,22 +77,22 @@ public actor DatabaseLogger
     
     private let connectionHandle: OpaquePointer
     private var isClosed = false
+    public private(set) var fatalError: Swift.Error?
+    private let isFirstRun: Bool
     private let logFileURL: URL
+    private let transport: SyncTransport
+
+    private(set) weak var database: Database!
     
     public init(transport: SyncTransport) async throws
     {
-        try await self.init(logFileURL: transport.localDatabaseLogUrl)
-    }
-
-    
-    /// Initialize the logger with a separate SQLite database
-    /// - Parameter logFileURL: Location for the log database file
-    internal init(logFileURL: URL) async throws {
-        guard logFileURL.isFileURL else {
+        guard await transport.localDatabaseLogUrl.isFileURL else {
             throw Error.failedToInitialize("Log URL must be a file URL")
         }
         
-        self.logFileURL = logFileURL
+        isFirstRun = !logFileURL.exists
+        
+        self.logFileURL = await transport.localDatabaseLogUrl
         
         var pointer: OpaquePointer?
         let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX
@@ -105,10 +105,55 @@ public actor DatabaseLogger
         
         self.connectionHandle = pointer
         
-        // Initialize the log schema
         try initializeSchema()
         
+        await transport.registerIndexIncreaseCallback { [weak self] highestIndex in
+            Task {
+                guard let self else { return }
+                await self.fetchAndUpdate()
+            }
+        }
+        
         print("📝 Database logger initialized at \(logFileURL.path)")
+    }
+    
+    func setDatabase(_ database: Database) async
+    {
+        self.database = database
+
+        // Do initial sync here, so the most recent changes are already integrated into the database when the `Database` initializer completes
+        await fetchAndUpdate()
+    }
+    
+    private func fetchAndUpdate() async
+    {
+        do {
+            // TODO: Stream these, so we're not stuck with 5GB of data on initial sync
+            
+            let newEntries = await transport.getEntries(from: 0)
+            for entry in newEntries {
+                try log(entry)
+            }
+            
+            // TODO: Save entries to local table
+            
+            guard !isClosed else {
+                // Not an issue; update the database next time
+                return
+            }
+            
+            let entriesToApply = try await getEntriesToApply()
+            
+            // TODO: This might be slow for initial sync; do batches instead? Entries belonging to the same transaction should be sequential already.
+            let groupedEntriesToApply = Dictionary(grouping: entriesToApply) { $0.transactionId }
+            for (transactionId, entriesForTransaction) in groupedEntriesToApply.sorted(by: { $0.value.first!.timestamp < $1.value.first!.timestamp }) {
+                try await database.processTransaction(entries: entriesForTransaction, transactionId: transactionId)
+            }
+        } catch {
+            // If we can't successfully read/write to the log, the database can't be used
+            try? await database.close()
+            fatalError = error
+        }
     }
     
     /// Creates the log table schema if it doesn't exist
@@ -319,7 +364,13 @@ public actor DatabaseLogger
         }
     }
     
-    /// Retrieve log entries within a date range
+    public func getEntriesToApply() async throws -> [LogEntry]
+    {
+        // TODO: Get all entries marked applied_locally == false that are either 1) Schema upgrade entries or 2) the most recent value update entry for a specific table and field
+    }
+
+        
+        /// Retrieve log entries within a date range
     public func getEntries(
         from startDate: Date? = nil,
         to endDate: Date? = nil,

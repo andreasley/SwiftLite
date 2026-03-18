@@ -27,7 +27,7 @@ public actor Database: Observable
     public private(set) var logger: DatabaseLogger?
     internal var currentTransactionId: UUID?
 
-    public nonisolated init(storage: StorageType, cacheSizeLimit: CacheSize? = nil) async throws
+    public init(storage: StorageType, cacheSizeLimit: CacheSize? = nil) async throws
     {
         var flags = [SQLITE_OPEN_READWRITE, SQLITE_OPEN_CREATE, SQLITE_OPEN_FULLMUTEX] // see https://sqlite.org/c3ref/open.html
         var databaseFilePath: String?
@@ -85,15 +85,7 @@ public actor Database: Observable
 
         self.connectionHandle = pointer
         
-        if let logger {
-            // Catch up on any log entries that aren't yet replayed in the local database.
-            // This includes entries for initial sync.
-            let existingEntries = try await logger.getEntries()
-            let grouped = Dictionary(grouping: existingEntries) { $0.transactionId }
-            for (transactionId, entries) in grouped.sorted(by: { $0.value.first!.timestamp < $1.value.first!.timestamp }) {
-                try await self.processTransaction(entries: entries, transactionId: transactionId)
-            }
-        }
+        await logger?.setDatabase(self)
     }
 
     func setPragma(name: String, value: String) throws
