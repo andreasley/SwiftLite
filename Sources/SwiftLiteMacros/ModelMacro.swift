@@ -1090,7 +1090,6 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         }
         
         for prop in propertyInfo.related {
-            let baseType = prop.type.replacingOccurrences(of: "?", with: "")
             properties.append("let \(prop.name): \(prop.type)")
             cases.append("case \\.\(prop.name): \"\(prop.name)\"")
         }

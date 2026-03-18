@@ -103,7 +103,7 @@ public struct InverseRelatedManyMacro: AccessorMacro
                                 IdentifierTypeSyntax(
                                     name: .identifier("RelatedCollection"),
                                     genericArgumentClause: GenericArgumentClauseSyntax {
-                                        GenericArgumentSyntax(argument: IdentifierTypeSyntax(name: .identifier(rootType)))
+                                        GenericArgumentSyntax(argument: .type(TypeSyntax(IdentifierTypeSyntax(name: .identifier(rootType)))))
                                     }
                                 )
                             )
@@ -125,7 +125,7 @@ public struct InverseRelatedManyMacro: AccessorMacro
                 type: IdentifierTypeSyntax(
                     name: .identifier("RelatedCollection"),
                     genericArgumentClause: GenericArgumentClauseSyntax {
-                        GenericArgumentSyntax(argument: IdentifierTypeSyntax(name: .identifier(rootType)))
+                        GenericArgumentSyntax(argument: .type(TypeSyntax(IdentifierTypeSyntax(name: .identifier(rootType)))))
                     }
                 )
             )
