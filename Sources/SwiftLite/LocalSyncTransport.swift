@@ -47,12 +47,29 @@ actor SimulatedServerSyncTransport: SyncTransport
     func sendEntries(entries: [DatabaseLogger.LogEntry]) async -> [UUID: Int64]
     {
         var updatedIndexes = [UUID: Int64]()
+        var nextIndex = Int64(serverLogEntries.count + 1)
         for entry in entries {
-            serverLogEntries.append(entry)
-            updatedIndexes[entry.id] = Int64(serverLogEntries.count)
+            guard entries.contains(where: { $0.id == entry.id && $0.synchronizedIndex == nil }) else { continue }
+            let entryWithIndex = DatabaseLogger.LogEntry(
+                id: entry.id,
+                timestamp: entry.timestamp,
+                transactionId: entry.transactionId,
+                operationType: entry.operationType,
+                tableName: entry.tableName,
+                objectId: entry.objectId,
+                columnName: entry.columnName,
+                newValue: entry.newValue,
+                metadata: entry.metadata,
+                user: entry.user,
+                synchronizedIndex: nextIndex,
+                appliedLocally: false
+            )
+            serverLogEntries.append(entryWithIndex)
+            updatedIndexes[entry.id] = Int64(nextIndex)
+            nextIndex += 1
         }
         for callback in indexIncreaseCallbacks {
-            callback(Int64(serverLogEntries.count))
+            await callback(Int64(serverLogEntries.count))
         }
         return updatedIndexes
     }

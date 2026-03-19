@@ -2,7 +2,7 @@ import Foundation
 
 public nonisolated protocol SyncTransport: Actor, Sendable
 {
-    typealias IndexIncreaseHandler = (_ highestIndex: Int64) -> Void
+    typealias IndexIncreaseHandler = (_ highestIndex: Int64) async -> Void
 
     var status: SyncTransportStatus { get }
     var syncErrors: [SyncError] { get }

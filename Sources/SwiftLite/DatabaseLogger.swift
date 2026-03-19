@@ -12,6 +12,8 @@ public actor DatabaseLogger
         case failedToClose(SQLiteStatus)
         case failedToInitialize(String)
         case failedToLog(String)
+        case failedToFetch(sql: String)
+        case loggerIsCloser
         
         public var errorDescription: String? {
             switch self {
@@ -23,6 +25,10 @@ public actor DatabaseLogger
                 return "Failed to initialize log database: \(message)"
             case .failedToLog(let message):
                 return "Failed to log operation: \(message)"
+            case .failedToFetch(sql: let sql):
+                return "Failed to fetch from database: \(sql)"
+            case .loggerIsCloser:
+                return "DatabaseLogger is already closed"
             }
         }
     }
@@ -51,6 +57,9 @@ public actor DatabaseLogger
         public let columnName: String?
         public let newValue: SQLValue?
         public let metadata: String? // JSON-encoded additional data
+        public let user: String?
+        public let synchronizedIndex: Int64?
+        public let appliedLocally: Bool
         
         public init(
             id: UUID = UUID(),
@@ -61,7 +70,10 @@ public actor DatabaseLogger
             objectId: UUID? = nil,
             columnName: String? = nil,
             newValue: SQLValue? = nil,
-            metadata: String? = nil
+            metadata: String? = nil,
+            user: String? = nil,
+            synchronizedIndex: Int64? = nil,
+            appliedLocally: Bool = false
         ) {
             self.id = id
             self.timestamp = timestamp
@@ -72,6 +84,9 @@ public actor DatabaseLogger
             self.columnName = columnName
             self.newValue = newValue
             self.metadata = metadata
+            self.user = user
+            self.synchronizedIndex = synchronizedIndex
+            self.appliedLocally = appliedLocally
         }
     }
     
@@ -90,10 +105,9 @@ public actor DatabaseLogger
             throw Error.failedToInitialize("Log URL must be a file URL")
         }
         
-        isFirstRun = !logFileURL.exists
-        
         self.logFileURL = await transport.localDatabaseLogUrl
-        
+        isFirstRun = !logFileURL.exists
+
         var pointer: OpaquePointer?
         let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX
         
@@ -104,14 +118,13 @@ public actor DatabaseLogger
         }
         
         self.connectionHandle = pointer
+        self.transport = transport
         
         try initializeSchema()
         
         await transport.registerIndexIncreaseCallback { [weak self] highestIndex in
-            Task {
-                guard let self else { return }
-                await self.fetchAndUpdate()
-            }
+            guard let self else { return }
+            await self.fetchAndUpdate()
         }
         
         print("📝 Database logger initialized at \(logFileURL.path)")
@@ -128,18 +141,16 @@ public actor DatabaseLogger
     private func fetchAndUpdate() async
     {
         do {
+            guard !isClosed else { throw Error.loggerIsCloser }
+
             // TODO: Stream these, so we're not stuck with 5GB of data on initial sync
+            // TODO: publish progress information somewhere
             
-            let newEntries = await transport.getEntries(from: 0)
+            let highestSynchronizedIndex = try getHighestSynchronizedIndex()
+            let newEntries = await transport.getEntries(from: highestSynchronizedIndex)
+
             for entry in newEntries {
                 try log(entry)
-            }
-            
-            // TODO: Save entries to local table
-            
-            guard !isClosed else {
-                // Not an issue; update the database next time
-                return
             }
             
             let entriesToApply = try await getEntriesToApply()
@@ -149,6 +160,19 @@ public actor DatabaseLogger
             for (transactionId, entriesForTransaction) in groupedEntriesToApply.sorted(by: { $0.value.first!.timestamp < $1.value.first!.timestamp }) {
                 try await database.processTransaction(entries: entriesForTransaction, transactionId: transactionId)
             }
+        } catch {
+            // If we can't successfully read/write to the log, the database can't be used
+            try? await database.close()
+            fatalError = error
+        }
+    }
+    
+    private func sendUnsynchronized() async
+    {
+        do {
+            let entries = try await getEntriesToSend()
+            let updatedSynchronizationIndexes = await transport.sendEntries(entries: entries)
+            try updateEntriesWithSynchronizationIndex(updatedSynchronizationIndexes)
         } catch {
             // If we can't successfully read/write to the log, the database can't be used
             try? await database.close()
@@ -167,7 +191,11 @@ public actor DatabaseLogger
             table_name TEXT,
             object_id TEXT,
             column_name TEXT,
-            metadata TEXT
+            new_value ANY,
+            metadata TEXT,
+            user TEXT,
+            synchronized_index INTEGER,
+            applied_locally INTEGER NOT NULL DEFAULT 0
         ) STRICT;
         """
         
@@ -176,7 +204,9 @@ public actor DatabaseLogger
             "CREATE INDEX IF NOT EXISTS idx_transaction_id ON operation_log(transaction_id);",
             "CREATE INDEX IF NOT EXISTS idx_operation_type ON operation_log(operation_type);",
             "CREATE INDEX IF NOT EXISTS idx_table_name ON operation_log(table_name);",
-            "CREATE INDEX IF NOT EXISTS idx_object_id ON operation_log(object_id);"
+            "CREATE INDEX IF NOT EXISTS idx_object_id ON operation_log(object_id);",
+            "CREATE INDEX IF NOT EXISTS idx_synchronized_index ON operation_log(synchronized_index);",
+            "CREATE INDEX IF NOT EXISTS idx_applied_locally ON operation_log(applied_locally);"
         ]
         
         try execute(createTableSQL)
@@ -200,8 +230,9 @@ public actor DatabaseLogger
         let sql = """
         INSERT INTO operation_log (
             id, timestamp, transaction_id, operation_type,
-            table_name, object_id, column_name, metadata
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            table_name, object_id, column_name, new_value, metadata,
+            user, synchronized_index, applied_locally
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         
         var statement: OpaquePointer?
@@ -238,29 +269,64 @@ public actor DatabaseLogger
             sqlite3_bind_null(statement, 7)
         }
         
-        // For field_updated operations, store the value in metadata column
-        // For other operations, use metadata for its original purpose (schema metadata, etc.)
+        // Bind new_value column (index 8)
+        if let newValue = entry.newValue {
+            switch newValue {
+            case .null:
+                sqlite3_bind_null(statement, 8)
+            case .int(let value):
+                sqlite3_bind_int64(statement, 8, value)
+            case .double(let value):
+                sqlite3_bind_double(statement, 8, value)
+            case .string(let value):
+                sqlite3_bind_text(statement, 8, value, -1, SQLITE_TRANSIENT)
+            case .data(let value):
+                _ = value.withUnsafeBytes { bufferPointer in
+                    sqlite3_bind_blob(statement, 8, bufferPointer.baseAddress, Int32(value.count), SQLITE_TRANSIENT)
+                }
+            }
+        } else {
+            sqlite3_bind_null(statement, 8)
+        }
+        
+        // Bind metadata column (index 9)
         if entry.operationType == .fieldUpdated {
-            // Store the SQLValue in metadata column
+            // For backward compatibility, we still encode to metadata for field updates
             if let newValue = entry.newValue {
                 let encoder = JSONEncoder()
                 if let jsonData = try? encoder.encode(newValue),
                    let jsonString = String(data: jsonData, encoding: .utf8) {
-                    sqlite3_bind_text(statement, 8, jsonString, -1, SQLITE_TRANSIENT)
+                    sqlite3_bind_text(statement, 9, jsonString, -1, SQLITE_TRANSIENT)
                 } else {
-                    sqlite3_bind_null(statement, 8)
+                    sqlite3_bind_null(statement, 9)
                 }
             } else {
-                sqlite3_bind_null(statement, 8)
+                sqlite3_bind_null(statement, 9)
             }
         } else {
-            // metadata contains schema metadata or other info
             if let metadata = entry.metadata {
-                sqlite3_bind_text(statement, 8, metadata, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(statement, 9, metadata, -1, SQLITE_TRANSIENT)
             } else {
-                sqlite3_bind_null(statement, 8)
+                sqlite3_bind_null(statement, 9)
             }
         }
+        
+        // Bind user column (index 10)
+        if let user = entry.user {
+            sqlite3_bind_text(statement, 10, user, -1, SQLITE_TRANSIENT)
+        } else {
+            sqlite3_bind_null(statement, 10)
+        }
+        
+        // Bind synchronized_index column (index 11)
+        if let synchronizedIndex = entry.synchronizedIndex {
+            sqlite3_bind_int64(statement, 11, synchronizedIndex)
+        } else {
+            sqlite3_bind_null(statement, 11)
+        }
+        
+        // Bind applied_locally column (index 12)
+        sqlite3_bind_int64(statement, 12, entry.appliedLocally ? 1 : 0)
         
         let stepResult = sqlite3_step(statement)
         guard stepResult == SQLITE_DONE else {
@@ -284,93 +350,436 @@ public actor DatabaseLogger
         }
     }
     
-    /// Log schema change operations
-    public func logSchemaChange(
+    private func updateEntriesWithSynchronizationIndex(_ updatedIndexes: [UUID: Int64]) throws
+    {
+        guard !updatedIndexes.isEmpty else { return }
+        
+        let sql = """
+        UPDATE operation_log 
+        SET synchronized_index = ?
+        WHERE id = ?
+        """
+        
+        var statement: OpaquePointer?
+        let prepareResult = sqlite3_prepare_v2(connectionHandle, sql, -1, &statement, nil)
+        defer { sqlite3_finalize(statement) }
+        
+        guard let statement, prepareResult == SQLiteStatus.ok else {
+            let errmsg = String(cString: sqlite3_errmsg(connectionHandle))
+            throw Error.failedToLog(errmsg)
+        }
+        
+        // Begin transaction for batch updates
+        try execute("BEGIN")
+        
+        do {
+            for (entryId, synchronizedIndex) in updatedIndexes {
+                // Reset bindings for reuse
+                sqlite3_reset(statement)
+                sqlite3_clear_bindings(statement)
+                
+                // Bind synchronized_index (parameter 1)
+                sqlite3_bind_int64(statement, 1, synchronizedIndex)
+                
+                // Bind entry id (parameter 2)
+                sqlite3_bind_text(statement, 2, entryId.uuidString, -1, SQLITE_TRANSIENT)
+                
+                // Execute the update
+                let stepResult = sqlite3_step(statement)
+                guard stepResult == SQLITE_DONE else {
+                    let errmsg = String(cString: sqlite3_errmsg(connectionHandle))
+                    throw Error.failedToLog("Failed to update synchronized_index: \(errmsg)")
+                }
+            }
+            
+            try execute("COMMIT")
+        } catch {
+            try? execute("ROLLBACK")
+            throw error
+        }
+    }
+    
+    /// Get the highest synchronized_index value from the log table
+    /// Returns nil if no entries have a synchronized_index set
+    public func getHighestSynchronizedIndex() throws -> Int64 {
+        let sql = "SELECT MAX(synchronized_index) FROM operation_log"
+        
+        var statement: OpaquePointer?
+        let prepareResult = sqlite3_prepare_v2(connectionHandle, sql, -1, &statement, nil)
+        defer { sqlite3_finalize(statement) }
+        
+        guard let statement, prepareResult == SQLiteStatus.ok else {
+            let errmsg = String(cString: sqlite3_errmsg(connectionHandle))
+            throw Error.failedToLog(errmsg)
+        }
+        
+        guard sqlite3_step(statement) == SQLITE_ROW else {
+            throw Error.failedToFetch(sql: sql)
+        }
+        
+        // Check if the result is NULL (no entries with synchronized_index)
+        if sqlite3_column_type(statement, 0) == SQLITE_NULL {
+            throw Error.failedToFetch(sql: sql)
+        }
+        
+        return sqlite3_column_int64(statement, 0)
+    }
+    
+    
+    /// Log a complete transaction's worth of changes in a single batch operation.
+    /// This is more efficient than calling individual log methods.
+    /// - Parameters:
+    ///   - transactionId: The UUID of the transaction
+    ///   - schemaChanges: Schema changes to log (table/column/index operations)
+    ///   - dataChanges: Data changes to log (row create/update/delete operations)
+    public func logTransactionBatch(
         transactionId: UUID,
-        operationType: OperationType,
-        tableName: String,
-        columnName: String? = nil,
-        metadata: [String: Any]? = nil
-    ) throws {
-        var metadataJSON: String?
-        if let metadata {
-            if let jsonData = try? JSONSerialization.data(withJSONObject: metadata),
-               let jsonString = String(data: jsonData, encoding: .utf8) {
-                metadataJSON = jsonString
+        schemaChanges: [SchemaChange],
+        dataChanges: [ChangedObject]
+    ) async throws {
+        var entries: [LogEntry] = []
+        
+        // Convert schema changes to log entries
+        for schemaChange in schemaChanges {
+            var metadataJSON: String?
+            if let metadata = schemaChange.metadata {
+                if let jsonData = try? JSONSerialization.data(withJSONObject: metadata),
+                   let jsonString = String(data: jsonData, encoding: .utf8) {
+                    metadataJSON = jsonString
+                }
+            }
+            
+            entries.append(LogEntry(
+                transactionId: transactionId,
+                operationType: schemaChange.operationType,
+                tableName: schemaChange.tableName,
+                columnName: schemaChange.columnName,
+                metadata: metadataJSON
+            ))
+        }
+        
+        // Convert data changes to log entries
+        for change in dataChanges {
+            switch change.status {
+            case .created:
+                // Log the row creation
+                entries.append(LogEntry(
+                    transactionId: transactionId,
+                    operationType: .rowCreated,
+                    tableName: change.table,
+                    objectId: change.objectId
+                ))
+                
+                // Log each field value as a separate field update
+                if let updatedFields = change.updatedFields {
+                    for (fieldName, value) in updatedFields {
+                        entries.append(LogEntry(
+                            transactionId: transactionId,
+                            operationType: .fieldUpdated,
+                            tableName: change.table,
+                            objectId: change.objectId,
+                            columnName: fieldName,
+                            newValue: value
+                        ))
+                    }
+                }
+                
+            case .deleted:
+                // Log the row deletion
+                entries.append(LogEntry(
+                    transactionId: transactionId,
+                    operationType: .rowDeleted,
+                    tableName: change.table,
+                    objectId: change.objectId
+                ))
+                
+            case .updated:
+                // Log each field change separately
+                if let updatedFields = change.updatedFields {
+                    for (fieldName, newValue) in updatedFields {
+                        entries.append(LogEntry(
+                            transactionId: transactionId,
+                            operationType: .fieldUpdated,
+                            tableName: change.table,
+                            objectId: change.objectId,
+                            columnName: fieldName,
+                            newValue: newValue
+                        ))
+                    }
+                }
             }
         }
         
-        try log(LogEntry(
-            transactionId: transactionId,
-            operationType: operationType,
-            tableName: tableName,
-            columnName: columnName,
-            metadata: metadataJSON
-        ))
+        // Log all entries in a single batch
+        try logBatch(entries)
+        
+        Task {
+            await sendUnsynchronized()
+        }
     }
     
-    /// Log data change from a ChangedObject (granular field-level logging)
-    public func logDataChange(
-        transactionId: UUID,
-        change: ChangedObject
-    ) throws {
-        switch change.status {
-        case .created:
-            // Log the row creation
-            try log(LogEntry(
-                transactionId: transactionId,
-                operationType: .rowCreated,
-                tableName: change.table,
-                objectId: change.objectId
-            ))
-            
-            // Log each field value as a separate field update
-            if let updatedFields = change.updatedFields {
-                for (fieldName, value) in updatedFields {
-                    try log(LogEntry(
-                        transactionId: transactionId,
-                        operationType: .fieldUpdated,
-                        tableName: change.table,
-                        objectId: change.objectId,
-                        columnName: fieldName,
-                        newValue: value
-                    ))
-                }
-            }
-            
-        case .deleted:
-            // Log the row deletion
-            try log(LogEntry(
-                transactionId: transactionId,
-                operationType: .rowDeleted,
-                tableName: change.table,
-                objectId: change.objectId
-            ))
-            
-        case .updated:
-            // Log each field change separately
-            if let updatedFields = change.updatedFields {
-                for (fieldName, newValue) in updatedFields {
-                    try log(LogEntry(
-                        transactionId: transactionId,
-                        operationType: .fieldUpdated,
-                        tableName: change.table,
-                        objectId: change.objectId,
-                        columnName: fieldName,
-                        newValue: newValue
-                    ))
-                }
-            }
+    /// Represents a schema change operation to be logged
+    public struct SchemaChange: Sendable {
+        public let operationType: OperationType
+        public let tableName: String
+        public let columnName: String?
+        public let metadata: [String: any Sendable]?
+        
+        public init(
+            operationType: OperationType,
+            tableName: String,
+            columnName: String? = nil,
+            metadata: [String: any Sendable]? = nil
+        ) {
+            self.operationType = operationType
+            self.tableName = tableName
+            self.columnName = columnName
+            self.metadata = metadata
         }
+    }
+    
+    private func getEntriesToSend() async throws -> [LogEntry]
+    {
+        let sql = """
+        SELECT 
+            id, timestamp, transaction_id, operation_type,
+            table_name, object_id, column_name, new_value, metadata,
+            user, synchronized_index, applied_locally
+        FROM operation_log
+        WHERE synchronized_index IS NULL
+        ORDER BY timestamp ASC
+        """
+        
+        var statement: OpaquePointer?
+        let prepareResult = sqlite3_prepare_v2(connectionHandle, sql, -1, &statement, nil)
+        defer { sqlite3_finalize(statement) }
+        
+        guard let statement, prepareResult == SQLiteStatus.ok else {
+            let errmsg = String(cString: sqlite3_errmsg(connectionHandle))
+            throw Error.failedToLog(errmsg)
+        }
+        
+        var entries: [LogEntry] = []
+        
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let id = UUID(uuidString: String(cString: sqlite3_column_text(statement, 0))),
+                  let transactionId = UUID(uuidString: String(cString: sqlite3_column_text(statement, 2))),
+                  let operationType = OperationType(rawValue: String(cString: sqlite3_column_text(statement, 3)))
+            else {
+                continue
+            }
+            
+            let timestamp = Date(timeIntervalSince1970: sqlite3_column_double(statement, 1))
+            
+            let tableName = sqlite3_column_type(statement, 4) != SQLITE_NULL
+                ? String(cString: sqlite3_column_text(statement, 4))
+                : nil
+            
+            let objectId = sqlite3_column_type(statement, 5) != SQLITE_NULL
+                ? UUID(uuidString: String(cString: sqlite3_column_text(statement, 5)))
+                : nil
+            
+            let columnName = sqlite3_column_type(statement, 6) != SQLITE_NULL
+                ? String(cString: sqlite3_column_text(statement, 6))
+                : nil
+            
+            // Read new_value from column index 7
+            let newValue: SQLValue?
+            if sqlite3_column_type(statement, 7) != SQLITE_NULL {
+                let columnType = sqlite3_column_type(statement, 7)
+                switch columnType {
+                case SQLITE_INTEGER:
+                    newValue = .int(sqlite3_column_int64(statement, 7))
+                case SQLITE_FLOAT:
+                    newValue = .double(sqlite3_column_double(statement, 7))
+                case SQLITE_TEXT:
+                    newValue = .string(String(cString: sqlite3_column_text(statement, 7)))
+                case SQLITE_BLOB:
+                    if let blobPointer = sqlite3_column_blob(statement, 7) {
+                        let blobSize = Int(sqlite3_column_bytes(statement, 7))
+                        let data = Data(bytes: blobPointer, count: blobSize)
+                        newValue = .data(data)
+                    } else {
+                        newValue = nil
+                    }
+                case SQLITE_NULL:
+                    newValue = .null
+                default:
+                    newValue = nil
+                }
+            } else {
+                newValue = nil
+            }
+            
+            // Read metadata from column index 8
+            let metadata = sqlite3_column_type(statement, 8) != SQLITE_NULL
+                ? String(cString: sqlite3_column_text(statement, 8))
+                : nil
+            
+            // Read user from column index 9
+            let user = sqlite3_column_type(statement, 9) != SQLITE_NULL
+                ? String(cString: sqlite3_column_text(statement, 9))
+                : nil
+            
+            // Read synchronized_index from column index 10
+            let synchronizedIndex = sqlite3_column_type(statement, 10) != SQLITE_NULL
+                ? sqlite3_column_int64(statement, 10)
+                : nil
+            
+            // Read applied_locally from column index 11
+            let appliedLocally = sqlite3_column_type(statement, 11) != SQLITE_NULL
+                ? sqlite3_column_int64(statement, 11) != 0
+                : false
+            
+            entries.append(LogEntry(
+                id: id,
+                timestamp: timestamp,
+                transactionId: transactionId,
+                operationType: operationType,
+                tableName: tableName,
+                objectId: objectId,
+                columnName: columnName,
+                newValue: newValue,
+                metadata: metadata,
+                user: user,
+                synchronizedIndex: synchronizedIndex,
+                appliedLocally: appliedLocally
+            ))
+        }
+        
+        return entries
     }
     
     public func getEntriesToApply() async throws -> [LogEntry]
     {
-        // TODO: Get all entries marked applied_locally == false that are either 1) Schema upgrade entries or 2) the most recent value update entry for a specific table and field
+        // Get all entries marked applied_locally == false that are either:
+        // 1) Schema upgrade entries (table_created, column_added, index_created, index_dropped)
+        // 2) Row creation/deletion entries
+        // 3) The most recent field update entry for each specific table/object/column combination
+        
+        let sql = """
+        WITH ranked_updates AS (
+            SELECT *,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY table_name, object_id, column_name 
+                       ORDER BY timestamp DESC
+                   ) as rn
+            FROM operation_log
+            WHERE applied_locally = 0
+        )
+        SELECT 
+            id, timestamp, transaction_id, operation_type,
+            table_name, object_id, column_name, new_value, metadata,
+            user, synchronized_index, applied_locally
+        FROM ranked_updates
+        WHERE 
+            operation_type IN ('table_created', 'column_added', 'index_created', 'index_dropped', 'row_created', 'row_deleted')
+            OR (operation_type = 'field_updated' AND rn = 1)
+        ORDER BY timestamp ASC
+        """
+        
+        var statement: OpaquePointer?
+        let prepareResult = sqlite3_prepare_v2(connectionHandle, sql, -1, &statement, nil)
+        defer { sqlite3_finalize(statement) }
+        
+        guard let statement, prepareResult == SQLiteStatus.ok else {
+            let errmsg = String(cString: sqlite3_errmsg(connectionHandle))
+            throw Error.failedToLog(errmsg)
+        }
+        
+        var entries: [LogEntry] = []
+        
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let id = UUID(uuidString: String(cString: sqlite3_column_text(statement, 0))),
+                  let transactionId = UUID(uuidString: String(cString: sqlite3_column_text(statement, 2))),
+                  let operationType = OperationType(rawValue: String(cString: sqlite3_column_text(statement, 3)))
+            else {
+                continue
+            }
+            
+            let timestamp = Date(timeIntervalSince1970: sqlite3_column_double(statement, 1))
+            
+            let tableName = sqlite3_column_type(statement, 4) != SQLITE_NULL
+                ? String(cString: sqlite3_column_text(statement, 4))
+                : nil
+            
+            let objectId = sqlite3_column_type(statement, 5) != SQLITE_NULL
+                ? UUID(uuidString: String(cString: sqlite3_column_text(statement, 5)))
+                : nil
+            
+            let columnName = sqlite3_column_type(statement, 6) != SQLITE_NULL
+                ? String(cString: sqlite3_column_text(statement, 6))
+                : nil
+            
+            // Read new_value from column index 7
+            let newValue: SQLValue?
+            if sqlite3_column_type(statement, 7) != SQLITE_NULL {
+                let columnType = sqlite3_column_type(statement, 7)
+                switch columnType {
+                case SQLITE_INTEGER:
+                    newValue = .int(sqlite3_column_int64(statement, 7))
+                case SQLITE_FLOAT:
+                    newValue = .double(sqlite3_column_double(statement, 7))
+                case SQLITE_TEXT:
+                    newValue = .string(String(cString: sqlite3_column_text(statement, 7)))
+                case SQLITE_BLOB:
+                    if let blobPointer = sqlite3_column_blob(statement, 7) {
+                        let blobSize = Int(sqlite3_column_bytes(statement, 7))
+                        let data = Data(bytes: blobPointer, count: blobSize)
+                        newValue = .data(data)
+                    } else {
+                        newValue = nil
+                    }
+                case SQLITE_NULL:
+                    newValue = .null
+                default:
+                    newValue = nil
+                }
+            } else {
+                newValue = nil
+            }
+            
+            // Read metadata from column index 8
+            let metadata = sqlite3_column_type(statement, 8) != SQLITE_NULL
+                ? String(cString: sqlite3_column_text(statement, 8))
+                : nil
+            
+            // Read user from column index 9
+            let user = sqlite3_column_type(statement, 9) != SQLITE_NULL
+                ? String(cString: sqlite3_column_text(statement, 9))
+                : nil
+            
+            // Read synchronized_index from column index 10
+            let synchronizedIndex = sqlite3_column_type(statement, 10) != SQLITE_NULL
+                ? sqlite3_column_int64(statement, 10)
+                : nil
+            
+            // Read applied_locally from column index 11
+            let appliedLocally = sqlite3_column_type(statement, 11) != SQLITE_NULL
+                ? sqlite3_column_int64(statement, 11) != 0
+                : false
+            
+            entries.append(LogEntry(
+                id: id,
+                timestamp: timestamp,
+                transactionId: transactionId,
+                operationType: operationType,
+                tableName: tableName,
+                objectId: objectId,
+                columnName: columnName,
+                newValue: newValue,
+                metadata: metadata,
+                user: user,
+                synchronizedIndex: synchronizedIndex,
+                appliedLocally: appliedLocally
+            ))
+        }
+        
+        return entries
     }
 
         
-        /// Retrieve log entries within a date range
+    /// Retrieve log entries within a date range
     public func getEntries(
         from startDate: Date? = nil,
         to endDate: Date? = nil,
@@ -451,34 +860,53 @@ public actor DatabaseLogger
                 ? String(cString: sqlite3_column_text(statement, 6))
                 : nil
             
-            // For field_updated operations, read from metadata column
-            // For other operations, metadata contains schema metadata or other info
+            // Read new_value from column index 7
             let newValue: SQLValue?
-            let metadata: String?
-            
-            if operationType == .fieldUpdated {
-                // Read value from metadata column (column index 7)
-                if sqlite3_column_type(statement, 7) != SQLITE_NULL {
-                    let jsonString = String(cString: sqlite3_column_text(statement, 7))
-                    let decoder = JSONDecoder()
-                    if let jsonData = jsonString.data(using: .utf8),
-                       let sqlValue = try? decoder.decode(SQLValue.self, from: jsonData) {
-                        newValue = sqlValue
+            if sqlite3_column_type(statement, 7) != SQLITE_NULL {
+                let columnType = sqlite3_column_type(statement, 7)
+                switch columnType {
+                case SQLITE_INTEGER:
+                    newValue = .int(sqlite3_column_int64(statement, 7))
+                case SQLITE_FLOAT:
+                    newValue = .double(sqlite3_column_double(statement, 7))
+                case SQLITE_TEXT:
+                    newValue = .string(String(cString: sqlite3_column_text(statement, 7)))
+                case SQLITE_BLOB:
+                    if let blobPointer = sqlite3_column_blob(statement, 7) {
+                        let blobSize = Int(sqlite3_column_bytes(statement, 7))
+                        let data = Data(bytes: blobPointer, count: blobSize)
+                        newValue = .data(data)
                     } else {
                         newValue = nil
                     }
-                } else {
+                case SQLITE_NULL:
+                    newValue = .null
+                default:
                     newValue = nil
                 }
-                metadata = nil // metadata is used for the value, not for metadata itself
             } else {
-                // For other operation types, use original behavior
                 newValue = nil
-                
-                metadata = sqlite3_column_type(statement, 7) != SQLITE_NULL
-                    ? String(cString: sqlite3_column_text(statement, 7))
-                    : nil
             }
+            
+            // Read metadata from column index 8
+            let metadata = sqlite3_column_type(statement, 8) != SQLITE_NULL
+                ? String(cString: sqlite3_column_text(statement, 8))
+                : nil
+            
+            // Read user from column index 9
+            let user = sqlite3_column_type(statement, 9) != SQLITE_NULL
+                ? String(cString: sqlite3_column_text(statement, 9))
+                : nil
+            
+            // Read synchronized_index from column index 10
+            let synchronizedIndex = sqlite3_column_type(statement, 10) != SQLITE_NULL
+                ? sqlite3_column_int64(statement, 10)
+                : nil
+            
+            // Read applied_locally from column index 11
+            let appliedLocally = sqlite3_column_type(statement, 11) != SQLITE_NULL
+                ? sqlite3_column_int64(statement, 11) != 0
+                : false
             
             entries.append(LogEntry(
                 id: id,
@@ -489,7 +917,10 @@ public actor DatabaseLogger
                 objectId: objectId,
                 columnName: columnName,
                 newValue: newValue,
-                metadata: metadata
+                metadata: metadata,
+                user: user,
+                synchronizedIndex: synchronizedIndex,
+                appliedLocally: appliedLocally
             ))
         }
         

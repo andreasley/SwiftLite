@@ -26,6 +26,7 @@ public actor Database: Observable
     // Logging for distributed sync
     public private(set) var logger: DatabaseLogger?
     internal var currentTransactionId: UUID?
+    internal var pendingSchemaChanges: [DatabaseLogger.SchemaChange] = []
 
     public init(storage: StorageType, cacheSizeLimit: CacheSize? = nil) async throws
     {
@@ -122,6 +123,7 @@ public actor Database: Observable
         try await gate.run {
             let transactionId = UUID()
             currentTransactionId = transactionId
+            pendingSchemaChanges = []
             
             print("▶️ BEGINNING SCHEMA UPDATE TRANSACTION")
             try self.run("BEGIN")
@@ -142,16 +144,26 @@ public actor Database: Observable
                 }
                 try self.run("COMMIT")
                 print("✅ COMMITTED SCHEMA UPDATE TRANSACTION")
-                // Transaction succeeded - logging happened during operations
+                
+                // Transaction succeeded - log all schema changes in a batch
+                if !pendingSchemaChanges.isEmpty {
+                    try? await logger?.logTransactionBatch(
+                        transactionId: transactionId,
+                        schemaChanges: pendingSchemaChanges,
+                        dataChanges: []
+                    )
+                }
             } catch {
                 try? self.run("ROLLBACK")
                 print("✴️ ROLLED BACK SCHEMA UPDATE TRANSACTION")
                 // Failed transaction - don't log, just clean up
                 currentTransactionId = nil
+                pendingSchemaChanges = []
                 throw error
             }
             
             currentTransactionId = nil
+            pendingSchemaChanges = []
         }
         
         for tablesWithoutMatchingModel in tablesWithoutMatchingModels {
@@ -441,10 +453,12 @@ public actor Database: Observable
                 print("✅ COMMITTED WRITE TRANSACTION")
                 transactionCompletedSuccessfully = true
                 
-                // Transaction succeeded - now log all the changes
-                for object in changeset.changes {
-                    try? await logger?.logDataChange(transactionId: transactionId, change: object)
-                }
+                // Transaction succeeded - log all data changes in a batch
+                try? await logger?.logTransactionBatch(
+                    transactionId: transactionId,
+                    schemaChanges: [],
+                    dataChanges: changeset.changes
+                )
             } catch {
                 try? self.run("ROLLBACK")
                 print("✴️ ROLLED BACK WRITE TRANSACTION")

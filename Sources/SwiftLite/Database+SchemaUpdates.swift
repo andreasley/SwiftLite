@@ -80,14 +80,15 @@ extension Database
                 let alterStatement = "ALTER TABLE \"\(table.name)\" ADD COLUMN \"\(column.name)\" \(column.storageClass.rawValue.uppercased())"
                 try run(alterStatement)
                 
-                // Log column addition
-                if let transactionId = currentTransactionId {
-                    try? await logger?.logSchemaChange(
-                        transactionId: transactionId,
-                        operationType: .columnAdded,
-                        tableName: table.name,
-                        columnName: column.name,
-                        metadata: ["storageClass": column.storageClass.rawValue]
+                // Collect column addition for batch logging
+                if currentTransactionId != nil {
+                    pendingSchemaChanges.append(
+                        DatabaseLogger.SchemaChange(
+                            operationType: .columnAdded,
+                            tableName: table.name,
+                            columnName: column.name,
+                            metadata: ["storageClass": column.storageClass.rawValue]
+                        )
                     )
                 }
             }
@@ -97,13 +98,14 @@ extension Database
                 print("🗑️ Dropping index '\(index.name)'")
                 try run("DROP INDEX \"\(index.name)\"")
                 
-                // Log index removal
-                if let transactionId = currentTransactionId {
-                    try? await logger?.logSchemaChange(
-                        transactionId: transactionId,
-                        operationType: .indexDropped,
-                        tableName: table.name,
-                        metadata: ["indexName": index.name]
+                // Collect index removal for batch logging
+                if currentTransactionId != nil {
+                    pendingSchemaChanges.append(
+                        DatabaseLogger.SchemaChange(
+                            operationType: .indexDropped,
+                            tableName: table.name,
+                            metadata: ["indexName": index.name]
+                        )
                     )
                 }
             }
@@ -113,17 +115,18 @@ extension Database
                 let createIndexStatement = "CREATE \(index.isUnique ? "UNIQUE " : "")INDEX \"\(index.name)\" ON \"\(table.name)\"(\(index.columns.joined(separator: ", ")))"
                 try run(createIndexStatement)
                 
-                // Log index creation
-                if let transactionId = currentTransactionId {
-                    try? await logger?.logSchemaChange(
-                        transactionId: transactionId,
-                        operationType: .indexCreated,
-                        tableName: table.name,
-                        metadata: [
-                            "indexName": index.name,
-                            "isUnique": index.isUnique,
-                            "columns": index.columns
-                        ]
+                // Collect index creation for batch logging
+                if currentTransactionId != nil {
+                    pendingSchemaChanges.append(
+                        DatabaseLogger.SchemaChange(
+                            operationType: .indexCreated,
+                            tableName: table.name,
+                            metadata: [
+                                "indexName": index.name,
+                                "isUnique": index.isUnique,
+                                "columns": index.columns
+                            ]
+                        )
                     )
                 }
             }
@@ -137,17 +140,18 @@ extension Database
         print(createTableStatement)
         try self.run(createTableStatement)
         
-        // Log table creation (granular: just the table itself)
-        if let transactionId = currentTransactionId {
-            try? await logger?.logSchemaChange(
-                transactionId: transactionId,
-                operationType: .tableCreated,
-                tableName: table.name
+        // Collect table creation for batch logging
+        if currentTransactionId != nil {
+            pendingSchemaChanges.append(
+                DatabaseLogger.SchemaChange(
+                    operationType: .tableCreated,
+                    tableName: table.name
+                )
             )
             
-            // Log each column addition separately
+            // Collect each column addition separately
             for column in table.columns {
-                var metadata: [String: String] = ["storageClass": column.storageClass.rawValue]
+                var metadata: [String: any Sendable] = ["storageClass": column.storageClass.rawValue]
                 
                 // Include referenced table if this column has a foreign key
                 if let referencedTable = column.referencedTable {
@@ -155,12 +159,13 @@ extension Database
                     metadata["referencedColumn"] = "id"
                 }
                 
-                try? await logger?.logSchemaChange(
-                    transactionId: transactionId,
-                    operationType: .columnAdded,
-                    tableName: table.name,
-                    columnName: column.name,
-                    metadata: metadata
+                pendingSchemaChanges.append(
+                    DatabaseLogger.SchemaChange(
+                        operationType: .columnAdded,
+                        tableName: table.name,
+                        columnName: column.name,
+                        metadata: metadata
+                    )
                 )
             }
         }
@@ -170,18 +175,19 @@ extension Database
             try self.run(createIndexStatement)
         }
         
-        // Log index creations
-        if let transactionId = currentTransactionId {
+        // Collect index creations for batch logging
+        if currentTransactionId != nil {
             for index in table.indexes {
-                try? await logger?.logSchemaChange(
-                    transactionId: transactionId,
-                    operationType: .indexCreated,
-                    tableName: table.name,
-                    metadata: [
-                        "indexName": index.name,
-                        "isUnique": index.isUnique,
-                        "columns": index.columns
-                    ]
+                pendingSchemaChanges.append(
+                    DatabaseLogger.SchemaChange(
+                        operationType: .indexCreated,
+                        tableName: table.name,
+                        metadata: [
+                            "indexName": index.name,
+                            "isUnique": index.isUnique,
+                            "columns": index.columns
+                        ]
+                    )
                 )
             }
         }
