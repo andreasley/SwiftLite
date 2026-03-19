@@ -92,6 +92,7 @@ public actor DatabaseLogger
     
     private let connectionHandle: OpaquePointer
     private var isClosed = false
+    private var isFetching = false
     public private(set) var fatalError: Swift.Error? {
         didSet {
             print("Fatal error in DatabaseLogger", fatalError?.localizedDescription ?? "")
@@ -101,6 +102,7 @@ public actor DatabaseLogger
     private let logFileURL: URL
     private let transport: SyncTransport
     public private(set) var highestSynchronizedIndex: Int64 = 0
+    public private(set) var unsynchronizedCount: Int64 = 0
 
     private(set) weak var database: Database!
     
@@ -128,19 +130,23 @@ public actor DatabaseLogger
         try initializeSchema()
         
         self.highestSynchronizedIndex = try getHighestSynchronizedIndex()
+        self.unsynchronizedCount = try getUnsynchronizedCount()
 
-        await transport.registerIndexIncreaseCallback { [weak self] highestIndex in
-            guard let self else { return }
-            await self.fetchAndUpdate()
-        }
-        
         print("📝 Database logger initialized at \(logFileURL.path)")
         print("Starting log from index \(self.highestSynchronizedIndex)")
+        print("Number of unsynchronized log entries: \(self.unsynchronizedCount)")
     }
     
     func setDatabase(_ database: Database) async
     {
         self.database = database
+
+        await transport.registerIndexIncreaseCallback { [weak self] highestIndex in
+            guard let self else { return }
+            let highestSynchronizedIndex = await self.highestSynchronizedIndex
+            guard highestIndex > highestSynchronizedIndex else { return }
+            await self.fetchAndUpdate()
+        }
 
         // Do initial sync here, so the most recent changes are already integrated into the database when the `Database` initializer completes
         await fetchAndUpdate()
@@ -148,6 +154,10 @@ public actor DatabaseLogger
     
     private func fetchAndUpdate() async
     {
+        guard !isFetching else { return }
+        isFetching = true
+        defer { isFetching = false }
+        
         do {
             guard !isClosed else { throw Error.loggerIsCloser }
 
@@ -155,6 +165,8 @@ public actor DatabaseLogger
             // TODO: publish progress information somewhere
             
             let newEntries = await transport.getEntries(from: highestSynchronizedIndex)
+
+            print("Received \(newEntries.count) entries to apply")
 
             for entry in newEntries {
                 try log(entry)
@@ -166,8 +178,9 @@ public actor DatabaseLogger
             
             // TODO: This might be slow for initial sync; do batches instead? Entries belonging to the same transaction should be sequential already.
             let groupedEntriesToApply = Dictionary(grouping: entriesToApply) { $0.transactionId }
-            for (transactionId, entriesForTransaction) in groupedEntriesToApply.sorted(by: { $0.value.first!.timestamp < $1.value.first!.timestamp }) {
-                try await database.processTransaction(entries: entriesForTransaction, transactionId: transactionId)
+            for (transactionId, entriesForTransaction) in groupedEntriesToApply.sorted(by: { ($0.value.first?.synchronizedIndex ?? 0) < ($1.value.first?.synchronizedIndex ?? 0) }) {
+                let sortedEntriesForTransaction = entriesForTransaction.sorted(by: { ($0.synchronizedIndex ?? 0) < ($1.synchronizedIndex ?? 0) })
+                try await database.processTransaction(entries: sortedEntriesForTransaction, transactionId: transactionId)
                 try markEntriesAsAppliedLocally(transactionId: transactionId)
             }
         } catch {
@@ -181,6 +194,7 @@ public actor DatabaseLogger
     {
         do {
             let entries = try await getEntriesToSend()
+            print("Found \(entries.count) entries to send to sync")
             let updatedSynchronizationIndexes = await transport.sendEntries(entries: entries)
             try updateEntriesWithSynchronizationIndex(updatedSynchronizationIndexes)
             self.highestSynchronizedIndex = updatedSynchronizationIndexes.reduce(highestSynchronizedIndex) { max($0, $1.value) }
@@ -453,7 +467,32 @@ public actor DatabaseLogger
         
         return sqlite3_column_int64(statement, 0)
     }
+
     
+    public func getUnsynchronizedCount() throws -> Int64 {
+        let sql = "SELECT COUNT(*) FROM operation_log WHERE synchronized_index IS NULL"
+        
+        var statement: OpaquePointer?
+        let prepareResult = sqlite3_prepare_v2(connectionHandle, sql, -1, &statement, nil)
+        defer { sqlite3_finalize(statement) }
+        
+        guard let statement, prepareResult == SQLiteStatus.ok else {
+            let errmsg = String(cString: sqlite3_errmsg(connectionHandle))
+            throw Error.failedToLog(errmsg)
+        }
+        
+        guard sqlite3_step(statement) == SQLITE_ROW else {
+            throw Error.failedToFetch(sql: sql)
+        }
+        
+        // Check if the result is NULL (no entries with synchronized_index) = fresh database
+        if sqlite3_column_type(statement, 0) == SQLITE_NULL {
+            return 0
+        }
+        
+        return sqlite3_column_int64(statement, 0)
+    }
+
     
     /// Log a complete transaction's worth of changes in a single batch operation.
     /// This is more efficient than calling individual log methods.

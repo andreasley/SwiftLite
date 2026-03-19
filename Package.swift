@@ -24,9 +24,15 @@ let package = Package(
             name: "SwiftLiteTesterHeadless",
             targets: ["SwiftLiteTesterHeadless"]
         ),
+        .executable(
+            name: "SwiftLiteTesterWebSocketSyncServer",
+            targets: ["SwiftLiteTesterWebSocketSyncServer"]
+        ),
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "602.0.0"),
+        .package(url: "https://github.com/hummingbird-project/hummingbird", from: "2.21.0"),
+        .package(url: "https://github.com/hummingbird-project/hummingbird-websocket", from: "2.6.0"),
     ],
     targets: [
         .macro(
@@ -45,6 +51,15 @@ let package = Package(
         .executableTarget(name: "SwiftLiteTesterLocal", dependencies: ["SwiftLite", "SwiftLiteTestModels", "SwiftLiteTestViews"]),
         .executableTarget(name: "SwiftLiteTesterLocalSync", dependencies: ["SwiftLite", "SwiftLiteTestModels", "SwiftLiteTestViews"]),
         .executableTarget(name: "SwiftLiteTesterWebSocketSync", dependencies: ["SwiftLite", "SwiftLiteTestModels", "SwiftLiteTestViews"]),
+
+        .executableTarget(
+            name: "SwiftLiteTesterWebSocketSyncServer",
+            dependencies: [
+                "SwiftLite",
+                .product(name: "Hummingbird", package: "hummingbird"),
+                .product(name: "HummingbirdWebSocket", package: "hummingbird-websocket"),
+            ]
+        ),
 
         // A test target used to develop the macro implementation.
         .testTarget(

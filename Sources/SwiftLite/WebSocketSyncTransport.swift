@@ -15,7 +15,6 @@ public actor WebSocketSyncTransport: SyncTransport
     private var webSocketTask: URLSessionWebSocketTask?
     private let serverURL: URL
     private let session: URLSession
-    private var isListening = false
     private var reconnectTask: Task<Void, Never>?
     
     // MARK: - Database URLs
@@ -63,12 +62,6 @@ public actor WebSocketSyncTransport: SyncTransport
         // Create WebSocket task
         webSocketTask = session.webSocketTask(with: serverURL)
         webSocketTask?.resume()
-        
-        // Start listening for messages
-        if !isListening {
-            isListening = true
-            await startListening()
-        }
         
         // Send initial handshake
         do {
@@ -149,24 +142,6 @@ public actor WebSocketSyncTransport: SyncTransport
     }
     
     // MARK: - Private Methods
-    
-    private func startListening() async {
-        while isListening {
-            do {
-                guard let webSocketTask = webSocketTask else {
-                    break
-                }
-                
-                let message = try await webSocketTask.receive()
-                await handleIncomingMessage(message)
-            } catch {
-                status = .offline
-                addError(error)
-                await scheduleReconnect()
-                break
-            }
-        }
-    }
     
     private func handleIncomingMessage(_ message: URLSessionWebSocketTask.Message) async {
         do {
