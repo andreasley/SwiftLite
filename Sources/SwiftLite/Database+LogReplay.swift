@@ -185,6 +185,9 @@ extension Database
     /// Process data change log entries
     private func processDataEntries(_ entries: [DatabaseLogger.LogEntry], transactionId: UUID) async throws
     {
+        var changedObjects: [ChangedObject] = []
+        var transactionCompletedSuccessfully = false
+        
         try self.run("BEGIN")
         
         do {
@@ -225,6 +228,16 @@ extension Database
                     )
                     try run(deleteStatement.sqlStatement)
                     
+                    // Create ChangedObject for deletion
+                    let changedObject = ChangedObject(
+                        table: tableName,
+                        objectId: objectId,
+                        status: .deleted,
+                        updatedFields: nil,
+                        transactionId: transactionId
+                    )
+                    changedObjects.append(changedObject)
+                    
                 } else if hasRowCreated {
                     // Create operation - collect all field values
                     var fields: [String: SQLValue] = ["id": .string(objectId.uuidString)]
@@ -239,6 +252,16 @@ extension Database
                     
                     let insertStatement = SQLStatementPreset.Insert(table: tableName, updatedFields: fields)
                     try execute(insertStatement.sqlStatement)
+                    
+                    // Create ChangedObject for creation
+                    let changedObject = ChangedObject(
+                        table: tableName,
+                        objectId: objectId,
+                        status: .created,
+                        updatedFields: fields,
+                        transactionId: transactionId
+                    )
+                    changedObjects.append(changedObject)
                     
                 } else if !fieldUpdates.isEmpty {
                     // Update operation - apply field changes
@@ -259,16 +282,37 @@ extension Database
                             condition: SQLCondition(field: "id", value: .string(objectId.uuidString))
                         )
                         try execute(updateStatement.sqlStatement)
+                        
+                        // Create ChangedObject for update
+                        let changedObject = ChangedObject(
+                            table: tableName,
+                            objectId: objectId,
+                            status: .updated,
+                            updatedFields: fields,
+                            transactionId: transactionId
+                        )
+                        changedObjects.append(changedObject)
                     }
                 }
             }
             
             try self.run("COMMIT")
             print("✅ COMMITTED DATA REPLAY TRANSACTION")
+            transactionCompletedSuccessfully = true
         } catch {
             try? self.run("ROLLBACK")
             print("✴️ ROLLED BACK DATA REPLAY TRANSACTION")
             throw error
+        }
+        
+        // If transaction succeeded, notify all registered proxies with the changeset
+        if transactionCompletedSuccessfully && !changedObjects.isEmpty {
+            let changeset = FrozenChangeset(changes: changedObjects)
+            Task {
+                for proxy in self.notificationProxies {
+                    proxy.onChange(changeset: changeset)
+                }
+            }
         }
     }
 }
