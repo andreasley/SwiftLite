@@ -1,35 +1,34 @@
 import Foundation
 
-actor SimulatedServerSyncTransport: SyncTransport
+public actor SimulatedServerSyncTransport: SyncTransport
 {
-    private(set) var status: SyncTransportStatus = .connecting
+    public private(set) var status: SyncTransportStatus = .connecting
 
-    nonisolated let databaseIdentifier: String = "test"
-    nonisolated let clientIdentifier: String
+    public nonisolated let databaseIdentifier: String = "test"
+    public nonisolated let clientIdentifier: String
     
     private var indexIncreaseCallbacks: [IndexIncreaseHandler] = []
     private var serverLogEntries: [DatabaseLogger.LogEntry] = []
     
-    init(clientIdentifier: String) {
+    private var clientIndex = 1
+    
+    public init(clientIdentifier: String) {
         self.clientIdentifier = clientIdentifier
     }
     
-    private(set) var syncErrors: [SyncError] = []
+    public private(set) var syncErrors: [SyncError] = []
     
-    var simulatedServerDatabaseUrl: URL {
-        databaseFilesDirectoryUrl.appendingPathComponent("server.sqlite", isDirectory: false)
+    public var localDatabaseUrl: URL {
+        clientIndex += 1
+        return databaseFilesDirectoryUrl
+            .appendingPathComponent(clientIdentifier, isDirectory: false)
+            .appendingPathComponent("database\(clientIndex).sqlite", isDirectory: false)
     }
 
-    var localDatabaseUrl: URL {
+    public var localDatabaseLogUrl: URL {
         databaseFilesDirectoryUrl
             .appendingPathComponent(clientIdentifier, isDirectory: false)
-            .appendingPathComponent("database.sqlite", isDirectory: false)
-    }
-
-    var localDatabaseLogUrl: URL {
-        databaseFilesDirectoryUrl
-            .appendingPathComponent(clientIdentifier, isDirectory: false)
-            .appendingPathComponent("database.log.sqlite", isDirectory: false)
+            .appendingPathComponent("database\(clientIndex).log.sqlite", isDirectory: false)
     }
     
     var databaseFilesDirectoryUrl: URL {
@@ -39,12 +38,12 @@ actor SimulatedServerSyncTransport: SyncTransport
         return databaseFilesDirectory
     }
 
-    func connect() async
+    public func connect() async
     {
         status = .connected
     }
     
-    func sendEntries(entries: [DatabaseLogger.LogEntry]) async -> [UUID: Int64]
+    public func sendEntries(entries: [DatabaseLogger.LogEntry]) async -> [UUID: Int64]
     {
         var updatedIndexes = [UUID: Int64]()
         var nextIndex = Int64(serverLogEntries.count + 1)
@@ -68,18 +67,20 @@ actor SimulatedServerSyncTransport: SyncTransport
             updatedIndexes[entry.id] = Int64(nextIndex)
             nextIndex += 1
         }
-        for callback in indexIncreaseCallbacks {
-            await callback(Int64(serverLogEntries.count))
+        Task {
+            for callback in indexIncreaseCallbacks {
+                await callback(Int64(serverLogEntries.count))
+            }
         }
         return updatedIndexes
     }
 
-    func getEntries(from index: Int64) async -> [DatabaseLogger.LogEntry]
+    public func getEntries(from index: Int64) async -> [DatabaseLogger.LogEntry]
     {
         Array(serverLogEntries.dropFirst(Int(index)))
     }
 
-    func registerIndexIncreaseCallback(_ callback: @escaping IndexIncreaseHandler)
+    public func registerIndexIncreaseCallback(_ callback: @escaping IndexIncreaseHandler)
     {
         indexIncreaseCallbacks.append(callback)
     }

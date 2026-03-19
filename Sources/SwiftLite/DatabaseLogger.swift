@@ -73,7 +73,7 @@ public actor DatabaseLogger
             metadata: String? = nil,
             user: String? = nil,
             synchronizedIndex: Int64? = nil,
-            appliedLocally: Bool = false
+            appliedLocally: Bool
         ) {
             self.id = id
             self.timestamp = timestamp
@@ -92,10 +92,15 @@ public actor DatabaseLogger
     
     private let connectionHandle: OpaquePointer
     private var isClosed = false
-    public private(set) var fatalError: Swift.Error?
+    public private(set) var fatalError: Swift.Error? {
+        didSet {
+            print("Fatal error in DatabaseLogger", fatalError?.localizedDescription ?? "")
+        }
+    }
     private let isFirstRun: Bool
     private let logFileURL: URL
     private let transport: SyncTransport
+    public private(set) var highestSynchronizedIndex: Int64 = 0
 
     private(set) weak var database: Database!
     
@@ -122,12 +127,15 @@ public actor DatabaseLogger
         
         try initializeSchema()
         
+        self.highestSynchronizedIndex = try getHighestSynchronizedIndex()
+
         await transport.registerIndexIncreaseCallback { [weak self] highestIndex in
             guard let self else { return }
             await self.fetchAndUpdate()
         }
         
         print("📝 Database logger initialized at \(logFileURL.path)")
+        print("Starting log from index \(self.highestSynchronizedIndex)")
     }
     
     func setDatabase(_ database: Database) async
@@ -146,19 +154,21 @@ public actor DatabaseLogger
             // TODO: Stream these, so we're not stuck with 5GB of data on initial sync
             // TODO: publish progress information somewhere
             
-            let highestSynchronizedIndex = try getHighestSynchronizedIndex()
             let newEntries = await transport.getEntries(from: highestSynchronizedIndex)
 
             for entry in newEntries {
                 try log(entry)
             }
-            
+
+            self.highestSynchronizedIndex = newEntries.compactMap { $0.synchronizedIndex }.reduce(highestSynchronizedIndex) { max($0, $1) }
+
             let entriesToApply = try await getEntriesToApply()
             
             // TODO: This might be slow for initial sync; do batches instead? Entries belonging to the same transaction should be sequential already.
             let groupedEntriesToApply = Dictionary(grouping: entriesToApply) { $0.transactionId }
             for (transactionId, entriesForTransaction) in groupedEntriesToApply.sorted(by: { $0.value.first!.timestamp < $1.value.first!.timestamp }) {
                 try await database.processTransaction(entries: entriesForTransaction, transactionId: transactionId)
+                try markEntriesAsAppliedLocally(transactionId: transactionId)
             }
         } catch {
             // If we can't successfully read/write to the log, the database can't be used
@@ -173,6 +183,8 @@ public actor DatabaseLogger
             let entries = try await getEntriesToSend()
             let updatedSynchronizationIndexes = await transport.sendEntries(entries: entries)
             try updateEntriesWithSynchronizationIndex(updatedSynchronizationIndexes)
+            self.highestSynchronizedIndex = updatedSynchronizationIndexes.reduce(highestSynchronizedIndex) { max($0, $1.value) }
+            print("Updated log to index \(self.highestSynchronizedIndex)")
         } catch {
             // If we can't successfully read/write to the log, the database can't be used
             try? await database.close()
@@ -228,7 +240,7 @@ public actor DatabaseLogger
     /// Log a single operation
     public func log(_ entry: LogEntry) throws {
         let sql = """
-        INSERT INTO operation_log (
+        INSERT OR IGNORE INTO operation_log (
             id, timestamp, transaction_id, operation_type,
             table_name, object_id, column_name, new_value, metadata,
             user, synchronized_index, applied_locally
@@ -350,6 +362,38 @@ public actor DatabaseLogger
         }
     }
     
+    private func markEntriesAsAppliedLocally(transactionId: UUID) throws
+    {
+        let sql = """
+        UPDATE operation_log 
+        SET applied_locally = 1
+        WHERE transaction_id = ?
+        """
+        
+        var statement: OpaquePointer?
+        let prepareResult = sqlite3_prepare_v2(connectionHandle, sql, -1, &statement, nil)
+        defer { sqlite3_finalize(statement) }
+        
+        guard let statement, prepareResult == SQLiteStatus.ok else {
+            let errmsg = String(cString: sqlite3_errmsg(connectionHandle))
+            throw Error.failedToLog(errmsg)
+        }
+        
+        // Reset bindings for reuse
+        sqlite3_reset(statement)
+        sqlite3_clear_bindings(statement)
+        
+        // Bind transaction_id (parameter 1)
+        sqlite3_bind_text(statement, 1, transactionId.uuidString, -1, SQLITE_TRANSIENT)
+        
+        // Execute the update
+        let stepResult = sqlite3_step(statement)
+        guard stepResult == SQLITE_DONE else {
+            let errmsg = String(cString: sqlite3_errmsg(connectionHandle))
+            throw Error.failedToLog("Failed to mark entries as applied locally: \(errmsg)")
+        }
+    }
+
     private func updateEntriesWithSynchronizationIndex(_ updatedIndexes: [UUID: Int64]) throws
     {
         guard !updatedIndexes.isEmpty else { return }
@@ -417,9 +461,9 @@ public actor DatabaseLogger
             throw Error.failedToFetch(sql: sql)
         }
         
-        // Check if the result is NULL (no entries with synchronized_index)
+        // Check if the result is NULL (no entries with synchronized_index) = fresh database
         if sqlite3_column_type(statement, 0) == SQLITE_NULL {
-            throw Error.failedToFetch(sql: sql)
+            return 0
         }
         
         return sqlite3_column_int64(statement, 0)
@@ -454,7 +498,8 @@ public actor DatabaseLogger
                 operationType: schemaChange.operationType,
                 tableName: schemaChange.tableName,
                 columnName: schemaChange.columnName,
-                metadata: metadataJSON
+                metadata: metadataJSON,
+                appliedLocally: true
             ))
         }
         
@@ -467,7 +512,8 @@ public actor DatabaseLogger
                     transactionId: transactionId,
                     operationType: .rowCreated,
                     tableName: change.table,
-                    objectId: change.objectId
+                    objectId: change.objectId,
+                    appliedLocally: true
                 ))
                 
                 // Log each field value as a separate field update
@@ -479,7 +525,8 @@ public actor DatabaseLogger
                             tableName: change.table,
                             objectId: change.objectId,
                             columnName: fieldName,
-                            newValue: value
+                            newValue: value,
+                            appliedLocally: true
                         ))
                     }
                 }
@@ -490,7 +537,8 @@ public actor DatabaseLogger
                     transactionId: transactionId,
                     operationType: .rowDeleted,
                     tableName: change.table,
-                    objectId: change.objectId
+                    objectId: change.objectId,
+                    appliedLocally: true
                 ))
                 
             case .updated:
@@ -503,7 +551,8 @@ public actor DatabaseLogger
                             tableName: change.table,
                             objectId: change.objectId,
                             columnName: fieldName,
-                            newValue: newValue
+                            newValue: newValue,
+                            appliedLocally: true
                         ))
                     }
                 }
