@@ -1,30 +1,30 @@
 import SwiftLite
 import Foundation
 
-@Model nonisolated final class Car
+@Model public nonisolated final class Car
 {
-    var combinedName: String {
+    public var combinedName: String {
         name + "zzz"
     }
     
     @Stored(defaultValue: UUID())
-    let publicId: UUID
+    public let publicId: UUID
     
     @Related
-    var engine: Engine.Snapshot
+    public var engine: Engine.Snapshot
     
     @Related(onDelete: .cascade)
-    var interior: Interior?
+    public var interior: Interior?
     
     @RelatedMany(Passenger.self, onDelete: .cascade)
-    var passengers: RelatedCollection<Passenger>
+    public var passengers: RelatedCollection<Passenger>
 
     @RelatedMany(Cargo.self, onDelete: .cascade)
-    var cargo: RelatedCollection<Cargo>
+    public var cargo: RelatedCollection<Cargo>
 
     @Stored(defaultValue: "asd")
-    var name: String
+    public var name: String
     
     @Stored(defaultValue: 0, fallbackValue: 0)
-    var price: Decimal
+    public var price: Decimal
 }

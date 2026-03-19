@@ -1,8 +1,8 @@
 import SwiftLite
 import Foundation
 
-@Model final class Cargo
+@Model public final class Cargo
 {
     @Stored(defaultValue: "")
-    var name: String
+    public var name: String
 }

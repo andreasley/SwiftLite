@@ -1,18 +1,18 @@
 import SwiftUI
 import SwiftLite
+import SwiftLiteTestModels
 
 @AsyncLoadingView
-struct PassengerDetailView: View
+struct EngineDetailView: View
 {
-    @EditableObject(autosaving: false) var passenger: Passenger
+    @EditableObject(autosaving: false) var engine: Engine
     
     var body: some View {
-        EmptyView()
         Form {
-            TextField("Name", text: $passenger.name)
+            TextField("Name", text: $engine.name)
             
-            Section("Cars with this passenger") {
-                List(passenger.cars) { car in
+            Section("Cars with this engine") {
+                List(engine.cars) { car in
                     NavigationLink(destination: CarDetailView.loading(car: car)) {
                         Text(car.name)
                     }
@@ -24,10 +24,10 @@ struct PassengerDetailView: View
             Spacer()
             Button("Save") {
                 Task {
-                    try? await passenger.save()
+                    try? await engine.save()
                 }
             }
-            .disabled(!passenger._hasPendingChanges)
+            .disabled(!engine._hasPendingChanges)
         }
     }
 }

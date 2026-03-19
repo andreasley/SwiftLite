@@ -1,7 +1,7 @@
 import SwiftLite
 import Foundation
 
-@Model final class Interior
+@Model public final class Interior
 {
     @Transient
     var blubb: Int = 0

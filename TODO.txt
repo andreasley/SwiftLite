@@ -1,3 +1,4 @@
+- DatabaseLogger: Try "sendUnsynchronized()" again after the connection status of the Transport changes
 - Unique database ID to detect (in SyncTransport) a serverside full reset or wrong database at the URL
 - Test what happens to logging when saving on quit
 
@@ -18,6 +19,8 @@
 ================================================
 Backlog
 ================================================
+
+- Skip duplicate schema changes serverside (from multiple offline clients that installed an app update)? Or log them for troubleshooting anyway?
 
 - Check local time when synchronizing; disable sync if time drift is too large
 - Implement ability to only sync the most recent field values instead of the full history

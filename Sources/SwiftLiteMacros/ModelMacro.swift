@@ -36,6 +36,12 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         }
     }
     
+    private static func isPublic(_ classDecl: ClassDeclSyntax) -> Bool {
+        classDecl.modifiers.contains { modifier in
+            modifier.name.tokenKind == .keyword(.public)
+        }
+    }
+    
     private static func validateDeclaration(
         _ declaration: some DeclGroupSyntax,
         node: AttributeSyntax,
@@ -265,6 +271,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         }
         
         let className = classDecl.name.text
+        let isPublic = isPublic(classDecl)
         
         // Collect property information (same as in MemberMacro)
         let propertyInfo = try collectPropertyInfo(from: classDecl)
@@ -274,12 +281,14 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             try generateModelProtocolMethods(
                 className: className,
                 propertyInfo: propertyInfo,
-                classDecl: classDecl
+                classDecl: classDecl,
+                isPublic: isPublic
             )
             
             try generateSchemaClass(
                 className: className,
-                propertyInfo: propertyInfo
+                propertyInfo: propertyInfo,
+                isPublic: isPublic
             )
             
             // Generate RelationshipModelSchema for each @RelatedMany property
@@ -290,19 +299,21 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
                 )
             }
             
-            try generateDefaultValuesStruct(propertyInfo: propertyInfo)
+            try generateDefaultValuesStruct(propertyInfo: propertyInfo, isPublic: isPublic)
             
-            try generateFallbackValuesStruct(propertyInfo: propertyInfo)
+            try generateFallbackValuesStruct(propertyInfo: propertyInfo, isPublic: isPublic)
                         
             try generateQueryProxyStruct(
                 className: className,
-                propertyInfo: propertyInfo
+                propertyInfo: propertyInfo,
+                isPublic: isPublic
             )
             
             try generateSnapshotStruct(
                 className: className,
                 propertyInfo: propertyInfo,
-                classDecl: classDecl
+                classDecl: classDecl,
+                isPublic: isPublic
             )
         }
         
@@ -471,13 +482,15 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         
         let className = classDecl.name.text
         let propertyInfo = try collectPropertyInfo(from: classDecl)
+        let isPublic = isPublic(classDecl)
+        let publicModifier = isPublic ? "public " : ""
         
         var members: [DeclSyntax] = []
         
         // Generate metadata and editableData properties
         members.append(
             """
-            let _metadata: ModelMetadata
+            \(raw: publicModifier)let _metadata: ModelMetadata
             """
         )
         
@@ -492,20 +505,22 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         // Generate id property
         members.append(
             """
-            let id: UUID
+            \(raw: publicModifier)let id: UUID
             """
         )
                         
         // Generate first initializer (for creating new objects)
         members.append(generateCreateInitializer(
             className: className,
-            propertyInfo: propertyInfo
+            propertyInfo: propertyInfo,
+            isPublic: isPublic
         ))
         
         // Generate second initializer (for loading from database)
         members.append(generateRowInitializer(
             className: className,
-            propertyInfo: propertyInfo
+            propertyInfo: propertyInfo,
+            isPublic: isPublic
         ))
         
         members.append(try generateEditableDataClass(propertyInfo: propertyInfo, className: className))
@@ -515,8 +530,11 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         
     private static func generateCreateInitializer(
         className: String,
-        propertyInfo: PropertyInfo
+        propertyInfo: PropertyInfo,
+        isPublic: Bool
     ) -> DeclSyntax {
+        let publicModifier = isPublic ? "public " : ""
+        
         // Build parameter list
         var parameters: [String] = ["db: Database"]
         
@@ -609,7 +627,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         let bodyString = bodyLines.joined(separator: "\n        ")
         
         return """
-        init(\(raw: paramString))
+        \(raw: publicModifier)init(\(raw: paramString))
         {
             \(raw: bodyString)
         }
@@ -618,8 +636,11 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
     
     private static func generateRowInitializer(
         className: String,
-        propertyInfo: PropertyInfo
+        propertyInfo: PropertyInfo,
+        isPublic: Bool
     ) -> DeclSyntax {
+        let publicModifier = isPublic ? "public " : ""
+        
         var bodyLines: [String] = [
             "let id: UUID = try row.get(\"id\")"
         ]
@@ -691,7 +712,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         let bodyString = bodyLines.joined(separator: "\n        ")
         
         return """
-        init(db: Database, row: Database.Row) async throws
+        \(raw: publicModifier)init(db: Database, row: Database.Row) async throws
         {
             \(raw: bodyString)
         }
@@ -703,8 +724,11 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
     private static func generateModelProtocolMethods(
         className: String,
         propertyInfo: PropertyInfo,
-        classDecl: ClassDeclSyntax
+        classDecl: ClassDeclSyntax,
+        isPublic: Bool
     ) throws -> DeclSyntax {
+        let publicModifier = isPublic ? "public " : ""
+        
         var methods = [String]()
         
         // _beginAutoupdating
@@ -728,7 +752,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         
         methods.append("""
         @MainActor
-        func _beginAutoupdating()
+        \(publicModifier)func _beginAutoupdating()
         {
             \(autoupdatingCalls.joined(separator: "\n    "))
         }
@@ -754,7 +778,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         }
         
         methods.append("""
-        var _hasPendingChanges: Bool {
+        \(publicModifier)var _hasPendingChanges: Bool {
             let hasChanges = [
                 \(hasPendingChecks.joined(separator: ",\n        "))
             ]
@@ -783,7 +807,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         }
         
         methods.append("""
-        func _beginSaving(changeset: Changeset) throws
+        \(publicModifier)func _beginSaving(changeset: Changeset) throws
         {
             \(beginSavingCalls.joined(separator: "\n    "))
         }
@@ -811,7 +835,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         }
         
         methods.append("""
-        func _endSaving(success: Bool, transactionId: UUID)
+        \(publicModifier)func _endSaving(success: Bool, transactionId: UUID)
         {
             let wasNew = _metadata.objectStatus == .new
             \(endSavingCalls.joined(separator: "\n    "))
@@ -831,7 +855,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         }
         
         methods.append("""
-        func _update(with changes: ChangedObject) async throws
+        \(publicModifier)func _update(with changes: ChangedObject) async throws
         {
             _metadata._update(with: changes)
         """)
@@ -864,7 +888,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         }
         
         methods.append("""
-        func _cascadeDeletion()
+        \(publicModifier)func _cascadeDeletion()
         {
             \(cascadeCalls.joined(separator: "\n    "))
         }
@@ -877,8 +901,11 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
     
     private static func generateSchemaClass(
         className: String,
-        propertyInfo: PropertyInfo
+        propertyInfo: PropertyInfo,
+        isPublic: Bool
     ) throws -> DeclSyntax {
+        let publicModifier = isPublic ? "public " : ""
+        
         var relatedTypes = [String]()
         for prop in propertyInfo.related {
             let baseType = prop.type.replacingOccurrences(of: "?", with: "")
@@ -890,12 +917,12 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         }
         
         var columns = ["Columns.id"]
-        var columnDefs = ["static let id = RequiredSchema.Column(name: \"id\", type: UUID.self)"]
+        var columnDefs = ["\(publicModifier)static let id = RequiredSchema.Column(name: \"id\", type: UUID.self)"]
         var indexes = [String]()
         
         for prop in propertyInfo.stored {
             columns.append("Columns.\(prop.name)")
-            columnDefs.append("static let \(prop.name) = RequiredSchema.Column(name: \"\(prop.name)\", type: \(prop.type).self)")
+            columnDefs.append("\(publicModifier)static let \(prop.name) = RequiredSchema.Column(name: \"\(prop.name)\", type: \(prop.type).self)")
             
             // Add index if isIndexed is true or isUnique is true
             if prop.isIndexed {
@@ -909,23 +936,23 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         for prop in propertyInfo.related {
             let baseType = prop.type.replacingOccurrences(of: "?", with: "")
             columns.append("Columns.\(prop.name)")
-            columnDefs.append("static let \(prop.name) = RequiredSchema.Column(name: \"\(prop.name)\", type: \(baseType).self, referencedTable: \(baseType).Model.Schema.table.name)")
+            columnDefs.append("\(publicModifier)static let \(prop.name) = RequiredSchema.Column(name: \"\(prop.name)\", type: \(baseType).self, referencedTable: \(baseType).Model.Schema.table.name)")
             indexes.append(".init(name: \"idx_\(className)_\(prop.name)\", isUnique: false, columns: [Columns.\(prop.name)])")
         }
         
         return """
-        final class Schema: ModelSchema
+        \(raw: publicModifier)final class Schema: ModelSchema
         {
-            typealias Model = \(raw: className)
+            \(raw: publicModifier)typealias Model = \(raw: className)
             
-            static let related: [any ModelSchema.Type] = [\(raw: relatedTypes.joined(separator: ", "))]
+            \(raw: publicModifier)static let related: [any ModelSchema.Type] = [\(raw: relatedTypes.joined(separator: ", "))]
             
-            struct Columns
+            \(raw: publicModifier)struct Columns
             {
                 \(raw: columnDefs.joined(separator: "\n        "))
             }
         
-            static let table = RequiredSchema.Table(name: "\(raw: className)", columns: [
+            \(raw: publicModifier)static let table = RequiredSchema.Table(name: "\(raw: className)", columns: [
                 \(raw: columns.joined(separator: ",\n        "))
             ], indexes: [
                 \(raw: indexes.joined(separator: ",\n        "))
@@ -955,44 +982,48 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         """
     }
     
-    private static func generateDefaultValuesStruct(propertyInfo: PropertyInfo) throws -> DeclSyntax {
+    private static func generateDefaultValuesStruct(propertyInfo: PropertyInfo, isPublic: Bool = false) throws -> DeclSyntax {
+        let publicModifier = isPublic ? "public " : ""
+        
         var defaultVars = [String]()
         
         for prop in propertyInfo.stored where prop.hasDefault {
             if let defaultValue = prop.defaultValue {
-                defaultVars.append("static var \(prop.name): \(prop.type) { \(defaultValue) }")
+                defaultVars.append("\(publicModifier)static var \(prop.name): \(prop.type) { \(defaultValue) }")
             }
         }
         
         for prop in propertyInfo.related where prop.isOptional {
-            defaultVars.append("static var \(prop.name): \(prop.type) { nil }")
+            defaultVars.append("\(publicModifier)static var \(prop.name): \(prop.type) { nil }")
         }
         
         return """
-        struct DefaultValues
+        \(raw: publicModifier)struct DefaultValues
         {
             \(raw: defaultVars.joined(separator: "\n    "))
         }
         """
     }
     
-    private static func generateFallbackValuesStruct(propertyInfo: PropertyInfo) throws -> DeclSyntax {
+    private static func generateFallbackValuesStruct(propertyInfo: PropertyInfo, isPublic: Bool = false) throws -> DeclSyntax {
+        let publicModifier = isPublic ? "public " : ""
+        
         var fallbackVars = [String]()
         
         for prop in propertyInfo.stored {
             if let fallbackValue = prop.fallbackValue {
-                fallbackVars.append("static var \(prop.name): \(prop.type) { \(fallbackValue) }")
+                fallbackVars.append("\(publicModifier)static var \(prop.name): \(prop.type) { \(fallbackValue) }")
             }
         }
         
         guard !fallbackVars.isEmpty else {
             return """
-            struct FallbackValues {}
+            \(raw: publicModifier)struct FallbackValues {}
             """
         }
         
         return """
-        struct FallbackValues
+        \(raw: publicModifier)struct FallbackValues
         {
             \(raw: fallbackVars.joined(separator: "\n    "))
         }
@@ -1079,27 +1110,30 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
     
     private static func generateQueryProxyStruct(
         className: String,
-        propertyInfo: PropertyInfo
+        propertyInfo: PropertyInfo,
+        isPublic: Bool
     ) throws -> DeclSyntax {
-        var properties = ["let id: UUID"]
+        let publicModifier = isPublic ? "public " : ""
+        
+        var properties = ["\(publicModifier)let id: UUID"]
         var cases = ["case \\.id: \"id\""]
         
         for prop in propertyInfo.stored {
-            properties.append("let \(prop.name): \(prop.type)")
+            properties.append("\(publicModifier)let \(prop.name): \(prop.type)")
             cases.append("case \\.\(prop.name): \"\(prop.name)\"")
         }
         
         for prop in propertyInfo.related {
-            properties.append("let \(prop.name): \(prop.type)")
+            properties.append("\(publicModifier)let \(prop.name): \(prop.type)")
             cases.append("case \\.\(prop.name): \"\(prop.name)\"")
         }
         
         return """
-        nonisolated struct QueryProxy: WithNamedKeyPaths
+        nonisolated \(raw: publicModifier)struct QueryProxy: WithNamedKeyPaths
         {
             \(raw: properties.joined(separator: "\n    "))
         
-            static func nameForKeyPath(keyPath: PartialKeyPath<Self>) -> String
+            \(raw: publicModifier)static func nameForKeyPath(keyPath: PartialKeyPath<Self>) -> String
             {
                 switch keyPath {
                 \(raw: cases.joined(separator: "\n        "))
@@ -1113,27 +1147,30 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
     private static func generateSnapshotStruct(
         className: String,
         propertyInfo: PropertyInfo,
-        classDecl: ClassDeclSyntax
+        classDecl: ClassDeclSyntax,
+        isPublic: Bool
     ) throws -> DeclSyntax {
+        let publicModifier = isPublic ? "public " : ""
+        
         var computedProps = [String]()
         for prop in propertyInfo.computed {
             computedProps.append("""
-            var \(prop.name): String {
+            \(publicModifier)var \(prop.name): String {
                 \(prop.body)
             }
             """)
         }
         
         var storedProps = [
-            "let _metadata: SnapshotMetadata<Self>",
+            "\(publicModifier)let _metadata: SnapshotMetadata<Self>",
             "",
-            "let id: UUID"
+            "\(publicModifier)let id: UUID"
         ]
         
         var rowExtractions = ["let id: UUID = try row.get(\"id\")", "", "self._metadata = SnapshotMetadata<Self>(id: id, db: db)", "", "self.id = id"]
         
         for prop in propertyInfo.stored {
-            storedProps.append("let \(prop.name): \(prop.type)")
+            storedProps.append("\(publicModifier)let \(prop.name): \(prop.type)")
             if prop.fallbackValue != nil {
                 rowExtractions.append("self.\(prop.name) = try row.get(\"\(prop.name)\", fallback: FallbackValues.\(prop.name))")
             } else {
@@ -1145,8 +1182,8 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             let baseType = prop.type.replacingOccurrences(of: "?", with: "").replacingOccurrences(of: ".Snapshot", with: "")
             if prop.isOptional {
                 storedProps.append("")
-                storedProps.append("let _\(prop.name): DirectRelationReference<\(baseType)>?")
-                storedProps.append("var \(prop.name): \(baseType).Snapshot? {")
+                storedProps.append("\(publicModifier)let _\(prop.name): DirectRelationReference<\(baseType)>?")
+                storedProps.append("\(publicModifier)var \(prop.name): \(baseType).Snapshot? {")
                 storedProps.append("    get async throws {")
                 storedProps.append("        guard let _\(prop.name) else { return nil }")
                 storedProps.append("        return try await _metadata.db.resolve(_\(prop.name))")
@@ -1155,8 +1192,8 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
                 rowExtractions.append("self._\(prop.name) = try row.get(\"\(prop.name)\")")
             } else {
                 storedProps.append("")
-                storedProps.append("let _\(prop.name): DirectRelationReference<\(baseType)>")
-                storedProps.append("var \(prop.name): \(baseType).Snapshot {")
+                storedProps.append("\(publicModifier)let _\(prop.name): DirectRelationReference<\(baseType)>")
+                storedProps.append("\(publicModifier)var \(prop.name): \(baseType).Snapshot {")
                 storedProps.append("    get async throws {")
                 storedProps.append("        try await _metadata.db.resolve(_\(prop.name))")
                 storedProps.append("    }")
@@ -1166,15 +1203,15 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         }
         
         return """
-        nonisolated struct Snapshot: ModelSnapshot
+        nonisolated \(raw: publicModifier)struct Snapshot: ModelSnapshot
         {
-            typealias Model = \(raw: className)
+            \(raw: publicModifier)typealias Model = \(raw: className)
             
             \(raw: computedProps.joined(separator: "\n    "))
             
             \(raw: storedProps.joined(separator: "\n    "))
         
-            init(db: Database, row: Database.Row) async throws
+            \(raw: publicModifier)init(db: Database, row: Database.Row) async throws
             {
                 \(raw: rowExtractions.joined(separator: "\n        "))
             }

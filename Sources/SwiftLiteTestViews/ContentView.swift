@@ -1,8 +1,9 @@
 import SwiftUI
 import SwiftLite
+import SwiftLiteTestModels
 
 
-struct ContentView: View
+public struct ContentView: View
 {
     enum MainNavigationItem: Int, Hashable, CaseIterable, Identifiable {
         case car
@@ -24,7 +25,9 @@ struct ContentView: View
     @State private var selectedEntity: MainNavigationItem?
     @State private var selectedModelId: UUID?
 
-    var body: some View {
+    public init() {}
+    
+    public var body: some View {
         NavigationSplitView {
             List(MainNavigationItem.allCases, selection: $selectedEntity) { item in
                 NavigationLink(item.name, value: item)

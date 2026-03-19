@@ -1,8 +1,11 @@
 import SwiftUI
 import SwiftLite
+import SwiftLiteTestModels
 
-struct MainWindowLocalDatabase: View
+struct MainWindow: View
 {
+    let transport: SharedLocalSimulatedSyncTransport
+    
     @State private var database: Database?
     @State private var engine: Engine.Snapshot?
     
@@ -15,11 +18,7 @@ struct MainWindowLocalDatabase: View
             ProgressView("Opening database...")
                 .task {
                     do {
-                        let temporaryDirectory = URL.temporaryDirectory.appending(component: "SwiftLiteDevelopment", directoryHint: .isDirectory)
-                        let fileUrl = temporaryDirectory.appending(component: "test2.sqlite", directoryHint: .notDirectory)
-
-                        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
-                        let db = try await Database(storage: .file(fileUrl))
+                        let db = try await Database(storage: .distributed(transport))
                         try await db.register(models: Car.self, Engine.self, Interior.self, Passenger.self)
                         self.database = db
                         let firstEngine = try await db.get(Engine.Snapshot.self).first

@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftLite
+import SwiftLiteTestModels
 
 struct ModelListView<T: Listable>: View
 {
