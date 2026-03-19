@@ -8,9 +8,10 @@ struct SwiftLiteTesterWebSocketSyncApp: App
 {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     
-    @State private var transport: WebSocketSyncTransport = WebSocketSyncTransport(serverURL: <#URL#>, clientIdentifier: "test")
+    @State private var transport: WebSocketSyncTransport = WebSocketSyncTransport(serverURL: URL(string: "ws://localhost:8888")!)
     @State private var database: Database?
     @State private var engine: Engine.Snapshot?
+    @State private var databaseOpenError: Error?
 
     var body: some Scene {
         WindowGroup {
@@ -18,6 +19,8 @@ struct SwiftLiteTesterWebSocketSyncApp: App
                 ContentView()
                     .environment(database)
                     .environment(\.defaultEngine, engine)
+            } else if let databaseOpenError {
+                ContentUnavailableView("Failed to open database", systemImage: "externaldrive.badge.xmark", description: Text(databaseOpenError.localizedDescription))
             } else {
                 ProgressView("Opening database...")
                     .task {
@@ -35,6 +38,7 @@ struct SwiftLiteTesterWebSocketSyncApp: App
                                 self.engine = firstEngine
                             }
                         } catch {
+                            self.databaseOpenError = error
                             print("Failed to open database", error.localizedDescription)
                         }
                     }
