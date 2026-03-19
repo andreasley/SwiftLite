@@ -302,27 +302,12 @@ public actor DatabaseLogger
         }
         
         // Bind metadata column (index 9)
-        if entry.operationType == .fieldUpdated {
-            // For backward compatibility, we still encode to metadata for field updates
-            if let newValue = entry.newValue {
-                let encoder = JSONEncoder()
-                if let jsonData = try? encoder.encode(newValue),
-                   let jsonString = String(data: jsonData, encoding: .utf8) {
-                    sqlite3_bind_text(statement, 9, jsonString, -1, SQLITE_TRANSIENT)
-                } else {
-                    sqlite3_bind_null(statement, 9)
-                }
-            } else {
-                sqlite3_bind_null(statement, 9)
-            }
+        if let metadata = entry.metadata {
+            sqlite3_bind_text(statement, 9, metadata, -1, SQLITE_TRANSIENT)
         } else {
-            if let metadata = entry.metadata {
-                sqlite3_bind_text(statement, 9, metadata, -1, SQLITE_TRANSIENT)
-            } else {
-                sqlite3_bind_null(statement, 9)
-            }
+            sqlite3_bind_null(statement, 9)
         }
-        
+
         // Bind user column (index 10)
         if let user = entry.user {
             sqlite3_bind_text(statement, 10, user, -1, SQLITE_TRANSIENT)
