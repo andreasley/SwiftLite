@@ -6,7 +6,7 @@ struct SwiftLiteTestApp: App
 {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
 
-    @State private var transport: SimulatedServerSyncTransport = SimulatedServerSyncTransport(clientIdentifier: "test")
+    @State private var transport: SharedLocalSimulatedSyncTransport = SharedLocalSimulatedSyncTransport(clientIdentifier: "test")
 
     var body: some Scene {
         WindowGroup {

@@ -1,6 +1,6 @@
 import Foundation
 
-public actor SimulatedServerSyncTransport: SyncTransport
+public actor SharedLocalSimulatedSyncTransport: SyncTransport
 {
     public private(set) var status: SyncTransportStatus = .connecting
 

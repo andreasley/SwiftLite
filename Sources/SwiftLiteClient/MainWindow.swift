@@ -3,7 +3,7 @@ import SwiftLite
 
 struct MainWindow: View
 {
-    let transport: SimulatedServerSyncTransport
+    let transport: SharedLocalSimulatedSyncTransport
     
     @State private var database: Database?
     @State private var engine: Engine.Snapshot?
