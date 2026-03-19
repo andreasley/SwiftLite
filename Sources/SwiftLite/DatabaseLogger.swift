@@ -33,7 +33,7 @@ public actor DatabaseLogger
         }
     }
     
-    public enum OperationType: String, Sendable {
+    public enum OperationType: String, Sendable, Codable {
         // Schema operations
         case tableCreated = "table_created"
         case columnAdded = "column_added"
@@ -47,7 +47,7 @@ public actor DatabaseLogger
     }
     
     /// Represents a single log entry in the database history
-    public struct LogEntry: Equatable, Hashable, Sendable {
+    public struct LogEntry: Equatable, Hashable, Sendable, Codable {
         public let id: UUID
         public let timestamp: Date
         public let transactionId: UUID
