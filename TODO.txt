@@ -1,3 +1,8 @@
+- Make the devices send a device ID that can be logged alongside log entries
+- Log the current user
+- 
+
+- Reconnect Websocket after connection status change; send entries
 - Switch to UUIDv7
 - DatabaseLogger: Try "sendUnsynchronized()" again after the connection status of the Transport changes
 - Unique database ID to detect (in SyncTransport) a serverside full reset or wrong database at the URL
@@ -21,6 +26,13 @@
 Backlog
 ================================================
 
+- When replaying transactions, deletions always commit (because foreign key checks are disabled for these transactions).
+	- This is important, because otherwise a conflicting deletion can't be replayed and the database breaks
+	- Conflicting deletions can happen with offline mode
+	- Fallback won't work in this case, because the field isn't null
+	- Option A: Present a picker to select a new object for the missing reference (UI only)
+	- Option B: Replay the log to recreate the object in question.
+	
 - Skip duplicate schema changes serverside (from multiple offline clients that installed an app update)? Or log them for troubleshooting anyway?
 
 - Check local time when synchronizing; disable sync if time drift is too large
