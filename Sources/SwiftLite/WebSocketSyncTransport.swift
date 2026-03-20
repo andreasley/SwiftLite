@@ -68,6 +68,11 @@ public actor WebSocketSyncTransport: SyncTransport
             let handshake = WebSocketMessage.handshake(databaseId: databaseIdentifier)
             try await send(message: handshake)
             status = .connected
+            
+            // Start listening for incoming messages (index updates)
+            Task {
+                await startListening()
+            }
         } catch {
             status = .offline
             addError(error)
@@ -77,71 +82,101 @@ public actor WebSocketSyncTransport: SyncTransport
 
     public func sendEntries(entries: [DatabaseLogger.LogEntry]) async -> [UUID : Int64]
     {
-        guard webSocketTask != nil else {
-            addError(WebSocketError.notConnected)
-            return [:]
-        }
-        
         do {
-            // Send entries to server
-            let message = WebSocketMessage.uploadEntries(entries: entries)
-            try await send(message: message)
+            // Use HTTP POST to upload entries
+            var uploadURL = serverURL
+            uploadURL.deleteLastPathComponent() // Remove "/sync"
+            uploadURL.appendPathComponent("upload")
+            uploadURL.appendPathComponent(databaseIdentifier)
             
-            // Wait for response
-            let response = try await receiveMessage()
+            var request = URLRequest(url: uploadURL)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             
-            switch response {
-            case .uploadResponse(let mapping):
-                return mapping
-            case .error(let errorMessage):
-                addError(WebSocketError.serverError(errorMessage))
-                return [:]
-            default:
-                addError(WebSocketError.unexpectedResponse)
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            request.httpBody = try encoder.encode(entries)
+            
+            let (data, response) = try await session.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                addError(WebSocketError.invalidResponse)
                 return [:]
             }
+            
+            guard httpResponse.statusCode == 200 else {
+                addError(WebSocketError.serverError("HTTP \(httpResponse.statusCode)"))
+                return [:]
+            }
+            
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let mapping = try decoder.decode([UUID: Int64].self, from: data)
+            
+            return mapping
         } catch {
-            status = .offline
             addError(error)
-            await scheduleReconnect()
             return [:]
         }
     }
     
     public func getEntries(from index: Int64) async -> [DatabaseLogger.LogEntry]
     {
-        guard webSocketTask != nil else {
-            addError(WebSocketError.notConnected)
-            return []
-        }
-        
         do {
-            // Request entries from server
-            let message = WebSocketMessage.downloadEntries(fromIndex: index)
-            try await send(message: message)
+            // Use HTTP GET to download entries
+            var downloadURL = serverURL
+            downloadURL.deleteLastPathComponent() // Remove "/sync"
+            downloadURL.appendPathComponent("download")
+            downloadURL.appendPathComponent(databaseIdentifier)
+            downloadURL.appendPathComponent(String(index))
             
-            // Wait for response
-            let response = try await receiveMessage()
+            var request = URLRequest(url: downloadURL)
+            request.httpMethod = "GET"
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
             
-            switch response {
-            case .downloadResponse(let entries):
-                return entries
-            case .error(let errorMessage):
-                addError(WebSocketError.serverError(errorMessage))
-                return []
-            default:
-                addError(WebSocketError.unexpectedResponse)
+            let (data, response) = try await session.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                addError(WebSocketError.invalidResponse)
                 return []
             }
+            
+            guard httpResponse.statusCode == 200 else {
+                addError(WebSocketError.serverError("HTTP \(httpResponse.statusCode)"))
+                return []
+            }
+            
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let entries = try decoder.decode([DatabaseLogger.LogEntry].self, from: data)
+            
+            return entries
         } catch {
-            status = .offline
             addError(error)
-            await scheduleReconnect()
             return []
         }
     }
     
+    
     // MARK: - Private Methods
+    
+    private func startListening() async {
+        guard let webSocketTask = webSocketTask else { return }
+        
+        while status == .connected {
+            do {
+                let message = try await webSocketTask.receive()
+                await handleIncomingMessage(message)
+            } catch {
+                if status == .connected {
+                    status = .offline
+                    addError(error)
+                    await scheduleReconnect()
+                }
+                break
+            }
+        }
+    }
     
     private func handleIncomingMessage(_ message: URLSessionWebSocketTask.Message) async {
         do {
@@ -175,15 +210,6 @@ public actor WebSocketSyncTransport: SyncTransport
         
         let urlMessage = URLSessionWebSocketTask.Message.data(data)
         try await webSocketTask.send(urlMessage)
-    }
-    
-    private func receiveMessage() async throws -> WebSocketMessage {
-        guard let webSocketTask = webSocketTask else {
-            throw WebSocketError.notConnected
-        }
-        
-        let message = try await webSocketTask.receive()
-        return try parseMessage(message)
     }
     
     private func parseMessage(_ message: URLSessionWebSocketTask.Message) throws -> WebSocketMessage {
@@ -232,29 +258,18 @@ public actor WebSocketSyncTransport: SyncTransport
 
 private enum WebSocketMessage: Codable {
     case handshake(databaseId: String)
-    case uploadEntries(entries: [DatabaseLogger.LogEntry])
-    case uploadResponse(mapping: [UUID: Int64])
-    case downloadEntries(fromIndex: Int64)
-    case downloadResponse(entries: [DatabaseLogger.LogEntry])
     case indexUpdate(highestIndex: Int64)
     case error(message: String)
     
     enum CodingKeys: String, CodingKey {
         case type
         case databaseId
-        case entries
-        case mapping
-        case fromIndex
         case highestIndex
         case message
     }
     
     enum MessageType: String, Codable {
         case handshake
-        case uploadEntries
-        case uploadResponse
-        case downloadEntries
-        case downloadResponse
         case indexUpdate
         case error
     }
@@ -267,18 +282,6 @@ private enum WebSocketMessage: Codable {
         case .handshake:
             let databaseId = try container.decode(String.self, forKey: .databaseId)
             self = .handshake(databaseId: databaseId)
-        case .uploadEntries:
-            let entries = try container.decode([DatabaseLogger.LogEntry].self, forKey: .entries)
-            self = .uploadEntries(entries: entries)
-        case .uploadResponse:
-            let mapping = try container.decode([UUID: Int64].self, forKey: .mapping)
-            self = .uploadResponse(mapping: mapping)
-        case .downloadEntries:
-            let fromIndex = try container.decode(Int64.self, forKey: .fromIndex)
-            self = .downloadEntries(fromIndex: fromIndex)
-        case .downloadResponse:
-            let entries = try container.decode([DatabaseLogger.LogEntry].self, forKey: .entries)
-            self = .downloadResponse(entries: entries)
         case .indexUpdate:
             let highestIndex = try container.decode(Int64.self, forKey: .highestIndex)
             self = .indexUpdate(highestIndex: highestIndex)
@@ -295,18 +298,6 @@ private enum WebSocketMessage: Codable {
         case .handshake(let databaseId):
             try container.encode(MessageType.handshake, forKey: .type)
             try container.encode(databaseId, forKey: .databaseId)
-        case .uploadEntries(let entries):
-            try container.encode(MessageType.uploadEntries, forKey: .type)
-            try container.encode(entries, forKey: .entries)
-        case .uploadResponse(let mapping):
-            try container.encode(MessageType.uploadResponse, forKey: .type)
-            try container.encode(mapping, forKey: .mapping)
-        case .downloadEntries(let fromIndex):
-            try container.encode(MessageType.downloadEntries, forKey: .type)
-            try container.encode(fromIndex, forKey: .fromIndex)
-        case .downloadResponse(let entries):
-            try container.encode(MessageType.downloadResponse, forKey: .type)
-            try container.encode(entries, forKey: .entries)
         case .indexUpdate(let highestIndex):
             try container.encode(MessageType.indexUpdate, forKey: .type)
             try container.encode(highestIndex, forKey: .highestIndex)
@@ -322,6 +313,7 @@ private enum WebSocketMessage: Codable {
 private enum WebSocketError: LocalizedError {
     case notConnected
     case invalidMessage
+    case invalidResponse
     case unexpectedResponse
     case serverError(String)
     
@@ -331,6 +323,8 @@ private enum WebSocketError: LocalizedError {
             return "WebSocket is not connected"
         case .invalidMessage:
             return "Received invalid message format"
+        case .invalidResponse:
+            return "Received invalid HTTP response"
         case .unexpectedResponse:
             return "Received unexpected response from server"
         case .serverError(let message):

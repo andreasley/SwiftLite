@@ -33,7 +33,7 @@ actor ServerDatabaseManager {
         clientConnections.removeValue(forKey: session.id)
     }
     
-    func broadcastIndexUpdate(databaseId: String, highestIndex: Int64, excludingSessionId: UUID) async {
+    func broadcastIndexUpdate(databaseId: String, highestIndex: Int64, excludingSessionId: UUID?) async {
         let message = WebSocketMessage.indexUpdate(highestIndex: highestIndex)
         
         let encoder = JSONEncoder()
@@ -46,14 +46,21 @@ actor ServerDatabaseManager {
         
         let buffer = ByteBuffer(data: messageData)
         
-        // Send to all clients connected to the same database (except the sender)
+        // Send to all clients connected to the same database (except the sender if specified)
         for (sessionId, connection) in clientConnections {
-            if connection.session.databaseId == databaseId && sessionId != excludingSessionId {
+            if connection.session.databaseId == databaseId {
+                // Skip the excluded session if provided
+                if let excludedId = excludingSessionId, sessionId == excludedId {
+                    continue
+                }
+                
                 do {
                     try await connection.outbound.write(.binary(buffer))
                     print("📤 Sent index update (\(highestIndex)) to session \(sessionId)")
                 } catch {
+                    clientConnections.removeValue(forKey: sessionId)
                     print("Failed to send index update to session \(sessionId): \(error)")
+                    print("Removing session \(sessionId) from client connection list")
                 }
             }
         }
@@ -133,8 +140,8 @@ actor ServerDatabase {
         INSERT INTO operation_log (
             id, timestamp, transaction_id, operation_type, 
             table_name, object_id, column_name, new_value,
-            metadata, user, synchronized_index, applied_locally
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            metadata, user, synchronized_index
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         
         for entry in entries {
@@ -205,7 +212,7 @@ actor ServerDatabase {
         let querySQL = """
         SELECT id, timestamp, transaction_id, operation_type,
                table_name, object_id, column_name, new_value,
-               metadata, user, synchronized_index, applied_locally
+               metadata, user, synchronized_index
         FROM operation_log
         WHERE synchronized_index > ?
         ORDER BY synchronized_index ASC
@@ -244,8 +251,7 @@ actor ServerDatabase {
             new_value ANY,
             metadata TEXT,
             user TEXT,
-            synchronized_index INTEGER,
-            applied_locally INTEGER NOT NULL DEFAULT 0
+            synchronized_index INTEGER
         ) STRICT;
         """
         
@@ -355,9 +361,7 @@ actor ServerDatabase {
         } else {
             synchronizedIndex = nil
         }
-        
-        let appliedLocally = sqlite3_column_int(stmt, 11) != 0
-        
+                
         return DatabaseLogger.LogEntry(
             id: id,
             timestamp: timestamp,
@@ -369,8 +373,7 @@ actor ServerDatabase {
             newValue: newValue,
             metadata: metadata,
             user: user,
-            synchronizedIndex: synchronizedIndex,
-            appliedLocally: appliedLocally
+            synchronizedIndex: synchronizedIndex
         )
     }
 }

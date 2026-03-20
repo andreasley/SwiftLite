@@ -60,8 +60,7 @@ public actor SharedLocalSimulatedSyncTransport: SyncTransport
                 newValue: entry.newValue,
                 metadata: entry.metadata,
                 user: entry.user,
-                synchronizedIndex: nextIndex,
-                appliedLocally: false
+                synchronizedIndex: nextIndex
             )
             serverLogEntries.append(entryWithIndex)
             updatedIndexes[entry.id] = Int64(nextIndex)

@@ -59,7 +59,6 @@ public actor DatabaseLogger
         public let metadata: String? // JSON-encoded additional data
         public let user: String?
         public let synchronizedIndex: Int64?
-        public let appliedLocally: Bool
         
         public init(
             id: UUID = UUID(),
@@ -72,8 +71,7 @@ public actor DatabaseLogger
             newValue: SQLValue? = nil,
             metadata: String? = nil,
             user: String? = nil,
-            synchronizedIndex: Int64? = nil,
-            appliedLocally: Bool
+            synchronizedIndex: Int64? = nil
         ) {
             self.id = id
             self.timestamp = timestamp
@@ -86,7 +84,6 @@ public actor DatabaseLogger
             self.metadata = metadata
             self.user = user
             self.synchronizedIndex = synchronizedIndex
-            self.appliedLocally = appliedLocally
         }
     }
     
@@ -169,7 +166,7 @@ public actor DatabaseLogger
             print("Received \(newEntries.count) entries to apply")
 
             for entry in newEntries {
-                try log(entry)
+                try log(entry, source: .remote)
             }
 
             self.highestSynchronizedIndex = newEntries.compactMap { $0.synchronizedIndex }.reduce(highestSynchronizedIndex) { max($0, $1) }
@@ -251,8 +248,13 @@ public actor DatabaseLogger
         }
     }
     
+    public nonisolated enum LogEntrySource {
+        case local
+        case remote
+    }
+    
     /// Log a single operation
-    public func log(_ entry: LogEntry) throws {
+    public func log(_ entry: LogEntry, source: LogEntrySource) throws {
         let sql = """
         INSERT OR IGNORE INTO operation_log (
             id, timestamp, transaction_id, operation_type,
@@ -337,7 +339,7 @@ public actor DatabaseLogger
         }
         
         // Bind applied_locally column (index 12)
-        sqlite3_bind_int64(statement, 12, entry.appliedLocally ? 1 : 0)
+        sqlite3_bind_int64(statement, 12, source == .local ? 1 : 0)
         
         let stepResult = sqlite3_step(statement)
         guard stepResult == SQLITE_DONE else {
@@ -352,7 +354,7 @@ public actor DatabaseLogger
         
         do {
             for entry in entries {
-                try log(entry)
+                try log(entry, source: .local)
             }
             try execute("COMMIT")
         } catch {
@@ -522,8 +524,7 @@ public actor DatabaseLogger
                 operationType: schemaChange.operationType,
                 tableName: schemaChange.tableName,
                 columnName: schemaChange.columnName,
-                metadata: metadataJSON,
-                appliedLocally: true
+                metadata: metadataJSON
             ))
         }
         
@@ -536,8 +537,7 @@ public actor DatabaseLogger
                     transactionId: transactionId,
                     operationType: .rowCreated,
                     tableName: change.table,
-                    objectId: change.objectId,
-                    appliedLocally: true
+                    objectId: change.objectId
                 ))
                 
                 // Log each field value as a separate field update
@@ -549,8 +549,7 @@ public actor DatabaseLogger
                             tableName: change.table,
                             objectId: change.objectId,
                             columnName: fieldName,
-                            newValue: value,
-                            appliedLocally: true
+                            newValue: value
                         ))
                     }
                 }
@@ -561,8 +560,7 @@ public actor DatabaseLogger
                     transactionId: transactionId,
                     operationType: .rowDeleted,
                     tableName: change.table,
-                    objectId: change.objectId,
-                    appliedLocally: true
+                    objectId: change.objectId
                 ))
                 
             case .updated:
@@ -575,8 +573,7 @@ public actor DatabaseLogger
                             tableName: change.table,
                             objectId: change.objectId,
                             columnName: fieldName,
-                            newValue: newValue,
-                            appliedLocally: true
+                            newValue: newValue
                         ))
                     }
                 }
@@ -715,8 +712,7 @@ public actor DatabaseLogger
                 newValue: newValue,
                 metadata: metadata,
                 user: user,
-                synchronizedIndex: synchronizedIndex,
-                appliedLocally: appliedLocally
+                synchronizedIndex: synchronizedIndex
             ))
         }
         
@@ -843,8 +839,7 @@ public actor DatabaseLogger
                 newValue: newValue,
                 metadata: metadata,
                 user: user,
-                synchronizedIndex: synchronizedIndex,
-                appliedLocally: appliedLocally
+                synchronizedIndex: synchronizedIndex
             ))
         }
         
@@ -993,7 +988,6 @@ public actor DatabaseLogger
                 metadata: metadata,
                 user: user,
                 synchronizedIndex: synchronizedIndex,
-                appliedLocally: appliedLocally
             ))
         }
         

@@ -9,6 +9,8 @@ struct SyncServer {
         let databaseManager = try await ServerDatabaseManager()
         
         let router = Router(context: BasicWebSocketRequestContext.self)
+        
+        // WebSocket endpoint for real-time index updates
         router.ws("/sync") { request, context in
             return .upgrade([:])
         } onUpgrade: { inbound, outbound, context in
@@ -16,6 +18,74 @@ struct SyncServer {
                 inbound: inbound,
                 outbound: outbound,
                 databaseManager: databaseManager
+            )
+        }
+        
+        // HTTP POST endpoint for uploading entries
+        router.post("/upload/:databaseId") { request, context async throws -> Response in
+            let databaseId = try context.parameters.require("databaseId")
+            
+            // Collect all ByteBuffer chunks from the request body
+            var bodyBuffer = ByteBuffer()
+            for try await chunk in request.body {
+                var chunk = chunk
+                bodyBuffer.writeBuffer(&chunk)
+            }
+            
+            let data = Data(buffer: bodyBuffer)
+            
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let entries = try decoder.decode([DatabaseLogger.LogEntry].self, from: data)
+            
+            let mapping = try await databaseManager.storeEntries(
+                entries: entries,
+                databaseId: databaseId
+            )
+            
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let responseData = try encoder.encode(mapping)
+
+            Task {
+                // Broadcast index update to all connected WebSocket clients
+                let highestIndex = try await databaseManager.getHighestIndex(databaseId: databaseId)
+                await databaseManager.broadcastIndexUpdate(
+                    databaseId: databaseId,
+                    highestIndex: highestIndex,
+                    excludingSessionId: nil // Broadcast to all since this is HTTP
+                )
+            }
+            
+            return Response(
+                status: .ok,
+                headers: [.contentType: "application/json"],
+                body: .init(byteBuffer: ByteBuffer(data: responseData))
+            )
+        }
+        
+        // HTTP GET endpoint for downloading entries
+        router.get("/download/:databaseId/:fromIndex") { request, context async throws -> Response in
+            let databaseId = try context.parameters.require("databaseId")
+            let fromIndexString = try context.parameters.require("fromIndex")
+            
+            guard let fromIndex = Int64(fromIndexString) else {
+                return Response(status: .badRequest)
+            }
+            
+            let entries = try await databaseManager.getEntries(
+                fromIndex: fromIndex,
+                databaseId: databaseId
+            )
+            
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let responseData = try encoder.encode(entries)
+            
+            return Response(
+                status: .ok,
+                headers: [.contentType: "application/json"],
+                body: .init(byteBuffer: ByteBuffer(data: responseData))
             )
         }
         
@@ -27,7 +97,10 @@ struct SyncServer {
             configuration: httpServerConfiguration
         )
         
-        print("🚀 WebSocket Sync Server starting on ws://localhost:8080/sync")
+        print("🚀 Sync Server starting on http://localhost:8080")
+        print("   WebSocket: ws://localhost:8080/sync")
+        print("   Upload:    POST http://localhost:8080/upload/:databaseId")
+        print("   Download:  GET  http://localhost:8080/download/:databaseId/:fromIndex")
         try await app.runService()
     }
     
@@ -94,37 +167,6 @@ struct SyncServer {
             let highestIndex = try await databaseManager.getHighestIndex(databaseId: databaseId)
             print("Client with session ID \(session.id.uuidString) connected; requested database ID: \(databaseId) (highest index: \(highestIndex))")
             return nil
-            
-        case .uploadEntries(let entries):
-            guard let session = clientSession else {
-                throw ServerError.notAuthenticated
-            }
-            
-            let mapping = try await databaseManager.storeEntries(
-                entries: entries,
-                databaseId: session.databaseId
-            )
-            
-            // Notify all other clients about the new highest index
-            let highestIndex = try await databaseManager.getHighestIndex(databaseId: session.databaseId)
-            await databaseManager.broadcastIndexUpdate(
-                databaseId: session.databaseId,
-                highestIndex: highestIndex,
-                excludingSessionId: session.id
-            )
-            
-            return .uploadResponse(mapping: mapping)
-            
-        case .downloadEntries(let fromIndex):
-            guard let session = clientSession else {
-                throw ServerError.notAuthenticated
-            }
-            
-            let entries = try await databaseManager.getEntries(
-                fromIndex: fromIndex,
-                databaseId: session.databaseId
-            )
-            return .downloadResponse(entries: entries)
             
         default:
             throw ServerError.unexpectedMessage
