@@ -186,6 +186,7 @@ extension Database
         var changedObjects: [ChangedObject] = []
         var transactionCompletedSuccessfully = false
         
+        try Self.setPragma(name: "foreign_keys", value: "OFF", connectionHandle: self.connectionHandle)
         try self.run("BEGIN")
         
         do {
@@ -295,6 +296,7 @@ extension Database
             }
             
             try self.run("COMMIT")
+            try Self.setPragma(name: "foreign_keys", value: "OFF", connectionHandle: self.connectionHandle)
             print("✅ COMMITTED DATA REPLAY TRANSACTION")
             transactionCompletedSuccessfully = true
         } catch {
