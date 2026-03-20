@@ -52,9 +52,7 @@ extension Database
             
             let dataEntries = entries.filter { entry in
                 switch entry.operationType {
-                case .rowCreated,
-                        .rowDeleted,
-                        .fieldUpdated:
+                case .rowCreated, .rowDeleted, .fieldUpdated:
                     return true
                 default:
                     return false
@@ -226,7 +224,7 @@ extension Database
                         table: tableName,
                         conditions: [SQLCondition(field: "id", value: .string(objectId.uuidString))]
                     )
-                    try run(deleteStatement.sqlStatement)
+                    try execute(deleteStatement.sqlStatement)
                     
                     // Create ChangedObject for deletion
                     let changedObject = ChangedObject(
