@@ -54,7 +54,8 @@ struct SyncServer {
                 let response = try await processMessage(
                     webSocketMessage,
                     clientSession: &clientSession,
-                    databaseManager: databaseManager
+                    databaseManager: databaseManager,
+                    outbound: outbound
                 )
                 
                 if let response {
@@ -82,13 +83,14 @@ struct SyncServer {
     static func processMessage(
         _ message: WebSocketMessage,
         clientSession: inout ClientSession?,
-        databaseManager: ServerDatabaseManager
+        databaseManager: ServerDatabaseManager,
+        outbound: WebSocketOutboundWriter
     ) async throws -> WebSocketMessage? {
         switch message {
         case .handshake(let databaseId):
             let session = ClientSession(databaseId: databaseId)
             clientSession = session
-            await databaseManager.addClient(session: session)
+            await databaseManager.addClient(session: session, outbound: outbound)
             let highestIndex = try await databaseManager.getHighestIndex(databaseId: databaseId)
             print("Client with session ID \(session.id.uuidString) connected; requested database ID: \(databaseId) (highest index: \(highestIndex))")
             return nil
@@ -103,9 +105,13 @@ struct SyncServer {
                 databaseId: session.databaseId
             )
             
-            Task {
-                // TODO: Inform all other WebSockets that are working with the same databaseId about the new highestIndex
-            }
+            // Notify all other clients about the new highest index
+            let highestIndex = try await databaseManager.getHighestIndex(databaseId: session.databaseId)
+            await databaseManager.broadcastIndexUpdate(
+                databaseId: session.databaseId,
+                highestIndex: highestIndex,
+                excludingSessionId: session.id
+            )
             
             return .uploadResponse(mapping: mapping)
             

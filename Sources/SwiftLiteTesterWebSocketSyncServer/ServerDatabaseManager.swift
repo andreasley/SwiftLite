@@ -1,6 +1,9 @@
 import Foundation
+import Foundation
 import SwiftLite
 import SQLite3
+import HummingbirdWebSocket
+import Hummingbird
 
 // Helper function for SQLite transient destructor
 nonisolated let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
@@ -8,7 +11,7 @@ nonisolated let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type
 /// Manages the server-side database that stores operation logs from multiple clients
 actor ServerDatabaseManager {
     private var databases: [String: ServerDatabase] = [:]
-    private var clientSessions: [ClientSession] = []
+    private var clientConnections: [UUID: ClientConnection] = [:]
     
     init() async throws {
         // Ensure data directory exists
@@ -22,12 +25,38 @@ actor ServerDatabaseManager {
         return await database.highestIndex
     }
     
-    func addClient(session: ClientSession) {
-        clientSessions.append(session)
+    func addClient(session: ClientSession, outbound: WebSocketOutboundWriter) {
+        clientConnections[session.id] = ClientConnection(session: session, outbound: outbound)
     }
     
     func removeClient(session: ClientSession) {
-        clientSessions.removeAll { $0.id == session.id }
+        clientConnections.removeValue(forKey: session.id)
+    }
+    
+    func broadcastIndexUpdate(databaseId: String, highestIndex: Int64, excludingSessionId: UUID) async {
+        let message = WebSocketMessage.indexUpdate(highestIndex: highestIndex)
+        
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        
+        guard let messageData = try? encoder.encode(message) else {
+            print("Failed to encode index update message")
+            return
+        }
+        
+        let buffer = ByteBuffer(data: messageData)
+        
+        // Send to all clients connected to the same database (except the sender)
+        for (sessionId, connection) in clientConnections {
+            if connection.session.databaseId == databaseId && sessionId != excludingSessionId {
+                do {
+                    try await connection.outbound.write(.binary(buffer))
+                    print("📤 Sent index update (\(highestIndex)) to session \(sessionId)")
+                } catch {
+                    print("Failed to send index update to session \(sessionId): \(error)")
+                }
+            }
+        }
     }
     
     func storeEntries(entries: [DatabaseLogger.LogEntry], databaseId: String) async throws -> [UUID: Int64] {
@@ -345,3 +374,11 @@ actor ServerDatabase {
         )
     }
 }
+
+// MARK: - Supporting Types
+
+struct ClientConnection: Sendable {
+    let session: ClientSession
+    let outbound: WebSocketOutboundWriter
+}
+
