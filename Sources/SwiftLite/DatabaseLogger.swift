@@ -168,6 +168,11 @@ public actor DatabaseLogger
 
         // Do initial sync here, so the most recent changes are already integrated into the database when the `Database` initializer completes
         await fetchAndUpdate()
+        
+        Task {
+            try? await Task.sleep(for: .seconds(1))
+            await sendUnsynchronized()
+        }
     }
     
     private func fetchAndUpdate() async
@@ -228,20 +233,27 @@ public actor DatabaseLogger
     
     private func sendUnsynchronized() async
     {
-        do {
-            let entries = try await getEntriesToSend()
-            print("Found \(entries.count) entries to send to sync")
-            let updatedSynchronizationIndexes = await transport.sendEntries(entries: entries)
-            if updatedSynchronizationIndexes.count != entries.count {
-                print("Sent \(entries.count) to server but only received \(updatedSynchronizationIndexes.count) indexes")
+        while pendingLocalCount > 0 {
+            guard await transport.status != .offline else { return }
+            do {
+                let entries = try await getEntriesToSend(limit: 100)
+                print("Found \(entries.count) entries to send to sync")
+                
+                guard entries.count > 0 else { return }
+                
+                let updatedSynchronizationIndexes = await transport.sendEntries(entries: entries)
+                if updatedSynchronizationIndexes.count != entries.count {
+                    print("Sent \(entries.count) to server but only received \(updatedSynchronizationIndexes.count) indexes")
+                }
+                try updateEntriesWithSynchronizationIndex(updatedSynchronizationIndexes)
+                self.highestLocalIndex = updatedSynchronizationIndexes.reduce(highestLocalIndex) { max($0, $1.value) }
+                print("Updated log to index \(self.highestLocalIndex)")
+                self.pendingLocalCount = try getPendingLocalCount()
+            } catch {
+                // If we can't successfully read/write to the log, the database can't be used
+                try? await database.close()
+                fatalError = error
             }
-            try updateEntriesWithSynchronizationIndex(updatedSynchronizationIndexes)
-            self.highestLocalIndex = updatedSynchronizationIndexes.reduce(highestLocalIndex) { max($0, $1.value) }
-            print("Updated log to index \(self.highestLocalIndex)")
-        } catch {
-            // If we can't successfully read/write to the log, the database can't be used
-            try? await database.close()
-            fatalError = error
         }
     }
     
@@ -626,6 +638,8 @@ public actor DatabaseLogger
         // Log all entries in a single batch
         try logBatch(entries)
         
+        self.pendingLocalCount = try getPendingLocalCount()
+
         Task {
             await sendUnsynchronized()
         }
@@ -651,7 +665,7 @@ public actor DatabaseLogger
         }
     }
     
-    private func getEntriesToSend() async throws -> [LogEntry]
+    private func getEntriesToSend(limit: Int64) async throws -> [LogEntry]
     {
         let sql = """
         SELECT 
@@ -659,7 +673,16 @@ public actor DatabaseLogger
             table_name, object_id, column_name, new_value, metadata,
             user, synchronized_index
         FROM operation_log
-        WHERE synchronized_index IS NULL
+        WHERE transaction_id IN (
+            SELECT DISTINCT transaction_id
+            FROM (
+                SELECT transaction_id
+                FROM operation_log
+                WHERE synchronized_index IS NULL
+                ORDER BY synchronized_index ASC
+                LIMIT ?
+            )
+        )
         ORDER BY timestamp ASC
         """
         
@@ -671,7 +694,9 @@ public actor DatabaseLogger
             let errmsg = String(cString: sqlite3_errmsg(connectionHandle))
             throw Error.failedToLog(errmsg)
         }
-        
+
+        sqlite3_bind_int64(statement, 1, limit)
+
         var entries: [LogEntry] = []
         
         while sqlite3_step(statement) == SQLITE_ROW {
