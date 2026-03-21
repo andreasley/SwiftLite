@@ -71,9 +71,9 @@ actor ServerDatabaseManager {
         return try await database.storeEntries(entries: entries)
     }
     
-    func getEntries(fromIndex: Int64, databaseId: String) async throws -> [DatabaseLogger.LogEntry] {
+    func getEntries(fromIndex: Int64, databaseId: String, limit: Int64) async throws -> [DatabaseLogger.LogEntry] {
         let database = try await getOrCreateDatabase(databaseId: databaseId)
-        return try await database.getEntries(fromIndex: fromIndex)
+        return try await database.getEntries(fromIndex: fromIndex, limit: limit)
     }
     
     private func getOrCreateDatabase(databaseId: String) async throws -> ServerDatabase {
@@ -208,13 +208,22 @@ actor ServerDatabase {
         return mapping
     }
     
-    func getEntries(fromIndex: Int64) throws -> [DatabaseLogger.LogEntry] {
+    func getEntries(fromIndex: Int64, limit: Int64) throws -> [DatabaseLogger.LogEntry] {
         let querySQL = """
         SELECT id, timestamp, transaction_id, operation_type,
                table_name, object_id, column_name, new_value,
                metadata, user, synchronized_index
         FROM operation_log
-        WHERE synchronized_index > ?
+        WHERE transaction_id IN (
+            SELECT DISTINCT transaction_id
+            FROM (
+                SELECT transaction_id
+                FROM operation_log
+                WHERE synchronized_index > ?
+                ORDER BY synchronized_index ASC
+                LIMIT ?
+            )
+        )
         ORDER BY synchronized_index ASC
         """
         
@@ -225,7 +234,8 @@ actor ServerDatabase {
         defer { sqlite3_finalize(stmt) }
         
         sqlite3_bind_int64(stmt, 1, fromIndex)
-        
+        sqlite3_bind_int64(stmt, 2, limit)
+
         var entries: [DatabaseLogger.LogEntry] = []
         
         while sqlite3_step(stmt) == SQLITE_ROW {

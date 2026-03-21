@@ -51,6 +51,11 @@ public actor SharedLocalSimulatedSyncTransport: SyncTransport
         statusContinuation.yield(.connected)
     }
     
+    public func getHighestRemoteIndex() async -> Int64?
+    {
+        Int64(serverLogEntries.count)
+    }
+
     public func sendEntries(entries: [DatabaseLogger.LogEntry]) async -> [UUID: Int64]
     {
         var updatedIndexes = [UUID: Int64]()
@@ -82,7 +87,7 @@ public actor SharedLocalSimulatedSyncTransport: SyncTransport
         return updatedIndexes
     }
 
-    public func getEntries(from index: Int64) async -> [DatabaseLogger.LogEntry]
+    public func getEntries(from index: Int64, limit: Int64) async -> [DatabaseLogger.LogEntry]
     {
         Array(serverLogEntries.dropFirst(Int(index)))
     }

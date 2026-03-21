@@ -98,8 +98,14 @@ public actor DatabaseLogger
     private let isFirstRun: Bool
     private let logFileURL: URL
     public let transport: SyncTransport
-    public private(set) var highestSynchronizedIndex: Int64 = 0
+    public private(set) var highestLocalIndex: Int64 = 0
+    public private(set) var highestRemoteIndex: Int64?
     public private(set) var pendingLocalCount: Int64 = 0
+    
+    public var pendingRemoteCount: Int64? {
+        guard let highestRemoteIndex else { return 0 }
+        return highestRemoteIndex - highestLocalIndex
+    }
 
     private(set) weak var database: Database!
     
@@ -126,22 +132,29 @@ public actor DatabaseLogger
         
         try initializeSchema()
         
-        self.highestSynchronizedIndex = try getHighestSynchronizedIndex()
+        self.highestLocalIndex = try getHighestLocalIndex()
         self.pendingLocalCount = try getPendingLocalCount()
+        self.highestRemoteIndex = await transport.getHighestRemoteIndex()
 
         print("📝 Database logger initialized at \(logFileURL.path)")
-        print("Starting log from index \(self.highestSynchronizedIndex)")
+        print("Starting log from index \(self.highestLocalIndex)")
         print("Number of unsynchronized log entries: \(self.pendingLocalCount)")
+    }
+    
+    func setHighestRemoteIndex(_ newValue: Int64)
+    {
+        self.highestRemoteIndex = newValue
     }
     
     func setDatabase(_ database: Database) async
     {
         self.database = database
 
-        await transport.registerIndexIncreaseCallback { [weak self] highestIndex in
+        await transport.registerIndexIncreaseCallback { [weak self] updatedHighestRemoteIndex in
             guard let self else { return }
-            let highestSynchronizedIndex = await self.highestSynchronizedIndex
-            guard highestIndex > highestSynchronizedIndex else { return }
+            await self.setHighestRemoteIndex(updatedHighestRemoteIndex)
+            let highestLocalIndex = await self.highestLocalIndex
+            guard updatedHighestRemoteIndex > highestLocalIndex else { return }
             await self.fetchAndUpdate()
         }
 
@@ -155,37 +168,54 @@ public actor DatabaseLogger
         isFetching = true
         defer { isFetching = false }
         
-        do {
-            guard !isClosed else { throw Error.loggerIsCloser }
+        self.highestRemoteIndex = await transport.getHighestRemoteIndex()
+        guard let highestRemoteIndex, let pendingRemoteCount else {
+            print("Failed to determine the highest remote index)")
+            return
+        }
+        
+        print("Highest remote index \(highestRemoteIndex) (\(pendingRemoteCount) pending remote)")
 
-            // TODO: Stream these, so we're not stuck with 5GB of data on initial sync
-            // TODO: publish progress information somewhere
-            
-            let newEntries = await transport.getEntries(from: highestSynchronizedIndex)
+        while pendingRemoteCount > 0 {
+            do {
+                guard !isClosed else { return }
 
-            print("Received \(newEntries.count) entries to apply")
+                // TODO: Stream these, so we're not stuck with 5GB of data on initial sync
+                // TODO: publish progress information somewhere
+                
+                let newEntries = await transport.getEntries(from: highestLocalIndex, limit: 100)
 
-            for entry in newEntries {
-                try log(entry, source: .remote)
+                print("Received \(newEntries.count) entries to apply")
+
+                guard newEntries.count > 0 else {
+                    // Transport returned 0 items; probably offline. Try again later.
+                    return
+                }
+
+                for entry in newEntries {
+                    try log(entry, source: .remote)
+                }
+
+                try await markOutdatedFieldUpdatesAsApplied()
+
+                let newHighestLocalIndex = newEntries.compactMap { $0.synchronizedIndex }.reduce(highestLocalIndex) { max($0, $1) }
+
+                self.highestLocalIndex = newHighestLocalIndex
+                
+                let entriesToApply = try await getEntriesToApply()
+                
+                // TODO: This might be slow for initial sync; do batches instead? Entries belonging to the same transaction should be sequential already.
+                let groupedEntriesToApply = Dictionary(grouping: entriesToApply) { $0.transactionId }
+                for (transactionId, entriesForTransaction) in groupedEntriesToApply.sorted(by: { ($0.value.first?.synchronizedIndex ?? 0) < ($1.value.first?.synchronizedIndex ?? 0) }) {
+                    let sortedEntriesForTransaction = entriesForTransaction.sorted(by: { ($0.synchronizedIndex ?? 0) < ($1.synchronizedIndex ?? 0) })
+                    try await database.processTransaction(entries: sortedEntriesForTransaction, transactionId: transactionId)
+                    try markEntriesAsAppliedLocally(transactionId: transactionId)
+                }
+            } catch {
+                // If we can't successfully read/write to the log, the database can't be used
+                try? await database.close()
+                fatalError = error
             }
-
-            try await markOutdatedFieldUpdatesAsApplied()
-
-            self.highestSynchronizedIndex = newEntries.compactMap { $0.synchronizedIndex }.reduce(highestSynchronizedIndex) { max($0, $1) }
-
-            let entriesToApply = try await getEntriesToApply()
-            
-            // TODO: This might be slow for initial sync; do batches instead? Entries belonging to the same transaction should be sequential already.
-            let groupedEntriesToApply = Dictionary(grouping: entriesToApply) { $0.transactionId }
-            for (transactionId, entriesForTransaction) in groupedEntriesToApply.sorted(by: { ($0.value.first?.synchronizedIndex ?? 0) < ($1.value.first?.synchronizedIndex ?? 0) }) {
-                let sortedEntriesForTransaction = entriesForTransaction.sorted(by: { ($0.synchronizedIndex ?? 0) < ($1.synchronizedIndex ?? 0) })
-                try await database.processTransaction(entries: sortedEntriesForTransaction, transactionId: transactionId)
-                try markEntriesAsAppliedLocally(transactionId: transactionId)
-            }
-        } catch {
-            // If we can't successfully read/write to the log, the database can't be used
-            try? await database.close()
-            fatalError = error
         }
     }
     
@@ -196,11 +226,11 @@ public actor DatabaseLogger
             print("Found \(entries.count) entries to send to sync")
             let updatedSynchronizationIndexes = await transport.sendEntries(entries: entries)
             if updatedSynchronizationIndexes.count != entries.count {
-                print("Sent \(entries.count) to server but only recieved \(updatedSynchronizationIndexes.count) indexes")
+                print("Sent \(entries.count) to server but only received \(updatedSynchronizationIndexes.count) indexes")
             }
             try updateEntriesWithSynchronizationIndex(updatedSynchronizationIndexes)
-            self.highestSynchronizedIndex = updatedSynchronizationIndexes.reduce(highestSynchronizedIndex) { max($0, $1.value) }
-            print("Updated log to index \(self.highestSynchronizedIndex)")
+            self.highestLocalIndex = updatedSynchronizationIndexes.reduce(highestLocalIndex) { max($0, $1.value) }
+            print("Updated log to index \(self.highestLocalIndex)")
         } catch {
             // If we can't successfully read/write to the log, the database can't be used
             try? await database.close()
@@ -451,7 +481,7 @@ public actor DatabaseLogger
     
     /// Get the highest synchronized_index value from the log table
     /// Returns nil if no entries have a synchronized_index set
-    public func getHighestSynchronizedIndex() throws -> Int64
+    public func getHighestLocalIndex() throws -> Int64
     {
         let sql = "SELECT MAX(synchronized_index) FROM operation_log"
         

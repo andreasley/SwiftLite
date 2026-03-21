@@ -6,6 +6,7 @@ public nonisolated protocol SyncTransport: Actor, Sendable
 
     var status: SyncTransportStatus { get }
     var syncErrors: [SyncError] { get }
+    
     nonisolated var statusStream: AsyncStream<SyncTransportStatus> { get }
 
     nonisolated var databaseIdentifier: String { get }
@@ -13,8 +14,9 @@ public nonisolated protocol SyncTransport: Actor, Sendable
     var localDatabaseLogUrl: URL { get }
 
     func connect() async
+    func getHighestRemoteIndex() async -> Int64?
     func sendEntries(entries: [DatabaseLogger.LogEntry]) async -> [UUID: Int64]
-    func getEntries(from index: Int64) async -> [DatabaseLogger.LogEntry]
+    func getEntries(from index: Int64, limit: Int64) async -> [DatabaseLogger.LogEntry]
     func registerIndexIncreaseCallback(_ callback: @escaping IndexIncreaseHandler)
 }
 

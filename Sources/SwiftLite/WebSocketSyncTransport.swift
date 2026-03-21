@@ -23,6 +23,7 @@ public actor WebSocketSyncTransport: SyncTransport
     public let syncUrl: URL
     public let uploadUrl: URL
     public let downloadUrl: URL
+    public let indexUrl: URL
 
     // Status stream support
     private var statusContinuation: AsyncStream<SyncTransportStatus>.Continuation?
@@ -52,7 +53,8 @@ public actor WebSocketSyncTransport: SyncTransport
         self.syncUrl = URL(string: "ws://\(server)/\(databaseIdentifier)/sync")!
         self.uploadUrl = URL(string: "http://\(server)/\(databaseIdentifier)/upload")!
         self.downloadUrl = URL(string: "http://\(server)/\(databaseIdentifier)/download")!
-        
+        self.indexUrl = URL(string: "http://\(server)/\(databaseIdentifier)/highestIndex")!
+
         self.databaseIdentifier = databaseIdentifier
         self.session = session
         
@@ -104,6 +106,36 @@ public actor WebSocketSyncTransport: SyncTransport
         }
     }
 
+    public func getHighestRemoteIndex() async -> Int64?
+    {
+        do {
+            var request = URLRequest(url: indexUrl)
+            request.httpMethod = "GET"
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
+            
+            let (data, response) = try await session.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                addError(WebSocketError.invalidResponse)
+                return nil
+            }
+            
+            guard httpResponse.statusCode == 200 else {
+                addError(WebSocketError.invalidResponse)
+                return nil
+            }
+            
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let highestIndex = try decoder.decode(Int64.self, from: data)
+            
+            return highestIndex
+        } catch {
+            addError(error)
+            return nil
+        }
+    }
+
     public func sendEntries(entries: [DatabaseLogger.LogEntry]) async -> [UUID : Int64]
     {
         do {
@@ -141,13 +173,13 @@ public actor WebSocketSyncTransport: SyncTransport
         }
     }
     
-    public func getEntries(from index: Int64) async -> [DatabaseLogger.LogEntry]
+    public func getEntries(from index: Int64, limit: Int64 = 10_000) async -> [DatabaseLogger.LogEntry]
     {
         do {
             status = .syncing(Progress(totalUnitCount: 1))
             defer { status = .connected }
             
-            var request = URLRequest(url: downloadUrl.appendingPathComponent(String(index)))
+            var request = URLRequest(url: downloadUrl.appending(queryItems: [.init(name: "from", value: String(index)), .init(name: "limit", value: String(limit))]))
             request.httpMethod = "GET"
             request.setValue("application/json", forHTTPHeaderField: "Accept")
             

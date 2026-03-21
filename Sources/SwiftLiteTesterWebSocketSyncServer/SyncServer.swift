@@ -67,18 +67,42 @@ struct SyncServer {
             )
         }
         
-        // HTTP GET endpoint for downloading entries
-        groupForDatabase.get("download/:fromIndex") { request, context async throws -> Response in
+        // HTTP GET endpoint for highest index
+        groupForDatabase.get("highestIndex") { request, context async throws -> Response in
             let databaseId = try context.parameters.require("databaseId")
-            let fromIndexString = try context.parameters.require("fromIndex")
             
-            guard let fromIndex = Int64(fromIndexString) else {
+            let highestIndex = try await databaseManager.getHighestIndex(databaseId: databaseId)
+            
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let responseData = try encoder.encode(highestIndex)
+            
+            return Response(
+                status: .ok,
+                headers: [.contentType: "application/json"],
+                body: .init(byteBuffer: ByteBuffer(data: responseData))
+            )
+        }
+
+        // HTTP GET endpoint for downloading entries
+        groupForDatabase.get("download") { request, context async throws -> Response in
+            let databaseId = try context.parameters.require("databaseId")
+            
+            guard let fromIndexString = request.uri.queryParameters["from"], let fromIndex = Int64(fromIndexString) else {
                 return Response(status: .badRequest)
+            }
+            
+            let limit: Int64
+            if let limitString = request.uri.queryParameters["limit"], let requestedLimit = Int64(limitString) {
+                limit = requestedLimit
+            } else {
+                limit = 10_000
             }
             
             let entries = try await databaseManager.getEntries(
                 fromIndex: fromIndex,
-                databaseId: databaseId
+                databaseId: databaseId,
+                limit: limit
             )
             
             let encoder = JSONEncoder()
@@ -91,7 +115,7 @@ struct SyncServer {
                 body: .init(byteBuffer: ByteBuffer(data: responseData))
             )
         }
-        
+
         let httpServerConfiguration = ApplicationConfiguration(address: .hostname("0.0.0.0", port: 8080))
 
         let app = Application(
@@ -102,8 +126,9 @@ struct SyncServer {
         
         print("🚀 Sync Server starting on http://localhost:8080")
         print("   WebSocket: /:databaseId/sync")
-        print("   Upload:    POST /:databaseId/upload/")
-        print("   Download:  GET  /:databaseId/download/:fromIndex")
+        print("   Upload:    POST /:databaseId/upload")
+        print("   Index:     GET  /:databaseId/highestIndex")
+        print("   Download:  GET  /:databaseId/download?from=index&limit=1000")
         try await app.runService()
     }
     
