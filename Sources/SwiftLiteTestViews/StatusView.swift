@@ -24,9 +24,9 @@ struct StatusView: View
             if let syncStatus = status?.syncStatus {
                 switch syncStatus {
                 case .connecting:
-                    Label("Access denied", systemImage: "circle.dotted")
+                    Label("Connecting", systemImage: "circle.dotted")
                 case .offline:
-                    Label("Access denied", systemImage: "network.slash")
+                    Label("Offline", systemImage: "network.slash")
                 case .accessDenied:
                     Label("Access denied", systemImage: "person.crop.circle.badge.xmark")
                 case .syncing(let progress, ):
