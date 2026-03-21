@@ -98,13 +98,13 @@ public actor DatabaseLogger
     private let isFirstRun: Bool
     private let logFileURL: URL
     public let transport: SyncTransport
-    public private(set) var highestLocalIndex: Int64 = 0
+    public private(set) var highestSyncedLocalIndex: Int64 = 0
     public private(set) var highestRemoteIndex: Int64?
     public private(set) var pendingLocalCount: Int64 = 0
     
     public var pendingRemoteCount: Int64? {
         guard let highestRemoteIndex else { return 0 }
-        return highestRemoteIndex - highestLocalIndex
+        return highestRemoteIndex - highestSyncedLocalIndex
     }
 
     private(set) weak var database: Database!
@@ -132,12 +132,12 @@ public actor DatabaseLogger
         
         try initializeSchema()
         
-        self.highestLocalIndex = try getHighestLocalIndex()
+        self.highestSyncedLocalIndex = try getHighestSyncedLocalIndex()
         self.pendingLocalCount = try getPendingLocalCount()
         self.highestRemoteIndex = await transport.getHighestRemoteIndex()
 
         print("📝 Database logger initialized at \(logFileURL.path)")
-        print("Starting log from index \(self.highestLocalIndex)")
+        print("Starting log from index \(self.highestSyncedLocalIndex)")
         print("Number of unsynchronized log entries: \(self.pendingLocalCount)")
     }
     
@@ -153,7 +153,7 @@ public actor DatabaseLogger
         await transport.onHighestRemoteIndexIncrease { [weak self] updatedHighestRemoteIndex in
             guard let self else { return }
             await self.setHighestRemoteIndex(updatedHighestRemoteIndex)
-            let highestLocalIndex = await self.highestLocalIndex
+            let highestLocalIndex = await self.highestSyncedLocalIndex
             guard updatedHighestRemoteIndex > highestLocalIndex else { return }
             await self.fetchAndUpdate()
         }
@@ -195,7 +195,7 @@ public actor DatabaseLogger
 
                 // TODO: publish progress information somewhere
                 
-                let newEntries = await transport.getEntries(from: highestLocalIndex, limit: 100)
+                let newEntries = await transport.getEntries(from: highestSyncedLocalIndex, limit: 100)
 
                 print("Received \(newEntries.count) entries to apply")
 
@@ -210,9 +210,7 @@ public actor DatabaseLogger
 
                 try await markOutdatedFieldUpdatesAsApplied()
 
-                let newHighestLocalIndex = newEntries.compactMap { $0.synchronizedIndex }.reduce(highestLocalIndex) { max($0, $1) }
-
-                self.highestLocalIndex = newHighestLocalIndex
+                self.highestSyncedLocalIndex = try getHighestSyncedLocalIndex()
                 
                 let entriesToApply = try await getEntriesToApply()
                 
@@ -246,9 +244,9 @@ public actor DatabaseLogger
                     print("Sent \(entries.count) to server but only received \(updatedSynchronizationIndexes.count) indexes")
                 }
                 try updateEntriesWithSynchronizationIndex(updatedSynchronizationIndexes)
-                self.highestLocalIndex = updatedSynchronizationIndexes.reduce(highestLocalIndex) { max($0, $1.value) }
-                print("Updated log to index \(self.highestLocalIndex)")
                 self.pendingLocalCount = try getPendingLocalCount()
+                self.highestSyncedLocalIndex = try getHighestSyncedLocalIndex()
+                print("Updated log to index \(self.highestSyncedLocalIndex)")
             } catch {
                 // If we can't successfully read/write to the log, the database can't be used
                 try? await database.close()
@@ -500,9 +498,17 @@ public actor DatabaseLogger
     
     /// Get the highest synchronized_index value from the log table
     /// Returns nil if no entries have a synchronized_index set
-    public func getHighestLocalIndex() throws -> Int64
+    public func getHighestSyncedLocalIndex() throws -> Int64
     {
-        let sql = "SELECT MAX(synchronized_index) FROM operation_log"
+        let sql = """
+        SELECT rn - 1
+        FROM (
+            SELECT "synchronized_index", ROW_NUMBER() OVER (ORDER BY "synchronized_index") AS rn
+            FROM operation_log
+        )
+        WHERE "synchronized_index" != rn
+        LIMIT 1;
+        """
         
         var statement: OpaquePointer?
         let prepareResult = sqlite3_prepare_v2(connectionHandle, sql, -1, &statement, nil)
