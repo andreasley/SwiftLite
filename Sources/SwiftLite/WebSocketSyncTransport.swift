@@ -4,11 +4,15 @@ public actor WebSocketSyncTransport: SyncTransport
 {
     // MARK: - Properties
     
-    private var indexIncreaseCallback: IndexIncreaseHandler? // this needs to be called when the server informs this client that there are new entries available
+    private var indexIncreaseCallback: IndexIncreaseHandler?
+    private var didComeOnlineCallback: DidComeOnlineHandler?
 
     public private(set) var status: SyncTransportStatus = .connecting {
         didSet {
             statusContinuation?.yield(status)
+            if oldValue == .offline {
+                didComeOnlineCallback?()
+            }
         }
     }
 
@@ -76,9 +80,14 @@ public actor WebSocketSyncTransport: SyncTransport
 
     // MARK: - SyncTransport Protocol
 
-    public func registerIndexIncreaseCallback(_ callback: @escaping IndexIncreaseHandler)
+    public func onHighestRemoteIndexIncrease(_ callback: @escaping IndexIncreaseHandler)
     {
         indexIncreaseCallback = callback
+    }
+
+    public func onDidComeBackOnline(_ callback: @escaping DidComeOnlineHandler)
+    {
+        didComeOnlineCallback = callback
     }
 
     public func connect() async

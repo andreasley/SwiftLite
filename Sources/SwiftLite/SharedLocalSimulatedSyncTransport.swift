@@ -3,7 +3,7 @@ import Foundation
 public actor SharedLocalSimulatedSyncTransport: SyncTransport
 {
     public private(set) var status: SyncTransportStatus = .connecting
-
+    
     public nonisolated let databaseIdentifier: String = "test"
     public nonisolated let clientIdentifier: String
     
@@ -31,7 +31,7 @@ public actor SharedLocalSimulatedSyncTransport: SyncTransport
             .appendingPathComponent(clientIdentifier, isDirectory: false)
             .appendingPathComponent("database\(clientIndex).sqlite", isDirectory: false)
     }
-
+    
     public var localDatabaseLogUrl: URL {
         databaseFilesDirectoryUrl
             .appendingPathComponent(clientIdentifier, isDirectory: false)
@@ -44,7 +44,7 @@ public actor SharedLocalSimulatedSyncTransport: SyncTransport
         let databaseFilesDirectory = applicationDirectory.appendingPathComponent(databaseIdentifier, isDirectory: true)
         return databaseFilesDirectory
     }
-
+    
     public func connect() async
     {
         status = .connected
@@ -55,7 +55,7 @@ public actor SharedLocalSimulatedSyncTransport: SyncTransport
     {
         Int64(serverLogEntries.count)
     }
-
+    
     public func sendEntries(entries: [DatabaseLogger.LogEntry]) async -> [UUID: Int64]
     {
         var updatedIndexes = [UUID: Int64]()
@@ -86,14 +86,16 @@ public actor SharedLocalSimulatedSyncTransport: SyncTransport
         }
         return updatedIndexes
     }
-
+    
     public func getEntries(from index: Int64, limit: Int64) async -> [DatabaseLogger.LogEntry]
     {
         Array(serverLogEntries.dropFirst(Int(index)))
     }
-
-    public func registerIndexIncreaseCallback(_ callback: @escaping IndexIncreaseHandler)
+    
+    public func onHighestRemoteIndexIncrease(_ callback: @escaping IndexIncreaseHandler)
     {
         indexIncreaseCallbacks.append(callback)
     }
+    
+    public func onDidComeBackOnline(_ callback: @escaping DidComeOnlineHandler) {}
 }

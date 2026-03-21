@@ -150,12 +150,20 @@ public actor DatabaseLogger
     {
         self.database = database
 
-        await transport.registerIndexIncreaseCallback { [weak self] updatedHighestRemoteIndex in
+        await transport.onHighestRemoteIndexIncrease { [weak self] updatedHighestRemoteIndex in
             guard let self else { return }
             await self.setHighestRemoteIndex(updatedHighestRemoteIndex)
             let highestLocalIndex = await self.highestLocalIndex
             guard updatedHighestRemoteIndex > highestLocalIndex else { return }
             await self.fetchAndUpdate()
+        }
+
+        await transport.onDidComeBackOnline { [weak self] in
+            guard let self else { return }
+            Task {
+                await fetchAndUpdate()
+                await sendUnsynchronized()
+            }
         }
 
         // Do initial sync here, so the most recent changes are already integrated into the database when the `Database` initializer completes
@@ -180,7 +188,6 @@ public actor DatabaseLogger
             do {
                 guard !isClosed else { return }
 
-                // TODO: Stream these, so we're not stuck with 5GB of data on initial sync
                 // TODO: publish progress information somewhere
                 
                 let newEntries = await transport.getEntries(from: highestLocalIndex, limit: 100)
