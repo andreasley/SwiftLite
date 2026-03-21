@@ -12,8 +12,15 @@ public actor SharedLocalSimulatedSyncTransport: SyncTransport
     
     private var clientIndex = 1
     
+    private let statusContinuation: AsyncStream<SyncTransportStatus>.Continuation
+    public nonisolated let statusStream: AsyncStream<SyncTransportStatus>
+    
     public init(clientIdentifier: String) {
         self.clientIdentifier = clientIdentifier
+        
+        var continuation: AsyncStream<SyncTransportStatus>.Continuation!
+        self.statusStream = AsyncStream { continuation = $0 }
+        self.statusContinuation = continuation
     }
     
     public private(set) var syncErrors: [SyncError] = []
@@ -41,6 +48,7 @@ public actor SharedLocalSimulatedSyncTransport: SyncTransport
     public func connect() async
     {
         status = .connected
+        statusContinuation.yield(.connected)
     }
     
     public func sendEntries(entries: [DatabaseLogger.LogEntry]) async -> [UUID: Int64]

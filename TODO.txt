@@ -1,3 +1,4 @@
+- Sync status view: Show history, show log, show last sync date
 - Make the devices send a device ID that can be logged alongside log entries
 - Log the current user
 - 

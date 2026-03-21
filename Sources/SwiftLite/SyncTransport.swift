@@ -6,6 +6,7 @@ public nonisolated protocol SyncTransport: Actor, Sendable
 
     var status: SyncTransportStatus { get }
     var syncErrors: [SyncError] { get }
+    nonisolated var statusStream: AsyncStream<SyncTransportStatus> { get }
 
     nonisolated var databaseIdentifier: String { get }
     var localDatabaseUrl: URL { get }
@@ -21,7 +22,7 @@ public nonisolated enum SyncTransportStatus: Equatable, Sendable {
     case connecting
     case offline
     case accessDenied
-    case syncing(download: Progress, upload: Progress)
+    case syncing(Progress)
     case connected
 }
 

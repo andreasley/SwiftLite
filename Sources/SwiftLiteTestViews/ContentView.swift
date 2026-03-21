@@ -32,6 +32,9 @@ public struct ContentView: View
             List(MainNavigationItem.allCases, selection: $selectedEntity) { item in
                 NavigationLink(item.name, value: item)
             }
+            .overlay(alignment: .bottom) {
+                StatusView()
+            }
         } content: {
             if let selectedEntity {
                 switch selectedEntity {
@@ -47,7 +50,7 @@ public struct ContentView: View
             if let selectedEntity, let selectedModelId {
                 Group {
                     switch selectedEntity {
-                    case .car: //.byId(selectedModelId, db: db)
+                    case .car:
                         CarDetailView.loading(car: DatabaseObjectReference(id: selectedModelId, db: db))
                     case .engine:
                         EngineDetailView.loading(engine: DatabaseObjectReference(id: selectedModelId, db: db))

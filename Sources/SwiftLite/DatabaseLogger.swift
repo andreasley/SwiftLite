@@ -97,9 +97,9 @@ public actor DatabaseLogger
     }
     private let isFirstRun: Bool
     private let logFileURL: URL
-    private let transport: SyncTransport
+    public let transport: SyncTransport
     public private(set) var highestSynchronizedIndex: Int64 = 0
-    public private(set) var unsynchronizedCount: Int64 = 0
+    public private(set) var pendingLocalCount: Int64 = 0
 
     private(set) weak var database: Database!
     
@@ -127,11 +127,11 @@ public actor DatabaseLogger
         try initializeSchema()
         
         self.highestSynchronizedIndex = try getHighestSynchronizedIndex()
-        self.unsynchronizedCount = try getUnsynchronizedCount()
+        self.pendingLocalCount = try getPendingLocalCount()
 
         print("📝 Database logger initialized at \(logFileURL.path)")
         print("Starting log from index \(self.highestSynchronizedIndex)")
-        print("Number of unsynchronized log entries: \(self.unsynchronizedCount)")
+        print("Number of unsynchronized log entries: \(self.pendingLocalCount)")
     }
     
     func setDatabase(_ database: Database) async
@@ -193,6 +193,9 @@ public actor DatabaseLogger
             let entries = try await getEntriesToSend()
             print("Found \(entries.count) entries to send to sync")
             let updatedSynchronizationIndexes = await transport.sendEntries(entries: entries)
+            if updatedSynchronizationIndexes.count != entries.count {
+                print("Sent \(entries.count) to server but only recieved \(updatedSynchronizationIndexes.count) indexes")
+            }
             try updateEntriesWithSynchronizationIndex(updatedSynchronizationIndexes)
             self.highestSynchronizedIndex = updatedSynchronizationIndexes.reduce(highestSynchronizedIndex) { max($0, $1.value) }
             print("Updated log to index \(self.highestSynchronizedIndex)")
@@ -470,8 +473,7 @@ public actor DatabaseLogger
         return sqlite3_column_int64(statement, 0)
     }
 
-    
-    public func getUnsynchronizedCount() throws -> Int64 {
+    public func getPendingLocalCount() throws -> Int64 {
         let sql = "SELECT COUNT(*) FROM operation_log WHERE synchronized_index IS NULL"
         
         var statement: OpaquePointer?

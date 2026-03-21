@@ -5,6 +5,18 @@ import SQLite3
 // Needs to be `Observable` to be used in SwiftUI's `Environment()`
 public actor Database: Observable
 {
+    nonisolated public struct Status: Sendable
+    {
+        public let localStatus: LocalDatabaseStatus
+        public let syncStatus: SyncTransportStatus?
+        public let pendingLocalChanges: Int64
+    }
+    
+    public enum LocalDatabaseStatus: Sendable {
+        case ok
+        case fatalError(Swift.Error)
+    }
+
     public enum StorageType {
         case file(URL)
         case inMemory
@@ -23,6 +35,12 @@ public actor Database: Observable
 
     public internal(set) var isClosed = false
     
+    public private(set) var localStatus: LocalDatabaseStatus = .ok
+    
+    // Status stream support
+    private var statusContinuation: AsyncStream<Status>.Continuation?
+    public nonisolated let statusStream: AsyncStream<Status>
+
     // Logging for distributed sync
     public private(set) var logger: DatabaseLogger?
     internal var currentTransactionId: UUID?
@@ -86,6 +104,25 @@ public actor Database: Observable
 
         self.connectionHandle = pointer
         
+        // Create the status stream
+        var continuation: AsyncStream<Status>.Continuation?
+        self.statusStream = AsyncStream { cont in
+            continuation = cont
+            // Yield the initial status
+            cont.yield(Status(localStatus: .ok, syncStatus: nil, pendingLocalChanges: 0))
+        }
+        self.statusContinuation = continuation
+
+        
+        if let transport = logger?.transport {
+            Task {
+                for await syncStatus in transport.statusStream {
+                    let updatedStatus = Status(localStatus: localStatus, syncStatus: syncStatus, pendingLocalChanges: await logger?.pendingLocalCount ?? 0)
+                    statusContinuation?.yield(updatedStatus)
+                }
+            }
+        }
+
         await logger?.setDatabase(self)
     }
 

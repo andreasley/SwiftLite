@@ -6,7 +6,11 @@ public actor WebSocketSyncTransport: SyncTransport
     
     private var indexIncreaseCallback: IndexIncreaseHandler? // this needs to be called when the server informs this client that there are new entries available
 
-    public private(set) var status: SyncTransportStatus = .connecting
+    public private(set) var status: SyncTransportStatus = .connecting {
+        didSet {
+            statusContinuation?.yield(status)
+        }
+    }
 
     public nonisolated let databaseIdentifier: String
     
@@ -16,6 +20,10 @@ public actor WebSocketSyncTransport: SyncTransport
     private let serverURL: URL
     private let session: URLSession
     private var reconnectTask: Task<Void, Never>?
+    
+    // Status stream support
+    private var statusContinuation: AsyncStream<SyncTransportStatus>.Continuation?
+    public nonisolated let statusStream: AsyncStream<SyncTransportStatus>
     
     // MARK: - Database URLs
     
@@ -41,11 +49,21 @@ public actor WebSocketSyncTransport: SyncTransport
         self.serverURL = serverURL
         self.databaseIdentifier = databaseIdentifier
         self.session = session
+        
+        // Create the status stream
+        var continuation: AsyncStream<SyncTransportStatus>.Continuation?
+        self.statusStream = AsyncStream { cont in
+            continuation = cont
+            // Yield the initial status
+            cont.yield(.connecting)
+        }
+        self.statusContinuation = continuation
     }
     
     deinit
     {
         reconnectTask?.cancel()
+        statusContinuation?.finish()
     }
 
     // MARK: - SyncTransport Protocol
@@ -83,6 +101,9 @@ public actor WebSocketSyncTransport: SyncTransport
     public func sendEntries(entries: [DatabaseLogger.LogEntry]) async -> [UUID : Int64]
     {
         do {
+            status = .syncing(Progress(totalUnitCount: Int64(entries.count)))
+            defer { status = .connected }
+
             // Use HTTP POST to upload entries
             var uploadURL = serverURL
             uploadURL.deleteLastPathComponent() // Remove "/sync"
@@ -123,6 +144,9 @@ public actor WebSocketSyncTransport: SyncTransport
     public func getEntries(from index: Int64) async -> [DatabaseLogger.LogEntry]
     {
         do {
+            status = .syncing(Progress(totalUnitCount: 1))
+            defer { status = .connected }
+
             // Use HTTP GET to download entries
             var downloadURL = serverURL
             downloadURL.deleteLastPathComponent() // Remove "/sync"
@@ -150,6 +174,9 @@ public actor WebSocketSyncTransport: SyncTransport
             decoder.dateDecodingStrategy = .iso8601
             let entries = try decoder.decode([DatabaseLogger.LogEntry].self, from: data)
             
+            status = .syncing(Progress(totalUnitCount: Int64(entries.count)))
+            defer { status = .connected }
+
             return entries
         } catch {
             addError(error)
