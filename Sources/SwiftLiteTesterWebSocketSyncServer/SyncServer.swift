@@ -101,7 +101,7 @@ struct SyncServer {
         )
         
         print("🚀 Sync Server starting on http://localhost:8080")
-        print("   WebSocket: ws://localhost:8080/:databaseId/sync")
+        print("   WebSocket: /:databaseId/sync")
         print("   Upload:    POST /:databaseId/upload/")
         print("   Download:  GET  /:databaseId/download/:fromIndex")
         try await app.runService()
