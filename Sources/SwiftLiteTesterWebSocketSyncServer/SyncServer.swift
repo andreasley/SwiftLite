@@ -10,8 +10,11 @@ struct SyncServer {
         
         let router = Router(context: BasicWebSocketRequestContext.self)
         
+        let groupForDatabase = router.group(":databaseId")
+        
         // WebSocket endpoint for real-time index updates
-        router.ws("/sync") { request, context in
+        groupForDatabase.ws("sync") { request, context in
+            _ = try context.parameters.require("databaseId")
             return .upgrade([:])
         } onUpgrade: { inbound, outbound, context in
             try await handleWebSocketConnection(
@@ -22,7 +25,7 @@ struct SyncServer {
         }
         
         // HTTP POST endpoint for uploading entries
-        router.post("/upload/:databaseId") { request, context async throws -> Response in
+        groupForDatabase.post("upload") { request, context async throws -> Response in
             let databaseId = try context.parameters.require("databaseId")
             
             // Collect all ByteBuffer chunks from the request body
@@ -65,7 +68,7 @@ struct SyncServer {
         }
         
         // HTTP GET endpoint for downloading entries
-        router.get("/download/:databaseId/:fromIndex") { request, context async throws -> Response in
+        groupForDatabase.get("download/:fromIndex") { request, context async throws -> Response in
             let databaseId = try context.parameters.require("databaseId")
             let fromIndexString = try context.parameters.require("fromIndex")
             
@@ -98,9 +101,9 @@ struct SyncServer {
         )
         
         print("🚀 Sync Server starting on http://localhost:8080")
-        print("   WebSocket: ws://localhost:8080/sync")
-        print("   Upload:    POST http://localhost:8080/upload/:databaseId")
-        print("   Download:  GET  http://localhost:8080/download/:databaseId/:fromIndex")
+        print("   WebSocket: ws://localhost:8080/:databaseId/sync")
+        print("   Upload:    POST /:databaseId/upload/")
+        print("   Download:  GET  /:databaseId/download/:fromIndex")
         try await app.runService()
     }
     

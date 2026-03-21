@@ -17,10 +17,13 @@ public actor WebSocketSyncTransport: SyncTransport
     public private(set) var syncErrors: [SyncError] = []
     
     private var webSocketTask: URLSessionWebSocketTask?
-    private let serverURL: URL
     private let session: URLSession
     private var reconnectTask: Task<Void, Never>?
-    
+
+    public let syncUrl: URL
+    public let uploadUrl: URL
+    public let downloadUrl: URL
+
     // Status stream support
     private var statusContinuation: AsyncStream<SyncTransportStatus>.Continuation?
     public nonisolated let statusStream: AsyncStream<SyncTransportStatus>
@@ -44,9 +47,12 @@ public actor WebSocketSyncTransport: SyncTransport
     
     // MARK: - Initialization
     
-    public init(serverURL: URL, databaseIdentifier: String = "test", session: URLSession = .shared)
+    public init(server: String, databaseIdentifier: String = "test", session: URLSession = .shared)
     {
-        self.serverURL = serverURL
+        self.syncUrl = URL(string: "ws://\(server)/\(databaseIdentifier)/sync")!
+        self.uploadUrl = URL(string: "http://\(server)/\(databaseIdentifier)/upload")!
+        self.downloadUrl = URL(string: "http://\(server)/\(databaseIdentifier)/download")!
+        
         self.databaseIdentifier = databaseIdentifier
         self.session = session
         
@@ -78,7 +84,7 @@ public actor WebSocketSyncTransport: SyncTransport
         status = .connecting
         
         // Create WebSocket task
-        webSocketTask = session.webSocketTask(with: serverURL)
+        webSocketTask = session.webSocketTask(with: syncUrl)
         webSocketTask?.resume()
         
         // Send initial handshake
@@ -103,14 +109,8 @@ public actor WebSocketSyncTransport: SyncTransport
         do {
             status = .syncing(Progress(totalUnitCount: Int64(entries.count)))
             defer { status = .connected }
-
-            // Use HTTP POST to upload entries
-            var uploadURL = serverURL
-            uploadURL.deleteLastPathComponent() // Remove "/sync"
-            uploadURL.appendPathComponent("upload")
-            uploadURL.appendPathComponent(databaseIdentifier)
             
-            var request = URLRequest(url: uploadURL)
+            var request = URLRequest(url: uploadUrl)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             
@@ -146,15 +146,8 @@ public actor WebSocketSyncTransport: SyncTransport
         do {
             status = .syncing(Progress(totalUnitCount: 1))
             defer { status = .connected }
-
-            // Use HTTP GET to download entries
-            var downloadURL = serverURL
-            downloadURL.deleteLastPathComponent() // Remove "/sync"
-            downloadURL.appendPathComponent("download")
-            downloadURL.appendPathComponent(databaseIdentifier)
-            downloadURL.appendPathComponent(String(index))
             
-            var request = URLRequest(url: downloadURL)
+            var request = URLRequest(url: downloadUrl.appendingPathComponent(String(index)))
             request.httpMethod = "GET"
             request.setValue("application/json", forHTTPHeaderField: "Accept")
             

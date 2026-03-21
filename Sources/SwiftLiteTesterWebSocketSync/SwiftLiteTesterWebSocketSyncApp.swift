@@ -12,8 +12,9 @@ struct SwiftLiteTesterWebSocketSyncApp: App
     @State private var database: Database?
     @State private var engine: Engine.Snapshot?
     @State private var databaseOpenError: Error?
-    @State private var serverURL: String = "ws://localhost:8080/sync"
+    @AppStorage("server") private var server: String = "localhost:8080"
     @State private var databaseIdentifier: String = "test"
+    @State private var hasValidServer: Bool = false
 
     
     var body: some Scene {
@@ -47,18 +48,29 @@ struct SwiftLiteTesterWebSocketSyncApp: App
                     }
             } else {
                 Form {
-                    TextField("URL", text: $serverURL)
-                    TextField("Database Identifier", text: $databaseIdentifier)
-                    Button("Connect") {
-                        guard let url = URL(string: serverURL) else {
-                            return
+                    Section {
+                        TextField("URL", text: $server)
+                        TextField("Database Identifier", text: $databaseIdentifier)
+                    } footer: {
+                        Button("Connect") {
+                            transport = WebSocketSyncTransport(server: server, databaseIdentifier: databaseIdentifier)
                         }
-                        transport = WebSocketSyncTransport(serverURL: url, databaseIdentifier: databaseIdentifier)
+                        .disabled(!hasValidServer)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                     }
                 }
                 .formStyle(.grouped)
+                .onAppear(perform: checkServer)
+                .onChange(of: server) { _, _ in
+                    checkServer()
+                }
             }
         }
+    }
+    
+    func checkServer()
+    {
+        self.hasValidServer = URL(string: "http://\(server)/") != nil
     }
 }
 
