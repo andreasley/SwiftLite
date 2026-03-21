@@ -3,7 +3,7 @@ import SwiftLite
 import SwiftLiteTestModels
 
 @MainActor
-protocol Creatable: ModelSnapshot
+protocol Creatable<Model>: Listable
 {
     static func create(database: Database, defaultEngine: Engine.Snapshot) -> Model
 }

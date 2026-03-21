@@ -13,11 +13,19 @@ public nonisolated extension DatabaseObjectReferenceConvertible
     }
 }
 
-nonisolated extension Fetchable
+nonisolated extension ModelSnapshot
 {
     public func getObjectReference() -> DatabaseObjectReference<Self.Model>
     {
         DatabaseObjectReference<Model>(self)
+    }
+}
+
+nonisolated extension Model
+{
+    public func getObjectReference() -> DatabaseObjectReference<Self>
+    {
+        DatabaseObjectReference<Self>(self)
     }
 }
 
@@ -26,5 +34,13 @@ nonisolated extension ObjectReference
     public func getObjectReference() -> DatabaseObjectReference<Model>
     {
         DatabaseObjectReference(self)
+    }
+}
+
+extension DatabaseObjectReference
+{
+    public func getObjectReference() -> DatabaseObjectReference<T>
+    {
+        self
     }
 }

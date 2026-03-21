@@ -6,12 +6,17 @@ struct ModelListView<T: Listable>: View
 {
     @Environment(Database.self) private var db
     @Environment(\.defaultEngine) private var defaultEngine
-    @Binding var selectedModelId: T.ID?
+    @Binding var selectedModel: (any ObjectReference)?
+    @State private var selection: DatabaseObjectReference<T.Model>?
     @LiveCollection(T.self) var snapshots
     
+    var isCreatable: Bool {
+        T.self is (any Creatable<T.Model>.Type)
+    }
+
     var body: some View {
-        List(snapshots, selection: $selectedModelId) { snapshot in
-            NavigationLink(snapshot.name, value: snapshot)
+        List(snapshots, selection: $selection) { snapshot in
+            NavigationLink(snapshot.name, value: snapshot.getObjectReference())
                 .contextMenu {
                     Button("Delete Item", systemImage: "minus") {
                         Task {
@@ -20,24 +25,28 @@ struct ModelListView<T: Listable>: View
                     }
                 }
         }
+        .onChange(of: selection) { oldValue, newValue in
+            selectedModel = selection
+        }
         .toolbar {
             ToolbarItem(placement: .navigation) {
-                if let CreatableType = T.self as? (any Creatable.Type) {
-                    Button("New Item", systemImage: "plus") {
-                        guard let defaultEngine else { return }
-                        createNew(CreatableType.self, defaultEngine: defaultEngine)
-                    }
-                }
+                Button("New Item", systemImage: "plus") {
+                    createNew()
+                }.disabled(!isCreatable)
             }
         }
     }
     
-    func createNew<C: Creatable>(_ type: C.Type = C.self, defaultEngine: Engine.Snapshot)
+    
+    func createNew()
     {
+        guard let CreatableType = T.self as? (any Creatable<T.Model>.Type) else { return }
+        guard let defaultEngine else { return }
+
         Task {
-            let newModel = C.create(database: db, defaultEngine: defaultEngine)
+            let newModel = CreatableType.create(database: db, defaultEngine: defaultEngine)
             try await newModel.save()
-            selectedModelId = newModel.id
+            selection = newModel.getObjectReference()
         }
     }
 }

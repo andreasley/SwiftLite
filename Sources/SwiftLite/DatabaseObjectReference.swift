@@ -1,6 +1,6 @@
 import Foundation
 
-public nonisolated struct DatabaseObjectReference<T>: ObjectReference where T: SwiftLite.Model
+public nonisolated struct DatabaseObjectReference<T>: ObjectReference, Hashable where T: SwiftLite.Model
 {
     public typealias Model = T
     
@@ -14,21 +14,22 @@ public nonisolated struct DatabaseObjectReference<T>: ObjectReference where T: S
         self.db = db
     }
     
-    public init<F: Fetchable>(_ fetchable: F) where F.Model == T
+    public init<S: ModelSnapshot>(_ snapshot: S) where S.Model == T
     {
-        self.id = fetchable.id
-        self.db = fetchable._metadata.db
+        self.id = snapshot.id
+        self.db = snapshot._metadata.db
     }
-    
+
+    public init(_ model: T)
+    {
+        self.id = model.id
+        self.db = model._metadata.db
+    }
+
     public init(_ reference: any ObjectReference, type: T.Type = T.self)
     {
         self.id = reference.id
         self.db = reference.db
-    }
-    
-    public func getObjectReference() -> DatabaseObjectReference<T>
-    {
-        self
     }
 }
 

@@ -23,7 +23,7 @@ public struct ContentView: View
     
     @Environment(Database.self) var db
     @State private var selectedEntity: MainNavigationItem?
-    @State private var selectedModelId: UUID?
+    @State private var selectedModel: (any ObjectReference)?
 
     public init() {}
     
@@ -39,25 +39,27 @@ public struct ContentView: View
             if let selectedEntity {
                 switch selectedEntity {
                 case .car:
-                    ModelListView<Car.Snapshot>(selectedModelId: $selectedModelId)
+                    ModelListView<Car.Snapshot>(selectedModel: $selectedModel)
                 case .engine:
-                    ModelListView<Engine.Snapshot>(selectedModelId: $selectedModelId)
+                    ModelListView<Engine.Snapshot>(selectedModel: $selectedModel)
                 case .passenger:
-                    ModelListView<Passenger.Snapshot>(selectedModelId: $selectedModelId)
+                    ModelListView<Passenger.Snapshot>(selectedModel: $selectedModel)
                 }
             }
         } detail: {
-            if let selectedEntity, let selectedModelId {
+            if let selectedModel {
                 Group {
-                    switch selectedEntity {
-                    case .car:
-                        CarDetailView.loading(car: DatabaseObjectReference(id: selectedModelId, db: db))
-                    case .engine:
-                        EngineDetailView.loading(engine: DatabaseObjectReference(id: selectedModelId, db: db))
-                    case .passenger:
-                        PassengerDetailView.loading(passenger: DatabaseObjectReference(id: selectedModelId, db: db))
+                    switch selectedModel {
+                    case let selectedCar as DatabaseObjectReference<Car>:
+                        CarDetailView.loading(car: selectedCar)
+                    case let selectedEngine as DatabaseObjectReference<Engine>:
+                        EngineDetailView.loading(engine: selectedEngine)
+                    case let selectedPassenger as DatabaseObjectReference<Passenger>:
+                        PassengerDetailView.loading(passenger: selectedPassenger)
+                    default:
+                        ContentUnavailableView("Not implemented", systemImage: "questionmark.square.dashed")
                     }
-                }.id(selectedModelId)
+                }.id(selectedModel.id)
             }
         }
     }
