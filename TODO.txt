@@ -1,3 +1,7 @@
+- Limit number of entries when fetching
+- Implement ping/pong for WebSocket
+- Mark older entries für a specific table/column locally as "applied"
+
 - Sync status view: Show history, show log, show last sync date
 - Make the devices send a device ID that can be logged alongside log entries
 - Log the current user
