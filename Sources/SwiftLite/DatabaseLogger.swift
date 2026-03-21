@@ -169,6 +169,8 @@ public actor DatabaseLogger
                 try log(entry, source: .remote)
             }
 
+            try await markOutdatedFieldUpdatesAsApplied()
+
             self.highestSynchronizedIndex = newEntries.compactMap { $0.synchronizedIndex }.reduce(highestSynchronizedIndex) { max($0, $1) }
 
             let entriesToApply = try await getEntriesToApply()
@@ -718,31 +720,60 @@ public actor DatabaseLogger
         return entries
     }
     
-    public func getEntriesToApply() async throws -> [LogEntry]
+    public func markOutdatedFieldUpdatesAsApplied() async throws
     {
-        // Get all entries marked applied_locally == false that are either:
-        // 1) Schema upgrade entries (table_created, column_added, index_created, index_dropped)
-        // 2) Row creation/deletion entries
-        // 3) The most recent field update entry for each specific table/object/column combination
+        // There's no point in ever applying field update values for a specific table/object/column if there's already a more recent value.
+        // Mark all such outdated values as "applied_locally = 1". These won't be applied to the local database. This works fine, even if they were part of a transaction, as all fields are nullable and foreign key checks are disabled while replaying (so setting a reference in a later transaction isn't an issue).
         
         let sql = """
-        WITH ranked_updates AS (
-            SELECT *,
-                   ROW_NUMBER() OVER (
-                       PARTITION BY table_name, object_id, column_name 
-                       ORDER BY timestamp DESC
-                   ) as rn
-            FROM operation_log
-            WHERE applied_locally = 0
+        UPDATE operation_log
+        SET applied_locally = 1
+        WHERE id IN (
+            SELECT id
+            FROM (
+                SELECT id,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY table_name, object_id, column_name 
+                           ORDER BY timestamp DESC
+                       ) as rn
+                FROM operation_log
+                WHERE operation_type = 'field_updated'
+                  AND applied_locally = 0
+            )
+            WHERE rn > 1
         )
+        """
+        
+        var statement: OpaquePointer?
+        let prepareResult = sqlite3_prepare_v2(connectionHandle, sql, -1, &statement, nil)
+        defer { sqlite3_finalize(statement) }
+        
+        guard let statement, prepareResult == SQLiteStatus.ok else {
+            let errmsg = String(cString: sqlite3_errmsg(connectionHandle))
+            throw Error.failedToLog("Failed to mark outdated field updates: \(errmsg)")
+        }
+        
+        let stepResult = sqlite3_step(statement)
+        guard stepResult == SQLITE_DONE else {
+            let errmsg = String(cString: sqlite3_errmsg(connectionHandle))
+            throw Error.failedToLog("Failed to execute mark outdated field updates: \(errmsg)")
+        }
+        
+        let changedRows = sqlite3_changes(connectionHandle)
+        if changedRows > 0 {
+            print("Marked \(changedRows) outdated field update(s) as applied")
+        }
+    }
+
+    public func getEntriesToApply() async throws -> [LogEntry]
+    {
+        let sql = """
         SELECT 
             id, timestamp, transaction_id, operation_type,
             table_name, object_id, column_name, new_value, metadata,
             user, synchronized_index
-        FROM ranked_updates
-        WHERE 
-            operation_type IN ('table_created', 'column_added', 'index_created', 'index_dropped', 'row_created', 'row_deleted')
-            OR (operation_type = 'field_updated' AND rn = 1)
+        FROM operation_log
+            WHERE applied_locally = 0
         ORDER BY timestamp ASC
         """
         
