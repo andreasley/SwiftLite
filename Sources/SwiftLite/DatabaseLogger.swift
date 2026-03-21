@@ -449,7 +449,8 @@ public actor DatabaseLogger
     
     /// Get the highest synchronized_index value from the log table
     /// Returns nil if no entries have a synchronized_index set
-    public func getHighestSynchronizedIndex() throws -> Int64 {
+    public func getHighestSynchronizedIndex() throws -> Int64
+    {
         let sql = "SELECT MAX(synchronized_index) FROM operation_log"
         
         var statement: OpaquePointer?
@@ -473,7 +474,8 @@ public actor DatabaseLogger
         return sqlite3_column_int64(statement, 0)
     }
 
-    public func getPendingLocalCount() throws -> Int64 {
+    public func getPendingLocalCount() throws -> Int64
+    {
         let sql = "SELECT COUNT(*) FROM operation_log WHERE synchronized_index IS NULL"
         
         var statement: OpaquePointer?
@@ -837,196 +839,7 @@ public actor DatabaseLogger
         
         return entries
     }
-
         
-    /// Retrieve log entries within a date range
-    public func getEntries(
-        from startDate: Date? = nil,
-        to endDate: Date? = nil,
-        transactionId: UUID? = nil,
-        tableName: String? = nil,
-        limit: Int? = nil
-    ) throws -> [LogEntry] {
-        var sql = "SELECT * FROM operation_log WHERE 1=1"
-        var bindIndex: Int32 = 1
-        
-        if startDate != nil {
-            sql += " AND timestamp >= ?"
-        }
-        if endDate != nil {
-            sql += " AND timestamp <= ?"
-        }
-        if transactionId != nil {
-            sql += " AND transaction_id = ?"
-        }
-        if tableName != nil {
-            sql += " AND table_name = ?"
-        }
-        
-        sql += " ORDER BY timestamp ASC"
-        
-        if let limit {
-            sql += " LIMIT \(limit)"
-        }
-        
-        var statement: OpaquePointer?
-        let prepareResult = sqlite3_prepare_v2(connectionHandle, sql, -1, &statement, nil)
-        defer { sqlite3_finalize(statement) }
-        
-        guard let statement, prepareResult == SQLiteStatus.ok else {
-            let errmsg = String(cString: sqlite3_errmsg(connectionHandle))
-            throw Error.failedToLog(errmsg)
-        }
-        
-        // Bind parameters
-        if let startDate {
-            sqlite3_bind_double(statement, bindIndex, startDate.timeIntervalSince1970)
-            bindIndex += 1
-        }
-        if let endDate {
-            sqlite3_bind_double(statement, bindIndex, endDate.timeIntervalSince1970)
-            bindIndex += 1
-        }
-        if let transactionId {
-            sqlite3_bind_text(statement, bindIndex, transactionId.uuidString, -1, SQLITE_TRANSIENT)
-            bindIndex += 1
-        }
-        if let tableName {
-            sqlite3_bind_text(statement, bindIndex, tableName, -1, SQLITE_TRANSIENT)
-            bindIndex += 1
-        }
-        
-        var entries: [LogEntry] = []
-        
-        while sqlite3_step(statement) == SQLITE_ROW {
-            guard let id = UUID(uuidString: String(cString: sqlite3_column_text(statement, 0))),
-                  let transactionId = UUID(uuidString: String(cString: sqlite3_column_text(statement, 2))),
-                  let operationType = OperationType(rawValue: String(cString: sqlite3_column_text(statement, 3)))
-            else {
-                continue
-            }
-            
-            let timestamp = Date(timeIntervalSince1970: sqlite3_column_double(statement, 1))
-            
-            let tableName = sqlite3_column_type(statement, 4) != SQLITE_NULL
-                ? String(cString: sqlite3_column_text(statement, 4))
-                : nil
-            
-            let objectId = sqlite3_column_type(statement, 5) != SQLITE_NULL
-                ? UUID(uuidString: String(cString: sqlite3_column_text(statement, 5)))
-                : nil
-            
-            let columnName = sqlite3_column_type(statement, 6) != SQLITE_NULL
-                ? String(cString: sqlite3_column_text(statement, 6))
-                : nil
-            
-            // Read new_value from column index 7
-            let newValue: SQLValue?
-            if sqlite3_column_type(statement, 7) != SQLITE_NULL {
-                let columnType = sqlite3_column_type(statement, 7)
-                switch columnType {
-                case SQLITE_INTEGER:
-                    newValue = .int(sqlite3_column_int64(statement, 7))
-                case SQLITE_FLOAT:
-                    newValue = .double(sqlite3_column_double(statement, 7))
-                case SQLITE_TEXT:
-                    newValue = .string(String(cString: sqlite3_column_text(statement, 7)))
-                case SQLITE_BLOB:
-                    if let blobPointer = sqlite3_column_blob(statement, 7) {
-                        let blobSize = Int(sqlite3_column_bytes(statement, 7))
-                        let data = Data(bytes: blobPointer, count: blobSize)
-                        newValue = .data(data)
-                    } else {
-                        newValue = nil
-                    }
-                case SQLITE_NULL:
-                    newValue = .null
-                default:
-                    newValue = nil
-                }
-            } else {
-                newValue = nil
-            }
-            
-            // Read metadata from column index 8
-            let metadata = sqlite3_column_type(statement, 8) != SQLITE_NULL
-                ? String(cString: sqlite3_column_text(statement, 8))
-                : nil
-            
-            // Read user from column index 9
-            let user = sqlite3_column_type(statement, 9) != SQLITE_NULL
-                ? String(cString: sqlite3_column_text(statement, 9))
-                : nil
-            
-            // Read synchronized_index from column index 10
-            let synchronizedIndex = sqlite3_column_type(statement, 10) != SQLITE_NULL
-                ? sqlite3_column_int64(statement, 10)
-                : nil
-            
-            entries.append(LogEntry(
-                id: id,
-                timestamp: timestamp,
-                transactionId: transactionId,
-                operationType: operationType,
-                tableName: tableName,
-                objectId: objectId,
-                columnName: columnName,
-                newValue: newValue,
-                metadata: metadata,
-                user: user,
-                synchronizedIndex: synchronizedIndex,
-            ))
-        }
-        
-        return entries
-    }
-    
-    /// Get all transactions within a date range
-    public func getTransactions(
-        from startDate: Date? = nil,
-        to endDate: Date? = nil
-    ) throws -> [UUID] {
-        var sql = "SELECT DISTINCT transaction_id FROM operation_log WHERE 1=1"
-        var bindIndex: Int32 = 1
-        
-        if startDate != nil {
-            sql += " AND timestamp >= ?"
-        }
-        if endDate != nil {
-            sql += " AND timestamp <= ?"
-        }
-        
-        sql += " ORDER BY timestamp ASC"
-        
-        var statement: OpaquePointer?
-        let prepareResult = sqlite3_prepare_v2(connectionHandle, sql, -1, &statement, nil)
-        defer { sqlite3_finalize(statement) }
-        
-        guard let statement, prepareResult == SQLiteStatus.ok else {
-            let errmsg = String(cString: sqlite3_errmsg(connectionHandle))
-            throw Error.failedToLog(errmsg)
-        }
-        
-        if let startDate {
-            sqlite3_bind_double(statement, bindIndex, startDate.timeIntervalSince1970)
-            bindIndex += 1
-        }
-        if let endDate {
-            sqlite3_bind_double(statement, bindIndex, endDate.timeIntervalSince1970)
-            bindIndex += 1
-        }
-        
-        var transactionIds: [UUID] = []
-        
-        while sqlite3_step(statement) == SQLITE_ROW {
-            if let transactionId = UUID(uuidString: String(cString: sqlite3_column_text(statement, 0))) {
-                transactionIds.append(transactionId)
-            }
-        }
-        
-        return transactionIds
-    }
-    
     /// Close the log database
     public func close() throws {
         guard !isClosed else { return }
