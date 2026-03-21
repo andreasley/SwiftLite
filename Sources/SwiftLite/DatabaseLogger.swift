@@ -616,7 +616,7 @@ public actor DatabaseLogger
         SELECT 
             id, timestamp, transaction_id, operation_type,
             table_name, object_id, column_name, new_value, metadata,
-            user, synchronized_index, applied_locally
+            user, synchronized_index
         FROM operation_log
         WHERE synchronized_index IS NULL
         ORDER BY timestamp ASC
@@ -697,12 +697,7 @@ public actor DatabaseLogger
             let synchronizedIndex = sqlite3_column_type(statement, 10) != SQLITE_NULL
                 ? sqlite3_column_int64(statement, 10)
                 : nil
-            
-            // Read applied_locally from column index 11
-            let appliedLocally = sqlite3_column_type(statement, 11) != SQLITE_NULL
-                ? sqlite3_column_int64(statement, 11) != 0
-                : false
-            
+                        
             entries.append(LogEntry(
                 id: id,
                 timestamp: timestamp,
@@ -741,7 +736,7 @@ public actor DatabaseLogger
         SELECT 
             id, timestamp, transaction_id, operation_type,
             table_name, object_id, column_name, new_value, metadata,
-            user, synchronized_index, applied_locally
+            user, synchronized_index
         FROM ranked_updates
         WHERE 
             operation_type IN ('table_created', 'column_added', 'index_created', 'index_dropped', 'row_created', 'row_deleted')
@@ -824,11 +819,6 @@ public actor DatabaseLogger
             let synchronizedIndex = sqlite3_column_type(statement, 10) != SQLITE_NULL
                 ? sqlite3_column_int64(statement, 10)
                 : nil
-            
-            // Read applied_locally from column index 11
-            let appliedLocally = sqlite3_column_type(statement, 11) != SQLITE_NULL
-                ? sqlite3_column_int64(statement, 11) != 0
-                : false
             
             entries.append(LogEntry(
                 id: id,
@@ -972,11 +962,6 @@ public actor DatabaseLogger
             let synchronizedIndex = sqlite3_column_type(statement, 10) != SQLITE_NULL
                 ? sqlite3_column_int64(statement, 10)
                 : nil
-            
-            // Read applied_locally from column index 11
-            let appliedLocally = sqlite3_column_type(statement, 11) != SQLITE_NULL
-                ? sqlite3_column_int64(statement, 11) != 0
-                : false
             
             entries.append(LogEntry(
                 id: id,
