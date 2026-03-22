@@ -177,6 +177,7 @@ public actor WebSocketSyncTransport: SyncTransport
             
             return mapping
         } catch {
+            print("WebSocket Sync Transport: Server returned an error: \(error)")
             addError(error)
             return [:]
         }
@@ -213,6 +214,7 @@ public actor WebSocketSyncTransport: SyncTransport
 
             return entries
         } catch {
+            print("WebSocket Sync Transport: Server returned an error: \(error)")
             addError(error)
             return []
         }

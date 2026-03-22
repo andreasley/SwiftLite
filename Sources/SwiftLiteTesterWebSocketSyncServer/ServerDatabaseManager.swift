@@ -1,5 +1,4 @@
 import Foundation
-import Foundation
 import SwiftLite
 import SQLite3
 import HummingbirdWebSocket
@@ -9,7 +8,8 @@ import Hummingbird
 nonisolated let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
 /// Manages the server-side database that stores operation logs from multiple clients
-actor ServerDatabaseManager {
+actor ServerDatabaseManager
+{
     private var databases: [String: ServerDatabase] = [:]
     private var clientConnections: [UUID: ClientConnection] = [:]
     
@@ -59,7 +59,7 @@ actor ServerDatabaseManager {
                         try await connection.outbound.write(.binary(buffer))
                         print("📤 Sent index update (\(highestIndex)) to session \(sessionId)")
                     } catch {
-                        clientConnections.removeValue(forKey: sessionId)
+                        removeClient(session: connection.session)
                         print("Failed to send index update to session \(sessionId): \(error)")
                         print("Removing session \(sessionId) from client connection list")
                     }
@@ -90,13 +90,16 @@ actor ServerDatabaseManager {
 }
 
 /// Represents a single database on the server (one per client database ID)
-actor ServerDatabase {
+actor ServerDatabase
+{
     private let databaseId: String
     private let databaseURL: URL
     private let connectionHandle: OpaquePointer
     public private(set) var highestIndex: Int64 = 0
+    let gate = TransactionGate()
     
-    init(databaseId: String) async throws {
+    init(databaseId: String) async throws
+    {
         self.databaseId = databaseId
         
         // Create database file path
@@ -127,27 +130,17 @@ actor ServerDatabase {
         sqlite3_close(connectionHandle)
     }
     
-    func storeEntries(entries: [DatabaseLogger.LogEntry]) throws -> [UUID: Int64] {
-        var mapping: [UUID: Int64] = [:]
-        
-        // Begin transaction
-        try execute(sql: "BEGIN TRANSACTION")
-        
-        defer {
-            // Commit transaction (or rollback if there's an error)
-            try? execute(sql: "COMMIT")
-        }
-        
+    func storeEntries(entries: [DatabaseLogger.LogEntry]) throws -> [UUID: Int64]
+    {
         let insertSQL = """
-        INSERT INTO operation_log (
+        INSERT OR IGNORE INTO operation_log (
             id, timestamp, transaction_id, operation_type, 
             table_name, object_id, column_name, new_value,
-            metadata, user, synchronized_index
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            metadata, user
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
-        
+
         for entry in entries {
-            highestIndex += 1
             
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(connectionHandle, insertSQL, -1, &stmt, nil) == SQLITE_OK else {
@@ -192,20 +185,59 @@ actor ServerDatabase {
                 sqlite3_bind_null(stmt, 10)
             }
             
-            sqlite3_bind_int64(stmt, 11, highestIndex)
-            sqlite3_bind_int(stmt, 12, 0)
-            
             guard sqlite3_step(stmt) == SQLITE_DONE else {
-                throw ServerError.databaseError("Failed to insert entry")
+                let errorMessage = String(cString: sqlite3_errmsg(connectionHandle))
+                throw ServerError.databaseError("Failed to insert entry: \(errorMessage)")
+            }
+        }
+
+        // Note: There may be gaps in the `synchronized_index` field, despite using AUTOINCREMENT. The reason is that INSERT OR IGNORE with failing UNIQUE constraints (because of duplicates) still consumes IDs. There's no efficient way around that.
+        self.highestIndex = try fetchHighestIndex()
+
+        // Fetch IDs for these objects, because we might have skipped a few that were retransmitted (ignored by SQLite because of the same id)
+        let mapping = try getSynchronizationIndexForEntries(ids: entries.map(\.id))
+        return mapping
+    }
+    
+    func getSynchronizationIndexForEntries(ids: [UUID]) throws -> [UUID: Int64]
+    {
+        var mapping: [UUID: Int64] = [:]
+        
+        // Build a query to fetch the synchronized_index for all entry IDs
+        let placeholders = ids.map { _ in "?" }.joined(separator: ", ")
+        let querySQL = """
+        SELECT id, synchronized_index 
+        FROM operation_log 
+        WHERE id IN (\(placeholders))
+        """
+        
+        var queryStmt: OpaquePointer?
+        guard sqlite3_prepare_v2(connectionHandle, querySQL, -1, &queryStmt, nil) == SQLITE_OK else {
+            throw ServerError.databaseError("Failed to prepare mapping query")
+        }
+        defer { sqlite3_finalize(queryStmt) }
+        
+        // Bind all entry IDs
+        for (index, id) in ids.enumerated() {
+            sqlite3_bind_text(queryStmt, Int32(index + 1), id.uuidString, -1, SQLITE_TRANSIENT)
+        }
+        
+        // Execute and collect results
+        while sqlite3_step(queryStmt) == SQLITE_ROW {
+            guard let idString = sqlite3_column_text(queryStmt, 0).map({ String(cString: $0) }),
+                  let id = UUID(uuidString: idString) else {
+                continue
             }
             
-            mapping[entry.id] = highestIndex
+            let synchronizedIndex = sqlite3_column_int64(queryStmt, 1)
+            mapping[id] = synchronizedIndex
         }
         
         return mapping
     }
     
-    func getEntries(fromIndex: Int64, limit: Int64) throws -> [DatabaseLogger.LogEntry] {
+    func getEntries(fromIndex: Int64, limit: Int64) throws -> [DatabaseLogger.LogEntry]
+    {
         let querySQL = """
         SELECT id, timestamp, transaction_id, operation_type,
                table_name, object_id, column_name, new_value,
@@ -248,7 +280,8 @@ actor ServerDatabase {
     private func initializeSchema() throws {
         let createTableSQL = """
         CREATE TABLE IF NOT EXISTS operation_log (
-            id TEXT PRIMARY KEY NOT NULL,
+            synchronized_index INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+            id TEXT NOT NULL,
             timestamp REAL NOT NULL,
             transaction_id TEXT NOT NULL,
             operation_type TEXT NOT NULL,
@@ -257,18 +290,17 @@ actor ServerDatabase {
             column_name TEXT,
             new_value ANY,
             metadata TEXT,
-            user TEXT,
-            synchronized_index INTEGER
+            user TEXT
         ) STRICT;
         """
         
         let createIndexSQL = [
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_id ON operation_log(id);",
             "CREATE INDEX IF NOT EXISTS idx_timestamp ON operation_log(timestamp);",
             "CREATE INDEX IF NOT EXISTS idx_transaction_id ON operation_log(transaction_id);",
             "CREATE INDEX IF NOT EXISTS idx_operation_type ON operation_log(operation_type);",
             "CREATE INDEX IF NOT EXISTS idx_table_name ON operation_log(table_name);",
             "CREATE INDEX IF NOT EXISTS idx_object_id ON operation_log(object_id);",
-            "CREATE INDEX IF NOT EXISTS idx_synchronized_index ON operation_log(synchronized_index);",
         ]
         
         try execute(sql: createTableSQL)
@@ -295,18 +327,18 @@ actor ServerDatabase {
         return value
     }
     
-    private func execute(sql: String) throws {
-        var error: UnsafeMutablePointer<CChar>?
-        let status = SQLiteStatus(sqlite3_exec(connectionHandle, sql, nil, nil, &error))
-        
-        if status != .ok {
-            let errorMessage = error.map { String(cString: $0) } ?? "Unknown error"
-            sqlite3_free(error)
-            throw ServerError.databaseError("SQL execution failed: \(errorMessage)")
+    private func execute(sql: String) throws
+    {
+        let result = sqlite3_exec(self.connectionHandle, sql, nil, nil, nil)
+        guard result == SQLiteStatus.ok.rawValue else {
+            let errmsg = String(cString: sqlite3_errmsg(self.connectionHandle))
+            print("🔴 Error while executing query: \(errmsg)")
+            throw ServerError.databaseError("Error while executing query: \(errmsg)")
         }
     }
     
-    private func bindSQLValue(_ value: SQLValue, to stmt: OpaquePointer?, at index: Int32) throws {
+    private func bindSQLValue(_ value: SQLValue, to stmt: OpaquePointer?, at index: Int32) throws
+    {
         switch value {
         case .int(let int):
             sqlite3_bind_int64(stmt, index, int)

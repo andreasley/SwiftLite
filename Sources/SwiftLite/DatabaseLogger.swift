@@ -181,15 +181,15 @@ public actor DatabaseLogger
         isFetching = true
         defer { isFetching = false }
         
-        self.highestRemoteIndex = await transport.getHighestRemoteIndex()
-        guard let highestRemoteIndex, let pendingRemoteCount else {
-            print("Failed to determine the highest remote index")
-            return
-        }
-        
-        print("Highest remote index \(highestRemoteIndex) (\(pendingRemoteCount) pending remote)")
+        while (self.pendingRemoteCount ?? 0) > 0 {
 
-        while pendingRemoteCount > 0 {
+            guard let highestRemoteIndex, let pendingRemoteCount else {
+                print("Failed to determine the highest remote index")
+                return
+            }
+
+            print("Highest remote index \(highestRemoteIndex) (\(pendingRemoteCount) pending remote)")
+            
             do {
                 guard !isClosed else { return }
 
@@ -213,7 +213,6 @@ public actor DatabaseLogger
 
                 let entriesToApply = try await getEntriesToApply()
                 
-                // TODO: This might be slow for initial sync; do batches instead? Entries belonging to the same transaction should be sequential already.
                 let groupedEntriesToApply = Dictionary(grouping: entriesToApply) { $0.transactionId }
                 for (transactionId, entriesForTransaction) in groupedEntriesToApply.sorted(by: { ($0.value.first?.synchronizedIndex ?? 0) < ($1.value.first?.synchronizedIndex ?? 0) }) {
                     let sortedEntriesForTransaction = entriesForTransaction.sorted(by: { ($0.synchronizedIndex ?? 0) < ($1.synchronizedIndex ?? 0) })
@@ -226,6 +225,7 @@ public actor DatabaseLogger
                 // Update configuration after successful sync
                 try updateLastSuccessfulSync()
                 try updateHighestSynchronizedIndex(highestSyncedIndexInReceivedEntries)
+                setHighestRemoteIndex(highestSyncedIndexInReceivedEntries)
                 print("Increased synced index to \(highestSyncedIndexInReceivedEntries)")
             } catch {
                 // If we can't successfully read/write to the log, the database can't be used
@@ -252,8 +252,6 @@ public actor DatabaseLogger
                 try updateEntriesWithSynchronizationIndex(updatedSynchronizationIndexes)
                 self.pendingLocalCount = try getPendingLocalCount()
 
-                print("Updated log to index \(self.highestSyncedLocalIndex)")
-                
                 // Update configuration after successful send
                 try updateLastSuccessfulSync()
             } catch {
@@ -1053,6 +1051,7 @@ public actor DatabaseLogger
     
     /// Update the highest synchronized index in config
     public func updateHighestSynchronizedIndex(_ index: Int64) throws {
+        print("Updated log to index \(index)")
         highestSyncedLocalIndex = index
         try setConfigValue(key: "highest_synchronized_index", value: .int(index))
     }
