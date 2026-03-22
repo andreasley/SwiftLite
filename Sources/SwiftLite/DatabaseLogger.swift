@@ -324,7 +324,8 @@ public actor DatabaseLogger
     }
     
     /// Initialize configuration values on first run
-    private func initializeConfiguration() throws {
+    private func initializeConfiguration() throws
+    {
         let creationTimestamp = Date().timeIntervalSince1970
         let clientDatabaseId = UUID.v7()
         
@@ -338,7 +339,8 @@ public actor DatabaseLogger
     }
     
     /// Execute a SQL statement without parameters
-    private func execute(_ sql: String) throws {
+    private func execute(_ sql: String) throws
+    {
         let result = sqlite3_exec(connectionHandle, sql, nil, nil, nil)
         guard result == SQLiteStatus.ok else {
             let errmsg = String(cString: sqlite3_errmsg(connectionHandle))
@@ -393,20 +395,7 @@ public actor DatabaseLogger
         
         // Bind new_value column (index 8)
         if let newValue = entry.newValue {
-            switch newValue {
-            case .null:
-                sqlite3_bind_null(statement, 8)
-            case .int(let value):
-                sqlite3_bind_int64(statement, 8, value)
-            case .double(let value):
-                sqlite3_bind_double(statement, 8, value)
-            case .string(let value):
-                sqlite3_bind_text(statement, 8, value, -1, SQLITE_TRANSIENT)
-            case .data(let value):
-                _ = value.withUnsafeBytes { bufferPointer in
-                    sqlite3_bind_blob(statement, 8, bufferPointer.baseAddress, Int32(value.count), SQLITE_TRANSIENT)
-                }
-            }
+            newValue.bind(to: statement, at: 8)
         } else {
             sqlite3_bind_null(statement, 8)
         }
@@ -961,21 +950,7 @@ public actor DatabaseLogger
         // Bind key
         sqlite3_bind_text(statement, 1, key, -1, SQLITE_TRANSIENT)
         
-        // Bind value
-        switch value {
-        case .null:
-            sqlite3_bind_null(statement, 2)
-        case .int(let intValue):
-            sqlite3_bind_int64(statement, 2, intValue)
-        case .double(let doubleValue):
-            sqlite3_bind_double(statement, 2, doubleValue)
-        case .string(let stringValue):
-            sqlite3_bind_text(statement, 2, stringValue, -1, SQLITE_TRANSIENT)
-        case .data(let dataValue):
-            _ = dataValue.withUnsafeBytes { bufferPointer in
-                sqlite3_bind_blob(statement, 2, bufferPointer.baseAddress, Int32(dataValue.count), SQLITE_TRANSIENT)
-            }
-        }
+        value.bind(to: statement, at: 2)
         
         let stepResult = sqlite3_step(statement)
         guard stepResult == SQLITE_DONE else {

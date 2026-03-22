@@ -168,7 +168,7 @@ actor ServerDatabase
             }
             
             if let newValue = entry.newValue {
-                try bindSQLValue(newValue, to: stmt, at: 8)
+                newValue.bind(to: stmt, at: 8)
             } else {
                 sqlite3_bind_null(stmt, 8)
             }
@@ -334,24 +334,6 @@ actor ServerDatabase
             let errmsg = String(cString: sqlite3_errmsg(self.connectionHandle))
             print("🔴 Error while executing query: \(errmsg)")
             throw ServerError.databaseError("Error while executing query: \(errmsg)")
-        }
-    }
-    
-    private func bindSQLValue(_ value: SQLValue, to stmt: OpaquePointer?, at index: Int32) throws
-    {
-        switch value {
-        case .int(let int):
-            sqlite3_bind_int64(stmt, index, int)
-        case .double(let double):
-            sqlite3_bind_double(stmt, index, double)
-        case .string(let string):
-            sqlite3_bind_text(stmt, index, string, -1, SQLITE_TRANSIENT)
-        case .data(let data):
-            data.withUnsafeBytes { bytes in
-                _ = sqlite3_bind_blob(stmt, index, bytes.baseAddress, Int32(data.count), SQLITE_TRANSIENT)
-            }
-        case .null:
-            sqlite3_bind_null(stmt, index)
         }
     }
     

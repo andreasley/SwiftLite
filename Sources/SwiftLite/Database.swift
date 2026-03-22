@@ -249,20 +249,7 @@ public actor Database: Observable
             var index: CInt = 1
             for value in valuesToBind {
                 defer { index += 1 }
-                switch value {
-                case .string(let string):
-                    sqlite3_bind_text(statement, index, string, -1, SQLITE_TRANSIENT)
-                case .int(let integer):
-                    sqlite3_bind_int64(statement, index, integer)
-                case .double(let value):
-                    sqlite3_bind_double(statement, index, value)
-                case .data(let data):
-                    _ = data.withUnsafeBytes { (bytes: UnsafeRawBufferPointer) in
-                        sqlite3_bind_blob(statement, 1, bytes.baseAddress, Int32(data.count), SQLITE_TRANSIENT)
-                    }
-                case .null:
-                    sqlite3_bind_null(statement, index)
-                }
+                value.bind(to: statement, at: index)
             }
         }
         
