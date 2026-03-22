@@ -89,7 +89,7 @@ public actor DatabaseLogger
     
     private let connectionHandle: OpaquePointer
     private var isClosed = false
-    private var isFetching = false
+    private var isSyncing = false
     public private(set) var fatalError: Swift.Error? {
         didSet {
             print("Fatal error in DatabaseLogger", fatalError?.localizedDescription ?? "")
@@ -155,32 +155,34 @@ public actor DatabaseLogger
             await self.setHighestRemoteIndex(updatedHighestRemoteIndex)
             let highestLocalIndex = await self.highestSyncedLocalIndex
             guard updatedHighestRemoteIndex > highestLocalIndex else { return }
-            await self.fetchAndUpdate()
+            await self.sync()
         }
 
         await transport.onDidComeBackOnline { [weak self] in
             guard let self else { return }
             Task {
-                await fetchAndUpdate()
-                await sendUnsynchronized()
+                await sync()
             }
         }
 
         // Do initial sync here, so the most recent changes are already integrated into the database when the `Database` initializer completes
-        await fetchAndUpdate()
+        await sync()
+    }
+    
+    private func sync() async
+    {
+        guard !isSyncing else { return }
+        isSyncing = true
+        defer { isSyncing = false }
         
-        Task {
-            try? await Task.sleep(for: .seconds(1))
-            await sendUnsynchronized()
-        }
+        await fetchAndUpdate()
+        await sendUnsynchronized()
     }
     
     private func fetchAndUpdate() async
     {
-        guard !isFetching else { return }
-        isFetching = true
-        defer { isFetching = false }
-        
+        guard isSyncing else { return }
+
         while (self.pendingRemoteCount ?? 0) > 0 {
 
             guard let highestRemoteIndex, let pendingRemoteCount else {
@@ -237,6 +239,8 @@ public actor DatabaseLogger
     
     private func sendUnsynchronized() async
     {
+        guard isSyncing else { return }
+
         while pendingLocalCount > 0 {
             guard await transport.status != .offline else { return }
             do {
@@ -248,7 +252,10 @@ public actor DatabaseLogger
                 let updatedSynchronizationIndexes = await transport.sendEntries(entries: entries)
                 if updatedSynchronizationIndexes.count != entries.count {
                     print("Sent \(entries.count) to server but only received \(updatedSynchronizationIndexes.count) indexes")
+                } else {
+                    print("Received \(updatedSynchronizationIndexes.count) indexes for sent entries")
                 }
+                
                 try updateEntriesWithSynchronizationIndex(updatedSynchronizationIndexes)
                 self.pendingLocalCount = try getPendingLocalCount()
 
@@ -644,7 +651,7 @@ public actor DatabaseLogger
         self.pendingLocalCount = try getPendingLocalCount()
 
         Task {
-            await sendUnsynchronized()
+            await sync()
         }
     }
     
