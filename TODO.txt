@@ -1,9 +1,7 @@
+- Store fatal error in the configuration database; fail Database initializer if broken
 - Sync Transport errors: Show in client
 - Client: Handle errors the server throws while inserting uploaded log entries
 - Filter any attempts to set the ID when logging (in both client server, probably) and replaying
-- Create a UNIQUE index for schema operations, so they aren't duplicated after multiple clients make the upgrade (while offline)
-
-- Check return value on use of sqlite3_bind_*
 
 - Server: Don't send entries back to the device that just sent it
 
@@ -41,9 +39,13 @@
 Backlog
 ================================================
 
-- When replaying transactions, deletions always commit (because foreign key checks are disabled for these transactions).
-	- This is important, because otherwise a conflicting deletion can't be replayed and the database breaks
-	- Conflicting deletions can happen with offline mode
+- Check return value for all uses of sqlite3_bind_*
+
+- Create a UNIQUE index for schema operations, so they aren't duplicated after multiple clients make the upgrade (while offline)
+
+- Implement a repair function for invalid references caused by deletions.
+	- When replaying transactions, deletions always commit (because foreign key checks are disabled for these transactions). This is important, because otherwise a conflicting deletion can't be replayed and the database breaks
+	- Conflicting deletions can happen because of offline situations or just badly timed synchronizations
 	- Fallback won't work in this case, because the field isn't null
 	- Option A: Present a picker to select a new object for the missing reference (UI only)
 	- Option B: Replay the log to recreate the object in question.
@@ -51,7 +53,7 @@ Backlog
 - Skip duplicate schema changes serverside (from multiple offline clients that installed an app update)? Or log them for troubleshooting anyway?
 
 - Check local time when synchronizing; disable sync if time drift is too large
-- Implement ability to only sync the most recent field values instead of the full history
+- Implement ability to only sync the most recent field values instead of the full history (for leaner sync; might be important for devices with limited power/storage)
 - Ability to compact the log database, removing all new values for a specific field in a specific object except for the last one
 - Use SQLite savepoints instead of transactions for nested reads?
 - Changing values and then changing them back to the previous value (before saving) still triggers a save, despite the value matching the previous one. 
