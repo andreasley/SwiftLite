@@ -223,7 +223,7 @@ extension Database
         var createIndexStatements = [String]()
         
         for index in table.indexes {
-            let statement = "CREATE INDEX \(index.name) ON \(table.name)(\(index.columns.joined(separator: ", ")));"
+            let statement = "CREATE \(index.isUnique ? "UNIQUE " : "")INDEX \(index.name) ON \(table.name)(\(index.columns.joined(separator: ", ")));"
             createIndexStatements.append(statement)
         }
         
