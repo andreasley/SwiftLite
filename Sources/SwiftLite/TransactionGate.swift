@@ -1,7 +1,9 @@
-actor TransactionGate
+public actor TransactionGate
 {
     private var pending: [CheckedContinuation<Void, Never>] = []
     private var isRunning = false
+    
+    public init() {}
     
     private func acquire() async
     {
@@ -22,7 +24,7 @@ actor TransactionGate
     }
     
     @discardableResult
-    func run<T>(_ body: () async throws -> T, isolation: isolated (any Actor)? = #isolation) async rethrows -> T
+    public func run<T>(_ body: () async throws -> T, isolation: isolated (any Actor)? = #isolation) async rethrows -> T
     {
         await acquire()
         defer { Task { await release() }}
