@@ -11,10 +11,10 @@ nonisolated final class CarExpanded
         name + "zzz"
     }
     
-    //@Stored(defaultValue: { UUID() })
+    //@Stored(defaultValue: { UUID.v7() })
     let id: UUID
 
-    //@Stored(defaultValue: { UUID() })
+    //@Stored(defaultValue: { UUID.v7() })
     let publicId: UUID
     
     //@Related
@@ -57,7 +57,7 @@ nonisolated final class CarExpanded
 
     init(db: Database, publicId: UUID = DefaultValues.publicId, name: String = DefaultValues.name, engine: Engine.Snapshot, interior: Interior? = DefaultValues.interior)
     {
-        let id = UUID()
+        let id = UUID.v7()
         let passengers = ManyToMany<PassengersRelationSchema>(db: db, parentId: id)
 
         self._metadata = Metadata(db: db, table: Schema.table.name, id: id, isNew: true)
@@ -183,7 +183,7 @@ nonisolated extension CarExpanded: Model
     struct DefaultValues
     {
         static var name: String { "asd" }
-        static var publicId: UUID { UUID() }
+        static var publicId: UUID { UUID.v7() }
         static var interior: Interior? { nil }
     }
 

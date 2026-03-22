@@ -8,7 +8,6 @@
 - 
 
 - Reconnect Websocket after connection status change; send entries
-- Switch to UUIDv7
 - DatabaseLogger: Try "sendUnsynchronized()" again after the connection status of the Transport changes
 - Unique database ID to detect (in SyncTransport) a serverside full reset or wrong database at the URL
 - Test what happens to logging when saving on quit

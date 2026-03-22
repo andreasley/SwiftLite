@@ -158,7 +158,7 @@ public nonisolated extension InverseManyToMany
         
         public init(db: Database, parent: Parent.Snapshot, element: UUID)
         {
-            let id = UUID()
+            let id = UUID.v7()
             
             self._metadata = ModelMetadata(db: db, table: Schema.table.name, id: id, isNew: true)
             

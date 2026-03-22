@@ -106,7 +106,7 @@ extension MainActorNotificationProxy
         
         init(modelName: String)
         {
-            self.id = UUID()
+            self.id = UUID.v7()
             self.modelName = modelName
         }
     }

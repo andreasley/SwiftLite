@@ -158,7 +158,7 @@ public actor Database: Observable
         }
         
         try await gate.run {
-            let transactionId = UUID()
+            let transactionId = UUID.v7()
             currentTransactionId = transactionId
             pendingSchemaChanges = []
             
@@ -460,7 +460,7 @@ public actor Database: Observable
     public func save(changeset: FrozenChangeset) async throws
     {
         try await gate.run {
-            let transactionId = UUID()
+            let transactionId = UUID.v7()
             currentTransactionId = transactionId
             
             print("▶️ BEGINNING WRITE TRANSACTION")

@@ -558,7 +558,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         
         // Build the initializer body
         var bodyLines: [String] = [
-            "let id = UUID()"
+            "let id = UUID.v7()"
         ]
         
         // Initialize many-to-many relationships

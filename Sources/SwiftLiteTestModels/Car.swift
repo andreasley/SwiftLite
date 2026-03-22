@@ -30,7 +30,7 @@ import Foundation
         name + "zzz"
     }
     
-    @Stored(defaultValue: UUID())
+    @Stored(defaultValue: UUID.v7())
     public let publicId: UUID
     
     @Related

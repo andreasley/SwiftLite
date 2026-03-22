@@ -29,7 +29,7 @@ nonisolated final class EngineExpanded
 
     init(db: Database, name: String = DefaultValues.name)
     {
-        let id = UUID()
+        let id = UUID.v7()
         let cars = Inverse<Car.Snapshot, Engine>(db: db, objectId: id, referencingField: "engine")
         
         self._metadata = ModelMetadata(db: db, table: Schema.table.name, id: id, isNew: true)

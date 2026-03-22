@@ -61,7 +61,7 @@ public actor DatabaseLogger
         public let synchronizedIndex: Int64?
         
         public init(
-            id: UUID = UUID(),
+            id: UUID = UUID.v7(),
             timestamp: Date = Date(),
             transactionId: UUID,
             operationType: OperationType,
@@ -132,7 +132,7 @@ public actor DatabaseLogger
         
         try initializeSchema()
         
-        self.highestSyncedLocalIndex = try getHighestSyncedLocalIndex()
+        self.highestSyncedLocalIndex = try getHighestSynchronizedIndex()
         self.pendingLocalCount = try getPendingLocalCount()
         self.highestRemoteIndex = await transport.getHighestRemoteIndex()
 
@@ -195,6 +195,7 @@ public actor DatabaseLogger
 
                 // TODO: publish progress information somewhere
                 
+                print("Fetching new entries, starting from index \(highestSyncedLocalIndex)")
                 let newEntries = await transport.getEntries(from: highestSyncedLocalIndex, limit: 100)
 
                 print("Received \(newEntries.count) entries to apply")
@@ -210,8 +211,6 @@ public actor DatabaseLogger
 
                 try await markOutdatedFieldUpdatesAsApplied()
 
-                self.highestSyncedLocalIndex = try getHighestSyncedLocalIndex()
-                
                 let entriesToApply = try await getEntriesToApply()
                 
                 // TODO: This might be slow for initial sync; do batches instead? Entries belonging to the same transaction should be sequential already.
@@ -221,6 +220,13 @@ public actor DatabaseLogger
                     try await database.processTransaction(entries: sortedEntriesForTransaction, transactionId: transactionId)
                     try markEntriesAsAppliedLocally(transactionId: transactionId)
                 }
+                
+                let highestSyncedIndexInReceivedEntries = newEntries.compactMap({ $0.synchronizedIndex }).reduce(highestSyncedLocalIndex) { max($0, $1) }
+
+                // Update configuration after successful sync
+                try updateLastSuccessfulSync()
+                try updateHighestSynchronizedIndex(highestSyncedIndexInReceivedEntries)
+                print("Increased synced index to \(highestSyncedIndexInReceivedEntries)")
             } catch {
                 // If we can't successfully read/write to the log, the database can't be used
                 try? await database.close()
@@ -245,8 +251,11 @@ public actor DatabaseLogger
                 }
                 try updateEntriesWithSynchronizationIndex(updatedSynchronizationIndexes)
                 self.pendingLocalCount = try getPendingLocalCount()
-                self.highestSyncedLocalIndex = try getHighestSyncedLocalIndex()
+
                 print("Updated log to index \(self.highestSyncedLocalIndex)")
+                
+                // Update configuration after successful send
+                try updateLastSuccessfulSync()
             } catch {
                 // If we can't successfully read/write to the log, the database can't be used
                 try? await database.close()
@@ -289,6 +298,35 @@ public actor DatabaseLogger
         for indexSQL in createIndexSQL {
             try execute(indexSQL)
         }
+        
+        // Create configuration table
+        let createConfigTableSQL = """
+        CREATE TABLE IF NOT EXISTS log_config (
+            key TEXT PRIMARY KEY NOT NULL,
+            value ANY
+        ) STRICT;
+        """
+        
+        try execute(createConfigTableSQL)
+        
+        // Initialize configuration values if this is the first run
+        if isFirstRun {
+            try initializeConfiguration()
+        }
+    }
+    
+    /// Initialize configuration values on first run
+    private func initializeConfiguration() throws {
+        let creationTimestamp = Date().timeIntervalSince1970
+        let clientDatabaseId = UUID.v7()
+        
+        try setConfigValue(key: "highest_synchronized_index", value: .int(0))
+        try setConfigValue(key: "server_database_id", value: .null)
+        try setConfigValue(key: "client_database_id", value: .string(clientDatabaseId.uuidString))
+        try setConfigValue(key: "last_successful_sync", value: .null)
+        try setConfigValue(key: "creation_timestamp", value: .double(creationTimestamp))
+        
+        print("📝 Initialized log configuration with client ID: \(clientDatabaseId.uuidString)")
     }
     
     /// Execute a SQL statement without parameters
@@ -494,41 +532,6 @@ public actor DatabaseLogger
             try? execute("ROLLBACK")
             throw error
         }
-    }
-    
-    /// Get the highest synchronized_index value from the log table
-    /// Returns nil if no entries have a synchronized_index set
-    public func getHighestSyncedLocalIndex() throws -> Int64
-    {
-        let sql = """
-        SELECT rn - 1
-        FROM (
-            SELECT "synchronized_index", ROW_NUMBER() OVER (ORDER BY "synchronized_index") AS rn
-            FROM operation_log
-        )
-        WHERE "synchronized_index" != rn
-        LIMIT 1;
-        """
-        
-        var statement: OpaquePointer?
-        let prepareResult = sqlite3_prepare_v2(connectionHandle, sql, -1, &statement, nil)
-        defer { sqlite3_finalize(statement) }
-        
-        guard let statement, prepareResult == SQLiteStatus.ok else {
-            let errmsg = String(cString: sqlite3_errmsg(connectionHandle))
-            throw Error.failedToLog(errmsg)
-        }
-        
-        guard sqlite3_step(statement) == SQLITE_ROW else {
-            throw Error.failedToFetch(sql: sql)
-        }
-        
-        // Check if the result is NULL (no entries with synchronized_index) = fresh database
-        if sqlite3_column_type(statement, 0) == SQLITE_NULL {
-            return 0
-        }
-        
-        return sqlite3_column_int64(statement, 0)
     }
 
     public func getPendingLocalCount() throws -> Int64
@@ -937,6 +940,154 @@ public actor DatabaseLogger
         }
         
         return entries
+    }
+    
+    // MARK: - Configuration Management
+    
+    /// Set a configuration value
+    private func setConfigValue(key: String, value: SQLValue) throws {
+        let sql = """
+        INSERT OR REPLACE INTO log_config (key, value)
+        VALUES (?, ?)
+        """
+        
+        var statement: OpaquePointer?
+        let prepareResult = sqlite3_prepare_v2(connectionHandle, sql, -1, &statement, nil)
+        defer { sqlite3_finalize(statement) }
+        
+        guard let statement, prepareResult == SQLiteStatus.ok else {
+            let errmsg = String(cString: sqlite3_errmsg(connectionHandle))
+            throw Error.failedToLog("Failed to set config value: \(errmsg)")
+        }
+        
+        // Bind key
+        sqlite3_bind_text(statement, 1, key, -1, SQLITE_TRANSIENT)
+        
+        // Bind value
+        switch value {
+        case .null:
+            sqlite3_bind_null(statement, 2)
+        case .int(let intValue):
+            sqlite3_bind_int64(statement, 2, intValue)
+        case .double(let doubleValue):
+            sqlite3_bind_double(statement, 2, doubleValue)
+        case .string(let stringValue):
+            sqlite3_bind_text(statement, 2, stringValue, -1, SQLITE_TRANSIENT)
+        case .data(let dataValue):
+            _ = dataValue.withUnsafeBytes { bufferPointer in
+                sqlite3_bind_blob(statement, 2, bufferPointer.baseAddress, Int32(dataValue.count), SQLITE_TRANSIENT)
+            }
+        }
+        
+        let stepResult = sqlite3_step(statement)
+        guard stepResult == SQLITE_DONE else {
+            let errmsg = String(cString: sqlite3_errmsg(connectionHandle))
+            throw Error.failedToLog("Failed to execute set config value: \(errmsg)")
+        }
+    }
+    
+    /// Get a configuration value
+    private func getConfigValue(key: String) throws -> SQLValue? {
+        let sql = "SELECT value FROM log_config WHERE key = ?"
+        
+        var statement: OpaquePointer?
+        let prepareResult = sqlite3_prepare_v2(connectionHandle, sql, -1, &statement, nil)
+        defer { sqlite3_finalize(statement) }
+        
+        guard let statement, prepareResult == SQLiteStatus.ok else {
+            let errmsg = String(cString: sqlite3_errmsg(connectionHandle))
+            throw Error.failedToLog("Failed to get config value: \(errmsg)")
+        }
+        
+        // Bind key
+        sqlite3_bind_text(statement, 1, key, -1, SQLITE_TRANSIENT)
+        
+        guard sqlite3_step(statement) == SQLITE_ROW else {
+            return nil
+        }
+        
+        let columnType = sqlite3_column_type(statement, 0)
+        switch columnType {
+        case SQLITE_INTEGER:
+            return .int(sqlite3_column_int64(statement, 0))
+        case SQLITE_FLOAT:
+            return .double(sqlite3_column_double(statement, 0))
+        case SQLITE_TEXT:
+            return .string(String(cString: sqlite3_column_text(statement, 0)))
+        case SQLITE_BLOB:
+            if let blobPointer = sqlite3_column_blob(statement, 0) {
+                let blobSize = Int(sqlite3_column_bytes(statement, 0))
+                let data = Data(bytes: blobPointer, count: blobSize)
+                return .data(data)
+            } else {
+                return nil
+            }
+        case SQLITE_NULL:
+            return .null
+        default:
+            return nil
+        }
+    }
+    
+    /// Get the client database ID (automatically generated on first run)
+    public func getClientDatabaseId() throws -> UUID? {
+        guard let value = try getConfigValue(key: "client_database_id"),
+              case .string(let uuidString) = value else {
+            return nil
+        }
+        return UUID(uuidString: uuidString)
+    }
+    
+    /// Get the server database ID
+    public func getServerDatabaseId() throws -> UUID? {
+        guard let value = try getConfigValue(key: "server_database_id"),
+              case .string(let uuidString) = value else {
+            return nil
+        }
+        return UUID(uuidString: uuidString)
+    }
+    
+    /// Set the server database ID
+    public func setServerDatabaseId(_ id: UUID) throws {
+        try setConfigValue(key: "server_database_id", value: .string(id.uuidString))
+    }
+    
+    /// Get the highest synchronized index from the config
+    public func getHighestSynchronizedIndex() throws -> Int64 {
+        guard let value = try getConfigValue(key: "highest_synchronized_index"),
+              case .int(let index) = value else {
+            return 0
+        }
+        return index
+    }
+    
+    /// Update the highest synchronized index in config
+    public func updateHighestSynchronizedIndex(_ index: Int64) throws {
+        highestSyncedLocalIndex = index
+        try setConfigValue(key: "highest_synchronized_index", value: .int(index))
+    }
+    
+    /// Get the last successful sync timestamp
+    public func getLastSuccessfulSync() throws -> Date? {
+        guard let value = try getConfigValue(key: "last_successful_sync"),
+              case .double(let timestamp) = value else {
+            return nil
+        }
+        return Date(timeIntervalSince1970: timestamp)
+    }
+    
+    /// Update the last successful sync timestamp
+    public func updateLastSuccessfulSync(_ date: Date = Date()) throws {
+        try setConfigValue(key: "last_successful_sync", value: .double(date.timeIntervalSince1970))
+    }
+    
+    /// Get the creation timestamp of the operation log database
+    public func getCreationTimestamp() throws -> Date? {
+        guard let value = try getConfigValue(key: "creation_timestamp"),
+              case .double(let timestamp) = value else {
+            return nil
+        }
+        return Date(timeIntervalSince1970: timestamp)
     }
         
     /// Close the log database

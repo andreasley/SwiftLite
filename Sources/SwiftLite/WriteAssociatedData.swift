@@ -9,7 +9,7 @@ nonisolated public struct WriteAssociatedData: Sendable, Equatable, Hashable
     @TaskLocal static var current: WriteAssociatedData?
     
     let db: Database
-    let transactionId: UUID = UUID()
+    let transactionId: UUID = UUID.v7()
     
     public func hash(into hasher: inout Hasher)
     {

@@ -30,7 +30,7 @@ nonisolated final class PassengerExpanded
 
     init(db: Database, name: String = DefaultValues.name)
     {
-        let id = UUID()
+        let id = UUID.v7()
         let cars = InverseManyToMany(keyPath: \Car._editableData.passengers, db: db, elementId: id)
 
         self._metadata = ModelMetadata(db: db, table: Schema.table.name, id: id, isNew: true)

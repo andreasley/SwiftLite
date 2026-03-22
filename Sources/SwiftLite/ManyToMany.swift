@@ -159,7 +159,7 @@ public nonisolated extension ManyToMany
         
         public init(db: Database, parent: UUID, element: Element)
         {
-            let id = UUID()
+            let id = UUID.v7()
             
             self._metadata = ModelMetadata(db: db, table: Schema.table.name, id: id, isNew: true)
             

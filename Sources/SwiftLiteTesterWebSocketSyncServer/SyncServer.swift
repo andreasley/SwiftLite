@@ -205,7 +205,7 @@ struct SyncServer {
 // MARK: - Supporting Types
 
 struct ClientSession: Identifiable, Sendable {
-    let id = UUID()
+    let id = UUID.v7()
     let databaseId: String
 }
 
