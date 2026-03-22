@@ -171,69 +171,75 @@ public actor DatabaseLogger
     
     private func sync() async
     {
+        guard await transport.status != .offline else { return }
+
         guard !isSyncing else { return }
         isSyncing = true
         defer { isSyncing = false }
+
+        // repeatedly sync small batches to not block the insertion of new log entries
         
-        await fetchAndUpdate()
-        await sendUnsynchronized()
+        while (self.pendingRemoteCount ?? 0) > 0 {
+            await fetchAndUpdate()
+        }
+        
+        while pendingLocalCount > 0 {
+            await sendUnsynchronized()
+        }
     }
     
     private func fetchAndUpdate() async
     {
         guard isSyncing else { return }
 
-        while (self.pendingRemoteCount ?? 0) > 0 {
+        guard let highestRemoteIndex, let pendingRemoteCount else {
+            print("Failed to determine the highest remote index")
+            return
+        }
 
-            guard let highestRemoteIndex, let pendingRemoteCount else {
-                print("Failed to determine the highest remote index")
+        print("Highest remote index \(highestRemoteIndex) (\(pendingRemoteCount) pending remote)")
+        
+        do {
+            guard !isClosed else { return }
+
+            // TODO: publish progress information somewhere
+            
+            print("Fetching new entries, starting from index \(highestSyncedLocalIndex)")
+            let newEntries = await transport.getEntries(from: highestSyncedLocalIndex, limit: 100)
+
+            print("Received \(newEntries.count) entries to apply")
+
+            guard newEntries.count > 0 else {
+                // Transport returned 0 items; probably offline. Try again later.
                 return
             }
 
-            print("Highest remote index \(highestRemoteIndex) (\(pendingRemoteCount) pending remote)")
-            
-            do {
-                guard !isClosed else { return }
-
-                // TODO: publish progress information somewhere
-                
-                print("Fetching new entries, starting from index \(highestSyncedLocalIndex)")
-                let newEntries = await transport.getEntries(from: highestSyncedLocalIndex, limit: 100)
-
-                print("Received \(newEntries.count) entries to apply")
-
-                guard newEntries.count > 0 else {
-                    // Transport returned 0 items; probably offline. Try again later.
-                    return
-                }
-
-                for entry in newEntries {
-                    try log(entry, source: .remote)
-                }
-
-                try await markOutdatedFieldUpdatesAsApplied()
-
-                let entriesToApply = try await getEntriesToApply()
-                
-                let groupedEntriesToApply = Dictionary(grouping: entriesToApply) { $0.transactionId }
-                for (transactionId, entriesForTransaction) in groupedEntriesToApply.sorted(by: { ($0.value.first?.synchronizedIndex ?? 0) < ($1.value.first?.synchronizedIndex ?? 0) }) {
-                    let sortedEntriesForTransaction = entriesForTransaction.sorted(by: { ($0.synchronizedIndex ?? 0) < ($1.synchronizedIndex ?? 0) })
-                    try await database.processTransaction(entries: sortedEntriesForTransaction, transactionId: transactionId)
-                    try markEntriesAsAppliedLocally(transactionId: transactionId)
-                }
-                
-                let highestSyncedIndexInReceivedEntries = newEntries.compactMap({ $0.synchronizedIndex }).reduce(highestSyncedLocalIndex) { max($0, $1) }
-
-                // Update configuration after successful sync
-                try updateLastSuccessfulSync()
-                try updateHighestSynchronizedIndex(highestSyncedIndexInReceivedEntries)
-                setHighestRemoteIndex(highestSyncedIndexInReceivedEntries)
-                print("Increased synced index to \(highestSyncedIndexInReceivedEntries)")
-            } catch {
-                // If we can't successfully read/write to the log, the database can't be used
-                try? await database.close()
-                fatalError = error
+            for entry in newEntries {
+                try log(entry, source: .remote)
             }
+
+            try await markOutdatedFieldUpdatesAsApplied()
+
+            let entriesToApply = try await getEntriesToApply()
+            
+            let groupedEntriesToApply = Dictionary(grouping: entriesToApply) { $0.transactionId }
+            for (transactionId, entriesForTransaction) in groupedEntriesToApply.sorted(by: { ($0.value.first?.synchronizedIndex ?? 0) < ($1.value.first?.synchronizedIndex ?? 0) }) {
+                let sortedEntriesForTransaction = entriesForTransaction.sorted(by: { ($0.synchronizedIndex ?? 0) < ($1.synchronizedIndex ?? 0) })
+                try await database.processTransaction(entries: sortedEntriesForTransaction, transactionId: transactionId)
+                try markEntriesAsAppliedLocally(transactionId: transactionId)
+            }
+            
+            let highestSyncedIndexInReceivedEntries = newEntries.compactMap({ $0.synchronizedIndex }).reduce(highestSyncedLocalIndex) { max($0, $1) }
+
+            // Update configuration after successful sync
+            try updateLastSuccessfulSync()
+            try updateHighestSynchronizedIndex(highestSyncedIndexInReceivedEntries)
+            setHighestRemoteIndex(highestSyncedIndexInReceivedEntries)
+            print("Increased synced index to \(highestSyncedIndexInReceivedEntries)")
+        } catch {
+            // If we can't successfully read/write to the log, the database can't be used
+            try? await database.close()
+            fatalError = error
         }
     }
     
@@ -241,31 +247,28 @@ public actor DatabaseLogger
     {
         guard isSyncing else { return }
 
-        while pendingLocalCount > 0 {
-            guard await transport.status != .offline else { return }
-            do {
-                let entries = try await getEntriesToSend(limit: 100)
-                print("Found \(entries.count) entries to send to sync")
-                
-                guard entries.count > 0 else { return }
-                
-                let updatedSynchronizationIndexes = await transport.sendEntries(entries: entries)
-                if updatedSynchronizationIndexes.count != entries.count {
-                    print("Sent \(entries.count) to server but only received \(updatedSynchronizationIndexes.count) indexes")
-                } else {
-                    print("Received \(updatedSynchronizationIndexes.count) indexes for sent entries")
-                }
-                
-                try updateEntriesWithSynchronizationIndex(updatedSynchronizationIndexes)
-                self.pendingLocalCount = try getPendingLocalCount()
-
-                // Update configuration after successful send
-                try updateLastSuccessfulSync()
-            } catch {
-                // If we can't successfully read/write to the log, the database can't be used
-                try? await database.close()
-                fatalError = error
+        do {
+            let entries = try await getEntriesToSend(limit: 100)
+            print("Found \(entries.count) entries to send to sync")
+            
+            guard entries.count > 0 else { return }
+            
+            let updatedSynchronizationIndexes = await transport.sendEntries(entries: entries)
+            if updatedSynchronizationIndexes.count != entries.count {
+                print("Sent \(entries.count) to server but only received \(updatedSynchronizationIndexes.count) indexes")
+            } else {
+                print("Received \(updatedSynchronizationIndexes.count) indexes for sent entries")
             }
+            
+            try updateEntriesWithSynchronizationIndex(updatedSynchronizationIndexes)
+            self.pendingLocalCount = try getPendingLocalCount()
+
+            // Update configuration after successful send
+            try updateLastSuccessfulSync()
+        } catch {
+            // If we can't successfully read/write to the log, the database can't be used
+            try? await database.close()
+            fatalError = error
         }
     }
     
