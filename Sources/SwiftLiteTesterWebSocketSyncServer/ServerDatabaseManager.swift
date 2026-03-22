@@ -13,6 +13,9 @@ actor ServerDatabaseManager
     private var databases: [String: ServerDatabase] = [:]
     private var clientConnections: [UUID: ClientConnection] = [:]
     
+    private let encoder = JSONEncoder.forSwiftLiteSync
+    private let decoder = JSONDecoder.forSwiftLiteSync
+
     init() async throws {
         // Ensure data directory exists
         let dataDir = URL.applicationSupportDirectory
@@ -35,9 +38,6 @@ actor ServerDatabaseManager
     
     func broadcastIndexUpdate(databaseId: String, highestIndex: Int64, excludingSessionId: UUID?) async {
         let message = WebSocketMessage.indexUpdate(highestIndex: highestIndex)
-        
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
         
         guard let messageData = try? encoder.encode(message) else {
             print("Failed to encode index update message")

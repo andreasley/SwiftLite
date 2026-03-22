@@ -37,8 +37,7 @@ struct SyncServer {
             
             let data = Data(buffer: bodyBuffer)
             
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
+            let decoder = JSONDecoder.forSwiftLiteSync
             let entries = try decoder.decode([DatabaseLogger.LogEntry].self, from: data)
             
             let mapping = try await databaseManager.storeEntries(
@@ -46,8 +45,7 @@ struct SyncServer {
                 databaseId: databaseId
             )
             
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
+            let encoder = JSONEncoder.forSwiftLiteSync
             let responseData = try encoder.encode(mapping)
 
             Task {
@@ -73,8 +71,7 @@ struct SyncServer {
             
             let highestIndex = try await databaseManager.getHighestIndex(databaseId: databaseId)
             
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
+            let encoder = JSONEncoder.forSwiftLiteSync
             let responseData = try encoder.encode(highestIndex)
             
             return Response(
@@ -105,8 +102,7 @@ struct SyncServer {
                 limit: limit
             )
             
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
+            let encoder = JSONEncoder.forSwiftLiteSync
             let responseData = try encoder.encode(entries)
             
             return Response(
@@ -139,6 +135,9 @@ struct SyncServer {
     ) async throws {
         var clientSession: ClientSession?
         
+        
+        let encoder = JSONEncoder.forSwiftLiteSync
+
         // Process incoming messages
         for try await message in inbound.messages(maxSize: 10 * 1024 * 1024) {
             guard case .binary(let buffer) = message else {
@@ -148,8 +147,7 @@ struct SyncServer {
             let data = Data(buffer: buffer)
             
             do {
-                let decoder = JSONDecoder()
-                decoder.dateDecodingStrategy = .iso8601
+                let decoder = JSONDecoder.forSwiftLiteSync
                 let webSocketMessage = try decoder.decode(WebSocketMessage.self, from: data)
 
                 let response = try await processMessage(
@@ -160,8 +158,6 @@ struct SyncServer {
                 )
                 
                 if let response {
-                    let encoder = JSONEncoder()
-                    encoder.dateEncodingStrategy = .iso8601
                     let responseData = try encoder.encode(response)
                     try await outbound.write(.binary(ByteBuffer(data: responseData)))
                 }

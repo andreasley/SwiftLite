@@ -29,6 +29,9 @@ public actor WebSocketSyncTransport: SyncTransport
     public let downloadUrl: URL
     public let indexUrl: URL
 
+    private let encoder = JSONEncoder.forSwiftLiteSync
+    private let decoder = JSONDecoder.forSwiftLiteSync
+
     // Status stream support
     private var statusContinuation: AsyncStream<SyncTransportStatus>.Continuation?
     public nonisolated let statusStream: AsyncStream<SyncTransportStatus>
@@ -134,8 +137,6 @@ public actor WebSocketSyncTransport: SyncTransport
                 return nil
             }
             
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
             let highestIndex = try decoder.decode(Int64.self, from: data)
             
             return highestIndex
@@ -155,10 +156,8 @@ public actor WebSocketSyncTransport: SyncTransport
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
             request.httpBody = try encoder.encode(entries)
-            
+
             let (data, response) = try await session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
@@ -171,8 +170,6 @@ public actor WebSocketSyncTransport: SyncTransport
                 return [:]
             }
             
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
             let mapping = try decoder.decode([UUID: Int64].self, from: data)
             
             return mapping
@@ -205,8 +202,6 @@ public actor WebSocketSyncTransport: SyncTransport
                 return []
             }
             
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
             let entries = try decoder.decode([DatabaseLogger.LogEntry].self, from: data)
             
             status = .syncing(Progress(totalUnitCount: Int64(entries.count)))
@@ -267,8 +262,6 @@ public actor WebSocketSyncTransport: SyncTransport
             throw WebSocketError.notConnected
         }
         
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
         let data = try encoder.encode(message)
         
         let urlMessage = URLSessionWebSocketTask.Message.data(data)
@@ -290,8 +283,6 @@ public actor WebSocketSyncTransport: SyncTransport
             throw WebSocketError.invalidMessage
         }
         
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
         return try decoder.decode(WebSocketMessage.self, from: data)
     }
     
