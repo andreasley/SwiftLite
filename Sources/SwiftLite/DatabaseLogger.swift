@@ -797,7 +797,7 @@ public actor DatabaseLogger
                 SELECT id,
                        ROW_NUMBER() OVER (
                            PARTITION BY table_name, object_id, column_name 
-                           ORDER BY timestamp DESC
+                           ORDER BY timestamp DESC, synchronized_index DESC
                        ) as rn
                 FROM operation_log
                 WHERE operation_type = 'field_updated'
