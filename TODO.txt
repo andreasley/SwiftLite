@@ -1,6 +1,18 @@
-- Limit number of entries when fetching
+- Sync Transport errors: Show in client
+- Client: Handle errors the server throws while inserting uploaded log entries
+- Combine id seter in operation_log with row creation
+- Filter any attempts to set the ID when logging (in both client server, probably) and replaying
+- Create a UNIQUE index for schema operations, so they aren't duplicated after multiple clients make the upgrade (while offline)
+
+- Check return value on use of sqlite3_bind_*
+
+- Server: Don't send entries back to the device that just sent it
+
+- Server database needs a unique ID, so the client can check if it's the correct database or if a client reset is required
+- Client database needs a unique ID?
+
 - Implement ping/pong for WebSocket
-- Mark older entries für a specific table/column locally as "applied"
+- Implement repeated retries for sync (both fetch and send)
 
 - Sync status view: Show history, show log, show last sync date
 - Make the devices send a device ID that can be logged alongside log entries
