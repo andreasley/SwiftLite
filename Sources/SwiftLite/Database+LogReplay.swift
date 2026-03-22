@@ -260,12 +260,14 @@ extension Database
                     changedObjects.append(changedObject)
                     
                 } else if !fieldUpdates.isEmpty {
-                    // Update operation - apply field changes
+                    // Update operation - apply field changes (except for `id`, which isn't allowed to change and shouldn't be sent anyway)
                     var fields: [String: SQLValue] = [:]
                     
                     for fieldUpdate in fieldUpdates {
                         guard let columnName = fieldUpdate.columnName,
-                              let newValue = fieldUpdate.newValue else { continue }
+                              let newValue = fieldUpdate.newValue,
+                              columnName != "id"
+                        else { continue }
                         fields[columnName] = newValue
                     }
                     

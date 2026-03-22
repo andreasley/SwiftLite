@@ -1,6 +1,5 @@
 - Sync Transport errors: Show in client
 - Client: Handle errors the server throws while inserting uploaded log entries
-- Combine id seter in operation_log with row creation
 - Filter any attempts to set the ID when logging (in both client server, probably) and replaying
 - Create a UNIQUE index for schema operations, so they aren't duplicated after multiple clients make the upgrade (while offline)
 

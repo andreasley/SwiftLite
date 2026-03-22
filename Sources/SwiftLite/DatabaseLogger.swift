@@ -600,6 +600,7 @@ public actor DatabaseLogger
                 // Log each field value as a separate field update
                 if let updatedFields = change.updatedFields {
                     for (fieldName, value) in updatedFields {
+                        guard fieldName != "id" else { continue } // The ID has to be set at row creation already; no point in updating it again
                         entries.append(LogEntry(
                             transactionId: transactionId,
                             operationType: .fieldUpdated,
@@ -624,6 +625,7 @@ public actor DatabaseLogger
                 // Log each field change separately
                 if let updatedFields = change.updatedFields {
                     for (fieldName, newValue) in updatedFields {
+                        guard fieldName != "id" else { continue } // The ID has to be set at row creation already; no point in updating it again
                         entries.append(LogEntry(
                             transactionId: transactionId,
                             operationType: .fieldUpdated,
@@ -784,7 +786,7 @@ public actor DatabaseLogger
     public func markOutdatedFieldUpdatesAsApplied() async throws
     {
         // There's no point in ever applying field update values for a specific table/object/column if there's already a more recent value.
-        // Mark all such outdated values as "applied_locally = 1". These won't be applied to the local database. This works fine, even if they were part of a transaction, as all fields are nullable and foreign key checks are disabled while replaying (so setting a reference in a later transaction isn't an issue).
+        // Mark all such outdated values as "applied_locally = 1". These won't be applied to the local database. This works fine, even if they were part of a transaction, as all fields are nullable and foreign key checks are disabled while replaying (so setting a reference in a later transaction instead isn't an issue when replaying).
         
         let sql = """
         UPDATE operation_log
