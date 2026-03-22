@@ -1,7 +1,6 @@
 - Store fatal error in the configuration database; fail Database initializer if broken
 - Sync Transport errors: Show in client
 - Client: Handle errors the server throws while inserting uploaded log entries
-- Filter any attempts to set the ID when logging (in both client server, probably) and replaying
 
 - Server: Don't send entries back to the device that just sent it
 
