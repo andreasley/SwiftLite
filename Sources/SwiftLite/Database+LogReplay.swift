@@ -80,10 +80,7 @@ extension Database
         
         do {
             for entry in entries {
-                guard let tableName = entry.tableName else {
-                    print("⚠️ Skipping schema entry without table name: \(entry.operationType)")
-                    continue
-                }
+                let tableName = entry.tableName
                 
                 switch entry.operationType {
                 case DatabaseLogger.OperationType.tableCreated:
@@ -200,10 +197,10 @@ extension Database
             }
             
             let groupedByObject = Dictionary(grouping: entries.compactMap { entry -> (ObjectKey, DatabaseLogger.LogEntry)? in
-                guard let tableName = entry.tableName, let objectId = entry.objectId else {
+                guard let objectId = entry.objectId else {
                     return nil
                 }
-                return (ObjectKey(tableName: tableName, objectId: objectId), entry)
+                return (ObjectKey(tableName: entry.tableName, objectId: objectId), entry)
             }) { $0.0 }
             
             for (key, keyedEntries) in groupedByObject {

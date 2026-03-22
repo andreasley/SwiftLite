@@ -52,7 +52,7 @@ public actor DatabaseLogger
         public let timestamp: Date
         public let transactionId: UUID
         public let operationType: OperationType
-        public let tableName: String?
+        public let tableName: String
         public let objectId: UUID?
         public let columnName: String?
         public let newValue: SQLValue?
@@ -65,7 +65,7 @@ public actor DatabaseLogger
             timestamp: Date = Date(),
             transactionId: UUID,
             operationType: OperationType,
-            tableName: String? = nil,
+            tableName: String,
             objectId: UUID? = nil,
             columnName: String? = nil,
             newValue: SQLValue? = nil,
@@ -183,7 +183,7 @@ public actor DatabaseLogger
         
         self.highestRemoteIndex = await transport.getHighestRemoteIndex()
         guard let highestRemoteIndex, let pendingRemoteCount else {
-            print("Failed to determine the highest remote index)")
+            print("Failed to determine the highest remote index")
             return
         }
         
@@ -272,7 +272,7 @@ public actor DatabaseLogger
             timestamp REAL NOT NULL,
             transaction_id TEXT NOT NULL,
             operation_type TEXT NOT NULL,
-            table_name TEXT,
+            table_name TEXT NOT NULL,
             object_id TEXT,
             column_name TEXT,
             new_value ANY,
@@ -368,12 +368,8 @@ public actor DatabaseLogger
         sqlite3_bind_double(statement, 2, entry.timestamp.timeIntervalSince1970)
         sqlite3_bind_text(statement, 3, entry.transactionId.uuidString, -1, SQLITE_TRANSIENT)
         sqlite3_bind_text(statement, 4, entry.operationType.rawValue, -1, SQLITE_TRANSIENT)
-        
-        if let tableName = entry.tableName {
-            sqlite3_bind_text(statement, 5, tableName, -1, SQLITE_TRANSIENT)
-        } else {
-            sqlite3_bind_null(statement, 5)
-        }
+        sqlite3_bind_text(statement, 5, entry.tableName, -1, SQLITE_TRANSIENT)
+
         
         if let objectId = entry.objectId {
             sqlite3_bind_text(statement, 6, objectId.uuidString, -1, SQLITE_TRANSIENT)
@@ -717,10 +713,7 @@ public actor DatabaseLogger
             }
             
             let timestamp = Date(timeIntervalSince1970: sqlite3_column_double(statement, 1))
-            
-            let tableName = sqlite3_column_type(statement, 4) != SQLITE_NULL
-                ? String(cString: sqlite3_column_text(statement, 4))
-                : nil
+            let tableName = String(cString: sqlite3_column_text(statement, 4))
             
             let objectId = sqlite3_column_type(statement, 5) != SQLITE_NULL
                 ? UUID(uuidString: String(cString: sqlite3_column_text(statement, 5)))
@@ -868,10 +861,7 @@ public actor DatabaseLogger
             }
             
             let timestamp = Date(timeIntervalSince1970: sqlite3_column_double(statement, 1))
-            
-            let tableName = sqlite3_column_type(statement, 4) != SQLITE_NULL
-                ? String(cString: sqlite3_column_text(statement, 4))
-                : nil
+            let tableName = String(cString: sqlite3_column_text(statement, 4))
             
             let objectId = sqlite3_column_type(statement, 5) != SQLITE_NULL
                 ? UUID(uuidString: String(cString: sqlite3_column_text(statement, 5)))

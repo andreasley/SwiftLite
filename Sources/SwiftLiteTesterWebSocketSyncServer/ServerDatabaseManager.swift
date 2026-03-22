@@ -158,12 +158,7 @@ actor ServerDatabase {
             sqlite3_bind_double(stmt, 2, entry.timestamp.timeIntervalSince1970)
             sqlite3_bind_text(stmt, 3, entry.transactionId.uuidString, -1, SQLITE_TRANSIENT)
             sqlite3_bind_text(stmt, 4, entry.operationType.rawValue, -1, SQLITE_TRANSIENT)
-            
-            if let tableName = entry.tableName {
-                sqlite3_bind_text(stmt, 5, tableName, -1, SQLITE_TRANSIENT)
-            } else {
-                sqlite3_bind_null(stmt, 5)
-            }
+            sqlite3_bind_text(stmt, 5, entry.tableName, -1, SQLITE_TRANSIENT)
             
             if let objectId = entry.objectId {
                 sqlite3_bind_text(stmt, 6, objectId.uuidString, -1, SQLITE_TRANSIENT)
@@ -255,7 +250,7 @@ actor ServerDatabase {
             timestamp REAL NOT NULL,
             transaction_id TEXT NOT NULL,
             operation_type TEXT NOT NULL,
-            table_name TEXT,
+            table_name TEXT NOT NULL,
             object_id TEXT,
             column_name TEXT,
             new_value ANY,
@@ -265,14 +260,20 @@ actor ServerDatabase {
         ) STRICT;
         """
         
+        let createIndexSQL = [
+            "CREATE INDEX IF NOT EXISTS idx_timestamp ON operation_log(timestamp);",
+            "CREATE INDEX IF NOT EXISTS idx_transaction_id ON operation_log(transaction_id);",
+            "CREATE INDEX IF NOT EXISTS idx_operation_type ON operation_log(operation_type);",
+            "CREATE INDEX IF NOT EXISTS idx_table_name ON operation_log(table_name);",
+            "CREATE INDEX IF NOT EXISTS idx_object_id ON operation_log(object_id);",
+            "CREATE INDEX IF NOT EXISTS idx_synchronized_index ON operation_log(synchronized_index);",
+        ]
+        
         try execute(sql: createTableSQL)
-        
-        let createIndexSQL = """
-        CREATE INDEX IF NOT EXISTS idx_synchronized_index 
-        ON operation_log(synchronized_index);
-        """
-        
-        try execute(sql: createIndexSQL)
+
+        for indexSQL in createIndexSQL {
+            try execute(sql: indexSQL)
+        }
     }
     
     private func fetchHighestIndex() throws -> Int64 {
@@ -320,7 +321,8 @@ actor ServerDatabase {
         }
     }
     
-    private func parseLogEntry(from stmt: OpaquePointer?) throws -> DatabaseLogger.LogEntry {
+    private func parseLogEntry(from stmt: OpaquePointer?) throws -> DatabaseLogger.LogEntry
+    {
         guard let idString = sqlite3_column_text(stmt, 0).map({ String(cString: $0) }),
               let id = UUID(uuidString: idString) else {
             throw ServerError.databaseError("Invalid entry ID")
@@ -337,8 +339,11 @@ actor ServerDatabase {
               let operationType = DatabaseLogger.OperationType(rawValue: operationTypeString) else {
             throw ServerError.databaseError("Invalid operation type")
         }
-        
-        let tableName = sqlite3_column_text(stmt, 4).map { String(cString: $0) }
+
+        guard let tableName = sqlite3_column_text(stmt, 4).map({ String(cString: $0) }) else {
+            throw ServerError.databaseError("Invalid table name")
+        }
+
         let objectId = sqlite3_column_text(stmt, 5).flatMap { UUID(uuidString: String(cString: $0)) }
         let columnName = sqlite3_column_text(stmt, 6).map { String(cString: $0) }
         
