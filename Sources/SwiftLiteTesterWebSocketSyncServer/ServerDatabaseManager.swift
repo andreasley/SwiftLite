@@ -54,13 +54,15 @@ actor ServerDatabaseManager {
                     continue
                 }
                 
-                do {
-                    try await connection.outbound.write(.binary(buffer))
-                    print("📤 Sent index update (\(highestIndex)) to session \(sessionId)")
-                } catch {
-                    clientConnections.removeValue(forKey: sessionId)
-                    print("Failed to send index update to session \(sessionId): \(error)")
-                    print("Removing session \(sessionId) from client connection list")
+                Task {
+                    do {
+                        try await connection.outbound.write(.binary(buffer))
+                        print("📤 Sent index update (\(highestIndex)) to session \(sessionId)")
+                    } catch {
+                        clientConnections.removeValue(forKey: sessionId)
+                        print("Failed to send index update to session \(sessionId): \(error)")
+                        print("Removing session \(sessionId) from client connection list")
+                    }
                 }
             }
         }
