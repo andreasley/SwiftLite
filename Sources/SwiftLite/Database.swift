@@ -8,8 +8,7 @@ public actor Database: Observable
     nonisolated public struct Status: Sendable
     {
         public let localStatus: LocalDatabaseStatus
-        public let syncStatus: SyncTransportStatus?
-        public let pendingLocalChanges: Int64
+        public let syncStatus: DatabaseLogger.Status
     }
     
     public enum LocalDatabaseStatus: Sendable {
@@ -38,7 +37,7 @@ public actor Database: Observable
     public private(set) var localStatus: LocalDatabaseStatus = .ok
     
     // Status stream support
-    private var statusContinuation: AsyncStream<Status>.Continuation?
+    private var statusContinuation: AsyncStream<Status>.Continuation
     public nonisolated let statusStream: AsyncStream<Status>
 
     // Logging for distributed sync
@@ -105,20 +104,14 @@ public actor Database: Observable
         self.connectionHandle = pointer
         
         // Create the status stream
-        var continuation: AsyncStream<Status>.Continuation?
-        self.statusStream = AsyncStream { cont in
-            continuation = cont
-            // Yield the initial status
-            cont.yield(Status(localStatus: .ok, syncStatus: nil, pendingLocalChanges: 0))
-        }
-        self.statusContinuation = continuation
+        (self.statusStream, self.statusContinuation) = AsyncStream.makeStream(of: Status.self)
 
         
-        if let transport = logger?.transport {
+        if let logger {
             Task {
-                for await syncStatus in transport.statusStream {
-                    let updatedStatus = Status(localStatus: localStatus, syncStatus: syncStatus, pendingLocalChanges: await logger?.pendingLocalCount ?? 0)
-                    statusContinuation?.yield(updatedStatus)
+                for await syncStatus in logger.statusStream {
+                    let updatedStatus = Status(localStatus: localStatus, syncStatus: syncStatus)
+                    statusContinuation.yield(updatedStatus)
                 }
             }
         }
@@ -531,6 +524,8 @@ public actor Database: Observable
         
     isolated deinit
     {
+        statusContinuation.finish()
+
         if !isClosed {
             sqlite3_close(self.connectionHandle)
         }

@@ -33,6 +33,17 @@ public actor DatabaseLogger
         }
     }
     
+    public nonisolated struct Status: Sendable
+    {
+        public let transportStatus: TransportStatus
+        public let currentSyncProgress: Progress?
+        public let pendingLocalChanges: Int64
+        public let pendingRemoteChanges: Int64
+        public let highestSyncedLocalIndex: Int64
+//        let syncHistory: [SyncHistoryEntry]
+        public let fatalError: Swift.Error?
+    }
+    
     public enum OperationType: String, Sendable, Codable {
         // Schema operations
         case tableCreated = "table_created"
@@ -98,14 +109,22 @@ public actor DatabaseLogger
     private let isFirstRun: Bool
     private let logFileURL: URL
     public let transport: SyncTransport
-    public private(set) var highestSyncedLocalIndex: Int64 = 0
-    public private(set) var highestRemoteIndex: Int64?
-    public private(set) var pendingLocalCount: Int64 = 0
     
+    public private(set) var highestSyncedLocalIndex: Int64 = 0 { didSet { updateStatus() }}
+    public private(set) var highestRemoteIndex: Int64? { didSet { updateStatus() }}
+    public private(set) var pendingLocalCount: Int64 = 0 { didSet { updateStatus() }}
+    public private(set) var currentSyncProgress: Progress? { didSet { updateStatus() }}
+
     public var pendingRemoteCount: Int64? {
         guard let highestRemoteIndex else { return 0 }
         return highestRemoteIndex - highestSyncedLocalIndex
     }
+
+    // Status stream support
+    private var status: Status
+    private var syncStatus: TransportStatus
+    private var statusContinuation: AsyncStream<Status>.Continuation?
+    public nonisolated let statusStream: AsyncStream<Status>
 
     private(set) weak var database: Database!
     
@@ -129,18 +148,56 @@ public actor DatabaseLogger
         
         self.connectionHandle = pointer
         self.transport = transport
+
+        let transportStatus = await transport.status
+        self.syncStatus = transportStatus
+
+        let initialStatus = Status(transportStatus: transportStatus, currentSyncProgress: nil, pendingLocalChanges: 0, pendingRemoteChanges: 00, highestSyncedLocalIndex: 0, fatalError: fatalError)
+        self.status = initialStatus
         
+
+        var continuation: AsyncStream<Status>.Continuation?
+        self.statusStream = AsyncStream { cont in
+            continuation = cont
+        }
+        self.statusContinuation = continuation
+
         try initializeSchema()
         
         self.highestSyncedLocalIndex = try getHighestSynchronizedIndex()
         self.pendingLocalCount = try getPendingLocalCount()
         self.highestRemoteIndex = await transport.getHighestRemoteIndex()
+        
+        updateStatus()
+        continuation?.yield(self.status)
 
         print("📝 Database logger initialized at \(logFileURL.path)")
         print("Starting log from index \(self.highestSyncedLocalIndex)")
         print("Number of unsynchronized log entries: \(self.pendingLocalCount)")
+
+        Task {
+            for await syncStatus in transport.statusStream {
+                self.syncStatus = syncStatus
+                self.updateStatus()
+                statusContinuation?.yield(self.status)
+            }
+        }
     }
-    
+
+    func updateStatus()
+    {
+        self.status = Status(
+            transportStatus: syncStatus,
+            currentSyncProgress: currentSyncProgress,
+            pendingLocalChanges: pendingLocalCount,
+            pendingRemoteChanges: pendingRemoteCount ?? 0,
+            highestSyncedLocalIndex: highestSyncedLocalIndex,
+            fatalError: fatalError
+        )
+        
+        statusContinuation?.yield(self.status)
+    }
+
     func setHighestRemoteIndex(_ newValue: Int64)
     {
         self.highestRemoteIndex = newValue
@@ -169,7 +226,7 @@ public actor DatabaseLogger
         await sync()
     }
     
-    private func sync() async
+    private func sync(force: Bool = false) async
     {
         guard await transport.status != .offline else { return }
 
@@ -179,12 +236,32 @@ public actor DatabaseLogger
 
         // repeatedly sync small batches to not block the insertion of new log entries
         
+        let totalCount = self.pendingLocalCount + (self.pendingRemoteCount ?? 0)
+        let progress = Progress(totalUnitCount: totalCount)
+        self.currentSyncProgress = progress
+        
+        guard totalCount > 0 || force else { return }
+        
         while (self.pendingRemoteCount ?? 0) > 0 {
             await fetchAndUpdate()
+            let remainingCount = self.pendingLocalCount + (self.pendingRemoteCount ?? 0)
+            progress.completedUnitCount = Int64(totalCount - remainingCount)
         }
         
         while pendingLocalCount > 0 {
             await sendUnsynchronized()
+            let remainingCount = self.pendingLocalCount + (self.pendingRemoteCount ?? 0)
+            progress.completedUnitCount = Int64(totalCount - remainingCount)
+        }
+        
+        self.currentSyncProgress = nil
+        
+        if let newHighestRemoteIndex = await self.transport.getHighestRemoteIndex() {
+            self.setHighestRemoteIndex(newHighestRemoteIndex)
+        }
+        
+        Task {
+            await sync()
         }
     }
     
@@ -1080,7 +1157,9 @@ public actor DatabaseLogger
         print("📝 Database logger closed")
     }
     
-    isolated deinit {
+    isolated deinit
+    {
+        statusContinuation?.finish()
         if !isClosed {
             sqlite3_close(connectionHandle)
         }

@@ -7,7 +7,7 @@ public actor WebSocketSyncTransport: SyncTransport
     private var indexIncreaseCallback: IndexIncreaseHandler?
     private var didComeOnlineCallback: DidComeOnlineHandler?
 
-    public private(set) var status: SyncTransportStatus = .connecting {
+    public private(set) var status: TransportStatus = .connecting {
         didSet {
             statusContinuation?.yield(status)
             if oldValue == .offline {
@@ -33,8 +33,8 @@ public actor WebSocketSyncTransport: SyncTransport
     private let decoder = JSONDecoder.forSwiftLiteSync
 
     // Status stream support
-    private var statusContinuation: AsyncStream<SyncTransportStatus>.Continuation?
-    public nonisolated let statusStream: AsyncStream<SyncTransportStatus>
+    private var statusContinuation: AsyncStream<TransportStatus>.Continuation?
+    public nonisolated let statusStream: AsyncStream<TransportStatus>
     
     // MARK: - Database URLs
     
@@ -66,7 +66,7 @@ public actor WebSocketSyncTransport: SyncTransport
         self.session = session
         
         // Create the status stream
-        var continuation: AsyncStream<SyncTransportStatus>.Continuation?
+        var continuation: AsyncStream<TransportStatus>.Continuation?
         self.statusStream = AsyncStream { cont in
             continuation = cont
             // Yield the initial status
@@ -149,7 +149,7 @@ public actor WebSocketSyncTransport: SyncTransport
     public func sendEntries(entries: [DatabaseLogger.LogEntry]) async -> [UUID : Int64]
     {
         do {
-            status = .syncing(Progress(totalUnitCount: Int64(entries.count)))
+            status = .transferring
             defer { status = .connected }
             
             var request = URLRequest(url: uploadUrl)
@@ -183,7 +183,7 @@ public actor WebSocketSyncTransport: SyncTransport
     public func getEntries(from index: Int64, limit: Int64 = 10_000) async -> [DatabaseLogger.LogEntry]
     {
         do {
-            status = .syncing(Progress(totalUnitCount: 1))
+            status = .transferring
             defer { status = .connected }
             
             var request = URLRequest(url: downloadUrl.appending(queryItems: [.init(name: "from", value: String(index)), .init(name: "limit", value: String(limit))]))
@@ -204,7 +204,6 @@ public actor WebSocketSyncTransport: SyncTransport
             
             let entries = try decoder.decode([DatabaseLogger.LogEntry].self, from: data)
             
-            status = .syncing(Progress(totalUnitCount: Int64(entries.count)))
             defer { status = .connected }
 
             return entries

@@ -18,21 +18,26 @@ struct StatusView: View
                 .background(.regularMaterial)
                 .padding(20)
             }
-            if let pendingLocalChanges = status?.pendingLocalChanges, pendingLocalChanges > 0 {
+            if let pendingLocalChanges = status?.syncStatus.pendingLocalChanges, pendingLocalChanges > 0 {
                 Text("Pending local changes: \(pendingLocalChanges)")
             }
-            if let syncStatus = status?.syncStatus {
-                switch syncStatus {
+            if let pendingRemoteChanges = status?.syncStatus.pendingRemoteChanges, pendingRemoteChanges > 0 {
+                Text("Pending remote changes: \(pendingRemoteChanges)")
+            }
+            if let transportStatus = status?.syncStatus.transportStatus {
+                switch transportStatus {
                 case .connecting:
                     Label("Connecting", systemImage: "circle.dotted")
                 case .offline:
                     Label("Offline", systemImage: "network.slash")
-                case .accessDenied:
-                    Label("Access denied", systemImage: "person.crop.circle.badge.xmark")
-                case .syncing(let progress, ):
+                case .error:
+                    Label("Error", systemImage: "xmark.octagon.fill")
+                case .transferring:
                     Label("Syncing", systemImage: "arrow.trianglehead.2.clockwise.rotate.90.icloud")
-                    ProgressView("Download (\(progress.totalUnitCount)", value: progress.fractionCompleted, total: 1)
-                        .progressViewStyle(.linear)
+                    if let progress = status?.syncStatus.currentSyncProgress {
+                        ProgressView("Download (\(progress.totalUnitCount)", value: progress.fractionCompleted, total: 1)
+                            .progressViewStyle(.linear)
+                    }
                 case .connected:
                     Label("Connected", systemImage: "network")
                 }

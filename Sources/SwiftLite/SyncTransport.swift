@@ -5,10 +5,10 @@ public nonisolated protocol SyncTransport: Actor, Sendable
     typealias IndexIncreaseHandler = (_ highestIndex: Int64) async -> Void
     typealias DidComeOnlineHandler = () -> Void
 
-    var status: SyncTransportStatus { get }
+    var status: TransportStatus { get }
     var syncErrors: [SyncError] { get }
     
-    nonisolated var statusStream: AsyncStream<SyncTransportStatus> { get }
+    nonisolated var statusStream: AsyncStream<TransportStatus> { get }
 
     nonisolated var databaseIdentifier: String { get }
     var localDatabaseUrl: URL { get }
@@ -22,12 +22,12 @@ public nonisolated protocol SyncTransport: Actor, Sendable
     func onDidComeBackOnline(_ callback: @escaping DidComeOnlineHandler)
 }
 
-public nonisolated enum SyncTransportStatus: Equatable, Sendable {
+public nonisolated enum TransportStatus: Equatable, Sendable {
     case connecting
     case offline
-    case accessDenied
-    case syncing(Progress)
     case connected
+    case transferring
+    case error
 }
 
 public nonisolated struct SyncError

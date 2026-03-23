@@ -2,7 +2,7 @@ import Foundation
 
 public actor SharedLocalSimulatedSyncTransport: SyncTransport
 {
-    public private(set) var status: SyncTransportStatus = .connecting
+    public private(set) var status: TransportStatus = .connecting
     
     public nonisolated let databaseIdentifier: String = "test"
     public nonisolated let clientIdentifier: String
@@ -12,13 +12,13 @@ public actor SharedLocalSimulatedSyncTransport: SyncTransport
     
     private var clientIndex = 1
     
-    private let statusContinuation: AsyncStream<SyncTransportStatus>.Continuation
-    public nonisolated let statusStream: AsyncStream<SyncTransportStatus>
+    private let statusContinuation: AsyncStream<TransportStatus>.Continuation
+    public nonisolated let statusStream: AsyncStream<TransportStatus>
     
     public init(clientIdentifier: String) {
         self.clientIdentifier = clientIdentifier
         
-        var continuation: AsyncStream<SyncTransportStatus>.Continuation!
+        var continuation: AsyncStream<TransportStatus>.Continuation!
         self.statusStream = AsyncStream { continuation = $0 }
         self.statusContinuation = continuation
     }
