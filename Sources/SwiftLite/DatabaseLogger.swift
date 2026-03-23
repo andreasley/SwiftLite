@@ -234,7 +234,7 @@ public actor DatabaseLogger
             // Update configuration after successful sync
             try updateLastSuccessfulSync()
             try updateHighestSynchronizedIndex(highestSyncedIndexInReceivedEntries)
-            setHighestRemoteIndex(highestSyncedIndexInReceivedEntries)
+            self.highestSyncedLocalIndex = highestSyncedIndexInReceivedEntries
             print("Increased synced index to \(highestSyncedIndexInReceivedEntries)")
         } catch {
             // If we can't successfully read/write to the log, the database can't be used
