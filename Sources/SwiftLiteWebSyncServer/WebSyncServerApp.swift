@@ -28,7 +28,7 @@ struct WebSyncServerApp
             )
         }
 
-        let groupForDatabase = router.group("id/:databaseId")
+        let groupForDatabase = router.group(":databaseName/:databaseId")
         
         // WebSocket endpoint for real-time index updates
         groupForDatabase.ws("sync") { request, context in
@@ -44,6 +44,7 @@ struct WebSyncServerApp
         
         // HTTP POST endpoint for uploading entries
         groupForDatabase.post("upload") { request, context async throws -> Response in
+            let databaseName = try context.parameters.require("databaseName")
             let databaseId = try context.parameters.require("databaseId", as: UUID.self)
 
             // Collect all ByteBuffer chunks from the request body
@@ -59,6 +60,7 @@ struct WebSyncServerApp
             let entries = try decoder.decode([SyncClient.LogEntry].self, from: data)
             
             let mapping = try await databaseManager.storeEntries(
+                databaseName: databaseName,
                 databaseId: databaseId,
                 entries: entries
             )
@@ -68,7 +70,7 @@ struct WebSyncServerApp
 
             Task {
                 // Broadcast index update to all connected WebSocket clients
-                let highestIndex = try await databaseManager.getHighestIndex(databaseId: databaseId)
+                let highestIndex = try await databaseManager.getHighestIndex(databaseName: databaseName, databaseId: databaseId)
                 await databaseManager.broadcastIndexUpdate(
                     databaseId: databaseId,
                     highestIndex: highestIndex,
@@ -85,9 +87,10 @@ struct WebSyncServerApp
         
         // HTTP GET endpoint for highest index
         groupForDatabase.get("highestIndex") { request, context async throws -> Response in
+            let databaseName = try context.parameters.require("databaseName")
             let databaseId = try context.parameters.require("databaseId", as: UUID.self)
             
-            let highestIndex = try await databaseManager.getHighestIndex(databaseId: databaseId)
+            let highestIndex = try await databaseManager.getHighestIndex(databaseName: databaseName, databaseId: databaseId)
             
             let encoder = JSONEncoder.forSwiftLiteSync
             let responseData = try encoder.encode(highestIndex)
@@ -101,6 +104,7 @@ struct WebSyncServerApp
 
         // HTTP GET endpoint for downloading entries
         groupForDatabase.get("download") { request, context async throws -> Response in
+            let databaseName = try context.parameters.require("databaseName")
             let databaseId = try context.parameters.require("databaseId", as: UUID.self)
 
             guard let fromIndexString = request.uri.queryParameters["from"], let fromIndex = Int64(fromIndexString) else {
@@ -115,6 +119,7 @@ struct WebSyncServerApp
             }
             
             let entries = try await databaseManager.getEntries(
+                databaseName: databaseName,
                 databaseId: databaseId,
                 fromIndex: fromIndex,
                 limit: limit
@@ -140,10 +145,10 @@ struct WebSyncServerApp
         
         print("🚀 Sync Server starting on http://localhost:8080")
         print("   ID:        GET  /:databaseName/id")
-        print("   WebSocket:      /id/:databaseId/sync")
-        print("   Upload:    POST /id/:databaseId/upload")
-        print("   Index:     GET  /id/:databaseId/highestIndex")
-        print("   Download:  GET  /id/:databaseId/download?from=index&limit=1000")
+        print("   WebSocket:      /:databaseName/:databaseId/sync")
+        print("   Upload:    POST /:databaseName/:databaseId/upload")
+        print("   Index:     GET  /:databaseName/:databaseId/highestIndex")
+        print("   Download:  GET  /:databaseName/:databaseId/download?from=index&limit=1000")
         try await app.runService()
     }
     
@@ -203,11 +208,11 @@ struct WebSyncServerApp
         outbound: WebSocketOutboundWriter
     ) async throws -> WebSocketSyncMessage? {
         switch message {
-        case .handshake(let databaseId):
-            let session = ClientSession(databaseId: databaseId)
+        case .handshake(let databaseName, let databaseId):
+            let session = ClientSession(databaseName: databaseName, databaseId: databaseId)
             clientSession = session
             await databaseManager.addClient(session: session, outbound: outbound)
-            let highestIndex = try await databaseManager.getHighestIndex(databaseId: databaseId)
+            let highestIndex = try await databaseManager.getHighestIndex(databaseName: databaseName, databaseId: databaseId)
             print("Client with session ID \(session.id.uuidString) connected; requested database ID: \(databaseId) (highest index: \(highestIndex))")
             return nil
             
@@ -221,6 +226,7 @@ struct WebSyncServerApp
 
 struct ClientSession: Identifiable, Sendable {
     let id = UUID.v7()
+    let databaseName: String
     let databaseId: UUID
 }
 

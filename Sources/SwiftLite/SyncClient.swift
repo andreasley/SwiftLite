@@ -286,8 +286,6 @@ public actor SyncClient
     
     public func sync(force: Bool = false) async
     {
-        guard await connector.status != .offline else { return }
-
         guard !isSyncing else { return }
         isSyncing = true
         defer { isSyncing = false }
@@ -302,6 +300,10 @@ public actor SyncClient
         guard totalCount > 0 || force else { return }
         
         while (self.pendingRemoteCount ?? 0) > 0 {
+            guard await connector.isReady else {
+                retrySyncLater()
+                return
+            }
             guard !isClosed else { return }
             await fetchAndUpdate()
             let remainingCount = self.pendingLocalCount + (self.pendingRemoteCount ?? 0)
@@ -309,6 +311,10 @@ public actor SyncClient
         }
         
         while pendingLocalCount > 0 {
+            guard await connector.isReady else {
+                retrySyncLater()
+                return
+            }
             guard !isClosed else { return }
             await sendUnsynchronized()
             let remainingCount = self.pendingLocalCount + (self.pendingRemoteCount ?? 0)
@@ -321,6 +327,13 @@ public actor SyncClient
         
         Task {
             await sync()
+        }
+    }
+    
+    private func retrySyncLater()
+    {
+        Task {
+            try? await Task.sleep(for: .seconds(5))
         }
     }
     

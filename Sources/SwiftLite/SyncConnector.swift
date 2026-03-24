@@ -33,3 +33,15 @@ public nonisolated struct SyncConnectorError
     let date: Date
     let error: Error
 }
+
+public extension SyncConnector
+{
+    var isReady: Bool {
+        switch status {
+        case .connected:
+            return true
+        default:
+            return false
+        }
+    }
+}

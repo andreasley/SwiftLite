@@ -79,7 +79,7 @@ public actor WebConnector: SyncConnector
 
         self.databaseId = databaseId
         
-        let basePath = "\(server)/id/\(databaseId)"
+        let basePath = "\(server)/\(databaseName)/\(databaseId)"
         self.syncUrl = URL(string: "ws://\(basePath)/sync")!
         self.uploadUrl = URL(string: "http://\(basePath)/upload")!
         self.downloadUrl = URL(string: "http://\(basePath)/download")!
@@ -92,7 +92,7 @@ public actor WebConnector: SyncConnector
 
 
         do {
-            let handshake = WebSocketSyncMessage.handshake(databaseId: databaseId)
+            let handshake = WebSocketSyncMessage.handshake(databaseName: databaseName, databaseId: databaseId)
             try await send(message: handshake)
             status = .connected
             
@@ -115,13 +115,11 @@ public actor WebConnector: SyncConnector
         let (data, response) = try await session.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
-            addError(Error.invalidResponse)
-            return nil
+            throw Error.invalidResponse
         }
         
         guard httpResponse.statusCode == 200 else {
-            addError(Error.invalidResponse)
-            return nil
+            throw Error.serverError("HTTP \(httpResponse.statusCode)")
         }
         
         let databaseId = try decoder.decode(UUID.self, from: data)
@@ -141,13 +139,11 @@ public actor WebConnector: SyncConnector
             let (data, response) = try await session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
-                addError(Error.invalidResponse)
-                return nil
+                throw Error.invalidResponse
             }
             
             guard httpResponse.statusCode == 200 else {
-                addError(Error.invalidResponse)
-                return nil
+                throw Error.serverError("HTTP \(httpResponse.statusCode)")
             }
             
             let highestIndex = try decoder.decode(Int64.self, from: data)
@@ -176,13 +172,11 @@ public actor WebConnector: SyncConnector
             let (data, response) = try await session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
-                addError(Error.invalidResponse)
-                return [:]
+                throw Error.invalidResponse
             }
             
             guard httpResponse.statusCode == 200 else {
-                addError(Error.serverError("HTTP \(httpResponse.statusCode)"))
-                return [:]
+                throw Error.serverError("HTTP \(httpResponse.statusCode)")
             }
             
             let mapping = try decoder.decode([UUID: Int64].self, from: data)
@@ -210,13 +204,11 @@ public actor WebConnector: SyncConnector
             let (data, response) = try await session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
-                addError(Error.invalidResponse)
-                return []
+                throw Error.invalidResponse
             }
             
             guard httpResponse.statusCode == 200 else {
-                addError(Error.serverError("HTTP \(httpResponse.statusCode)"))
-                return []
+                throw Error.serverError("HTTP \(httpResponse.statusCode)")
             }
             
             let entries = try decoder.decode([SyncClient.LogEntry].self, from: data)
@@ -232,7 +224,8 @@ public actor WebConnector: SyncConnector
     }
     
     
-    private func startListeningForIndexIncreaseNotifications() async {
+    private func startListeningForIndexIncreaseNotifications() async
+    {
         guard let webSocketTask = webSocketTask else { return }
         
         while status == .connected {
@@ -240,11 +233,7 @@ public actor WebConnector: SyncConnector
                 let message = try await webSocketTask.receive()
                 await handleIncomingMessage(message)
             } catch {
-                if status == .connected {
-                    status = .offline
-                    addError(error)
-                    await scheduleReconnect()
-                }
+                addError(error)
                 break
             }
         }
@@ -271,7 +260,8 @@ public actor WebConnector: SyncConnector
         }
     }
     
-    private func send(message: WebSocketSyncMessage) async throws {
+    private func send(message: WebSocketSyncMessage) async throws
+    {
         guard let webSocketTask = webSocketTask else {
             throw Error.notConnected
         }
@@ -282,7 +272,8 @@ public actor WebConnector: SyncConnector
         try await webSocketTask.send(urlMessage)
     }
     
-    private func parseMessage(_ message: URLSessionWebSocketTask.Message) throws -> WebSocketSyncMessage {
+    private func parseMessage(_ message: URLSessionWebSocketTask.Message) throws -> WebSocketSyncMessage
+    {
         let data: Data
         
         switch message {
@@ -300,7 +291,8 @@ public actor WebConnector: SyncConnector
         return try decoder.decode(WebSocketSyncMessage.self, from: data)
     }
     
-    private func scheduleReconnect() async {
+    private func scheduleReconnect() async
+    {
         reconnectTask?.cancel()
         
         guard let databaseId else { return }
@@ -313,9 +305,17 @@ public actor WebConnector: SyncConnector
         }
     }
     
-    private func addError(_ error: Swift.Error) {
+    private func addError(_ error: Swift.Error)
+    {
+        status = .error
+        
+        Task {
+            await scheduleReconnect()
+        }
+
         let syncError = SyncConnectorError(date: Date(), error: error)
         errors.append(syncError)
+        print("Web connector error:", error)
         
         // Keep only the last 100 errors
         if errors.count > 100 {

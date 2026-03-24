@@ -10,7 +10,7 @@ nonisolated let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type
 /// Manages the server-side database that stores operation logs from multiple clients
 actor ServerDatabaseManager
 {
-    private var databases: [UUID: ServerDatabase] = [:]
+    private var databases: [String: ServerDatabase] = [:]
     private var clientConnections: [UUID: ClientConnection] = [:]
     
     private let encoder = JSONEncoder.forSwiftLiteSync
@@ -18,22 +18,24 @@ actor ServerDatabaseManager
     
     private let dataDir: URL
 
-    init() async throws {
-        // Ensure data directory exists
-        self.dataDir = URL.applicationSupportDirectory
-            .appendingPathComponent("SwiftLiteWebSyncServer", isDirectory: true)
+    init() async throws
+    {
+        self.dataDir = URL.applicationSupportDirectory.appendingPathComponent("SwiftLiteWebSyncServer", isDirectory: true)
         try FileManager.default.createDirectory(at: dataDir, withIntermediateDirectories: true)
     }
     
-    func addClient(session: ClientSession, outbound: WebSocketOutboundWriter) {
+    func addClient(session: ClientSession, outbound: WebSocketOutboundWriter)
+    {
         clientConnections[session.id] = ClientConnection(session: session, outbound: outbound)
     }
     
-    func removeClient(session: ClientSession) {
+    func removeClient(session: ClientSession)
+    {
         clientConnections.removeValue(forKey: session.id)
     }
     
-    func broadcastIndexUpdate(databaseId: UUID, highestIndex: Int64, excludingSessionId: UUID?) async {
+    func broadcastIndexUpdate(databaseId: UUID, highestIndex: Int64, excludingSessionId: UUID?) async
+    {
         let message = WebSocketSyncMessage.indexUpdate(highestIndex: highestIndex)
         
         guard let messageData = try? encoder.encode(message) else {
@@ -67,48 +69,47 @@ actor ServerDatabaseManager
     
     func getOrCreateDatabaseId(databaseName: String) async throws -> UUID
     {
-        let existingDatabaseId = databases.first(where: { $0.value.databaseName == databaseName })?.key
-        if let existingDatabaseId {
-            return existingDatabaseId
-        } else {
-            let newDatabase = try await ServerDatabase(dataDir: dataDir, databaseName: databaseName)
-            let newDatabaseId = newDatabase.databaseId
-            databases[newDatabaseId] = newDatabase
-            return newDatabaseId
+        guard let existingDatabase = databases[databaseName] else {
+            throw Error.databaseNotFound
         }
+        
+        return existingDatabase.databaseId
     }
     
-    func getHighestIndex(databaseId: UUID) async throws -> Int64
+    func getHighestIndex(databaseName: String, databaseId: UUID) async throws -> Int64
     {
-        let database = try getDatabase(databaseId: databaseId)
+        let database = try await getDatabase(databaseName: databaseName, databaseId: databaseId)
         return await database.highestIndex
     }
 
-    func storeEntries(databaseId: UUID, entries: [SyncClient.LogEntry]) async throws -> [UUID: Int64]
+    func storeEntries(databaseName: String, databaseId: UUID, entries: [SyncClient.LogEntry]) async throws -> [UUID: Int64]
     {
-        let database = try getDatabase(databaseId: databaseId)
+        let database = try await getDatabase(databaseName: databaseName, databaseId: databaseId)
         return try await database.storeEntries(entries: entries)
     }
     
-    func getEntries(databaseId: UUID, fromIndex: Int64, limit: Int64) async throws -> [SyncClient.LogEntry]
+    func getEntries(databaseName: String, databaseId: UUID, fromIndex: Int64, limit: Int64) async throws -> [SyncClient.LogEntry]
     {
-        let database = try getDatabase(databaseId: databaseId)
+        let database = try await getDatabase(databaseName: databaseName, databaseId: databaseId)
         return try await database.getEntries(fromIndex: fromIndex, limit: limit)
     }
     
-//    private func getOrCreateDatabase(databaseId: UUID) async throws -> ServerDatabase {
-//        if let existing = databases[databaseId] {
-//            return existing
-//        }
-//        
-//        let newDatabase = try await ServerDatabase(dataDir: dataDir, databaseId: databaseId)
-//        databases[databaseId] = newDatabase
-//        return newDatabase
-//    }
-
-    private func getDatabase(databaseId: UUID) throws -> ServerDatabase {
-        guard let existing = databases[databaseId] else { throw Error.databaseNotFound }
-        return existing
+    private func getDatabase(databaseName: String, databaseId: UUID) async throws -> ServerDatabase
+    {
+        let database: ServerDatabase
+        if let existingDatabase = databases[databaseName] {
+            database = existingDatabase
+        } else {
+            let newDatabase = try await ServerDatabase(dataDir: dataDir, databaseName: databaseName)
+            databases[databaseName] = newDatabase
+            database = newDatabase
+        }
+        
+        guard database.databaseId == databaseId else {
+            throw Error.databaseIdWrong
+        }
+        
+        return database
     }
 }
 
@@ -126,5 +127,6 @@ extension ServerDatabaseManager
 {
     enum Error: LocalizedError {
         case databaseNotFound
+        case databaseIdWrong
     }
 }
