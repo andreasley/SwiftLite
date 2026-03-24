@@ -87,7 +87,7 @@ public actor WebConnector: SyncConnector
         
         // Send initial handshake
         do {
-            let handshake = WebSocketMessage.handshake(databaseId: databaseIdentifier)
+            let handshake = WebSocketMessage.handshake(databaseName: databaseIdentifier)
             try await send(message: handshake)
             status = .connected
             
@@ -112,12 +112,12 @@ public actor WebConnector: SyncConnector
             let (data, response) = try await session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
-                addError(WebSocketError.invalidResponse)
+                addError(Error.invalidResponse)
                 return nil
             }
             
             guard httpResponse.statusCode == 200 else {
-                addError(WebSocketError.invalidResponse)
+                addError(Error.invalidResponse)
                 return nil
             }
             
@@ -145,12 +145,12 @@ public actor WebConnector: SyncConnector
             let (data, response) = try await session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
-                addError(WebSocketError.invalidResponse)
+                addError(Error.invalidResponse)
                 return [:]
             }
             
             guard httpResponse.statusCode == 200 else {
-                addError(WebSocketError.serverError("HTTP \(httpResponse.statusCode)"))
+                addError(Error.serverError("HTTP \(httpResponse.statusCode)"))
                 return [:]
             }
             
@@ -177,12 +177,12 @@ public actor WebConnector: SyncConnector
             let (data, response) = try await session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
-                addError(WebSocketError.invalidResponse)
+                addError(Error.invalidResponse)
                 return []
             }
             
             guard httpResponse.statusCode == 200 else {
-                addError(WebSocketError.serverError("HTTP \(httpResponse.statusCode)"))
+                addError(Error.serverError("HTTP \(httpResponse.statusCode)"))
                 return []
             }
             
@@ -230,7 +230,7 @@ public actor WebConnector: SyncConnector
                     await callback(highestIndex)
                 }
             case .error(let errorMessage):
-                addError(WebSocketError.serverError(errorMessage))
+                addError(Error.serverError(errorMessage))
             default:
                 // Other messages are handled by explicit receive calls
                 break
@@ -242,7 +242,7 @@ public actor WebConnector: SyncConnector
     
     private func send(message: WebSocketMessage) async throws {
         guard let webSocketTask = webSocketTask else {
-            throw WebSocketError.notConnected
+            throw Error.notConnected
         }
         
         let data = try encoder.encode(message)
@@ -259,11 +259,11 @@ public actor WebConnector: SyncConnector
             data = messageData
         case .string(let text):
             guard let textData = text.data(using: .utf8) else {
-                throw WebSocketError.invalidMessage
+                throw Error.invalidMessage
             }
             data = textData
         @unknown default:
-            throw WebSocketError.invalidMessage
+            throw Error.invalidMessage
         }
         
         return try decoder.decode(WebSocketMessage.self, from: data)
@@ -281,7 +281,7 @@ public actor WebConnector: SyncConnector
         }
     }
     
-    private func addError(_ error: Error) {
+    private func addError(_ error: Swift.Error) {
         let syncError = SyncConnectorError(date: Date(), error: error)
         errors.append(syncError)
         
@@ -291,82 +291,32 @@ public actor WebConnector: SyncConnector
         }
     }
 }
-// MARK: - WebSocket Message Types
 
-private enum WebSocketMessage: Codable {
-    case handshake(databaseId: String)
-    case indexUpdate(highestIndex: Int64)
-    case error(message: String)
-    
-    enum CodingKeys: String, CodingKey {
-        case type
-        case databaseId
-        case highestIndex
-        case message
-    }
-    
-    enum MessageType: String, Codable {
-        case handshake
-        case indexUpdate
-        case error
-    }
-    
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let type = try container.decode(MessageType.self, forKey: .type)
-        
-        switch type {
-        case .handshake:
-            let databaseId = try container.decode(String.self, forKey: .databaseId)
-            self = .handshake(databaseId: databaseId)
-        case .indexUpdate:
-            let highestIndex = try container.decode(Int64.self, forKey: .highestIndex)
-            self = .indexUpdate(highestIndex: highestIndex)
-        case .error:
-            let message = try container.decode(String.self, forKey: .message)
-            self = .error(message: message)
-        }
-    }
-    
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        
-        switch self {
-        case .handshake(let databaseId):
-            try container.encode(MessageType.handshake, forKey: .type)
-            try container.encode(databaseId, forKey: .databaseId)
-        case .indexUpdate(let highestIndex):
-            try container.encode(MessageType.indexUpdate, forKey: .type)
-            try container.encode(highestIndex, forKey: .highestIndex)
-        case .error(let message):
-            try container.encode(MessageType.error, forKey: .type)
-            try container.encode(message, forKey: .message)
-        }
-    }
-}
 
 // MARK: - Custom Errors
 
-private enum WebSocketError: LocalizedError {
-    case notConnected
-    case invalidMessage
-    case invalidResponse
-    case unexpectedResponse
-    case serverError(String)
-    
-    var errorDescription: String? {
-        switch self {
-        case .notConnected:
-            return "WebSocket is not connected"
-        case .invalidMessage:
-            return "Received invalid message format"
-        case .invalidResponse:
-            return "Received invalid HTTP response"
-        case .unexpectedResponse:
-            return "Received unexpected response from server"
-        case .serverError(let message):
-            return "Server error: \(message)"
+public nonisolated extension WebConnector
+{
+    enum Error: LocalizedError {
+        case notConnected
+        case invalidMessage
+        case invalidResponse
+        case unexpectedResponse
+        case serverError(String)
+        
+        public var errorDescription: String? {
+            switch self {
+            case .notConnected:
+                return "WebSocket is not connected"
+            case .invalidMessage:
+                return "Received invalid message format"
+            case .invalidResponse:
+                return "Received invalid HTTP response"
+            case .unexpectedResponse:
+                return "Received unexpected response from server"
+            case .serverError(let message):
+                return "Server error: \(message)"
+            }
         }
     }
 }
-

@@ -4,8 +4,10 @@ import HummingbirdWebSocket
 import SwiftLite
 
 @main
-struct SyncServer {
-    static func main() async throws {
+struct WebSyncServerApp
+{
+    static func main() async throws
+    {
         let databaseManager = try await ServerDatabaseManager()
         
         let router = Router(context: BasicWebSocketRequestContext.self)
