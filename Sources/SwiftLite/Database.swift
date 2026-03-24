@@ -35,10 +35,7 @@ public actor Database: Observable
     public internal(set) var isClosed = false
     
     public private(set) var localStatus: LocalDatabaseStatus = .ok
-    
-    // Status stream support
-    private var statusContinuation: AsyncStream<Status>.Continuation
-    public nonisolated let statusStream: AsyncStream<Status>
+    public nonisolated let statusUpdates = AsyncStreams<Status>()
 
     // Logging for distributed sync
     public private(set) var logger: DatabaseLogger?
@@ -103,15 +100,11 @@ public actor Database: Observable
 
         self.connectionHandle = pointer
         
-        // Create the status stream
-        (self.statusStream, self.statusContinuation) = AsyncStream.makeStream(of: Status.self)
-
-        
         if let logger {
             Task {
                 for await syncStatus in logger.statusStream {
                     let updatedStatus = Status(localStatus: localStatus, syncStatus: syncStatus)
-                    statusContinuation.yield(updatedStatus)
+                    statusUpdates.yield(updatedStatus)
                 }
             }
         }
@@ -524,7 +517,7 @@ public actor Database: Observable
         
     isolated deinit
     {
-        statusContinuation.finish()
+        statusUpdates.finish()
 
         if !isClosed {
             sqlite3_close(self.connectionHandle)
