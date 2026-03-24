@@ -8,7 +8,7 @@ public actor WebConnector: SyncConnector
     public private(set) var status: SyncConnectorStatus = .connecting {
         didSet {
             statusContinuation?.yield(status)
-            if oldValue == .offline {
+            if (oldValue == .offline || oldValue == .connecting) && status == .connected {
                 didComeOnlineCallback?()
             }
         }
