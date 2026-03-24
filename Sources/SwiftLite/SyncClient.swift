@@ -13,7 +13,6 @@ public actor SyncClient
         case failedToInitialize(String)
         case failedToLog(String)
         case failedToFetch(sql: String)
-        case loggerIsCloser
         
         public var errorDescription: String? {
             switch self {
@@ -27,8 +26,6 @@ public actor SyncClient
                 return "Failed to log operation: \(message)"
             case .failedToFetch(sql: let sql):
                 return "Failed to fetch from database: \(sql)"
-            case .loggerIsCloser:
-                return "DatabaseLogger is already closed"
             }
         }
     }
@@ -103,12 +100,12 @@ public actor SyncClient
     private var isSyncing = false
     public private(set) var fatalError: Swift.Error? {
         didSet {
-            print("Fatal error in DatabaseLogger", fatalError?.localizedDescription ?? "")
+            print("Fatal error in SyncClient", fatalError?.localizedDescription ?? "")
         }
     }
     private let isFirstRun: Bool
     private let databaseFileUrl: URL?
-    public let transport: SyncConnector
+    public let connector: SyncConnector
     
     public private(set) var highestSyncedLocalIndex: Int64 = 0 { didSet { updateStatus() }}
     public private(set) var highestRemoteIndex: Int64? { didSet { updateStatus() }}
@@ -122,7 +119,7 @@ public actor SyncClient
 
     // Status stream support
     private var status: Status
-    private var syncStatus: SyncConnectorStatus
+    private var connectorStatus: SyncConnectorStatus
     private var statusContinuation: AsyncStream<Status>.Continuation?
     public nonisolated let statusStream: AsyncStream<Status>
 
@@ -151,12 +148,12 @@ public actor SyncClient
         }
         
         self.connectionHandle = pointer
-        self.transport = connector
+        self.connector = connector
 
-        let transportStatus = await connector.status
-        self.syncStatus = transportStatus
+        let connectorStatus = await connector.status
+        self.connectorStatus = connectorStatus
 
-        let initialStatus = Status(connectorStatus: transportStatus, currentSyncProgress: nil, pendingLocalChanges: 0, pendingRemoteChanges: 00, highestSyncedLocalIndex: 0, fatalError: fatalError)
+        let initialStatus = Status(connectorStatus: connectorStatus, currentSyncProgress: nil, pendingLocalChanges: 0, pendingRemoteChanges: 00, highestSyncedLocalIndex: 0, fatalError: fatalError)
         self.status = initialStatus
         
 
@@ -175,13 +172,13 @@ public actor SyncClient
         updateStatus()
         continuation?.yield(self.status)
 
-        print("📝 Database logger initialized; storage:", databaseFileUrl?.path ?? "in memory")
+        print("📝 Database syncClient initialized; storage:", databaseFileUrl?.path ?? "in memory")
         print("Starting log from index \(self.highestSyncedLocalIndex)")
         print("Number of unsynchronized log entries: \(self.pendingLocalCount)")
 
         Task {
             for await syncStatus in connector.statusStream {
-                self.syncStatus = syncStatus
+                self.connectorStatus = syncStatus
                 self.updateStatus()
                 statusContinuation?.yield(self.status)
             }
@@ -191,7 +188,7 @@ public actor SyncClient
     func updateStatus()
     {
         self.status = Status(
-            connectorStatus: syncStatus,
+            connectorStatus: connectorStatus,
             currentSyncProgress: currentSyncProgress,
             pendingLocalChanges: pendingLocalCount,
             pendingRemoteChanges: pendingRemoteCount ?? 0,
@@ -211,7 +208,7 @@ public actor SyncClient
     {
         self.database = database
 
-        await transport.onHighestRemoteIndexIncrease { [weak self] updatedHighestRemoteIndex in
+        await connector.onHighestRemoteIndexIncrease { [weak self] updatedHighestRemoteIndex in
             guard let self else { return }
             await self.setHighestRemoteIndex(updatedHighestRemoteIndex)
             let highestLocalIndex = await self.highestSyncedLocalIndex
@@ -219,7 +216,7 @@ public actor SyncClient
             await self.sync()
         }
 
-        await transport.onDidComeBackOnline { [weak self] in
+        await connector.onDidComeBackOnline { [weak self] in
             guard let self else { return }
             Task {
                 await sync()
@@ -229,7 +226,7 @@ public actor SyncClient
     
     public func sync(force: Bool = false) async
     {
-        guard await transport.status != .offline else { return }
+        guard await connector.status != .offline else { return }
 
         guard !isSyncing else { return }
         isSyncing = true
@@ -258,7 +255,7 @@ public actor SyncClient
             progress.completedUnitCount = Int64(totalCount - remainingCount)
         }
         
-        if let newHighestRemoteIndex = await self.transport.getHighestRemoteIndex() {
+        if let newHighestRemoteIndex = await self.connector.getHighestRemoteIndex() {
             self.setHighestRemoteIndex(newHighestRemoteIndex)
         }
         
@@ -282,12 +279,12 @@ public actor SyncClient
             // TODO: publish progress information somewhere
             
             print("Fetching new entries, starting from index \(highestSyncedLocalIndex)")
-            let newEntries = await transport.getEntries(from: highestSyncedLocalIndex, limit: 100)
+            let newEntries = await connector.getEntries(from: highestSyncedLocalIndex, limit: 100)
 
             print("Received \(newEntries.count) entries to apply")
 
             guard newEntries.count > 0 else {
-                // Transport returned 0 items; probably offline. Try again later.
+                // Connector returned 0 items; probably offline. Try again later.
                 return
             }
 
@@ -330,7 +327,7 @@ public actor SyncClient
             
             guard entries.count > 0 else { return }
             
-            let updatedSynchronizationIndexes = await transport.sendEntries(entries: entries)
+            let updatedSynchronizationIndexes = await connector.sendEntries(entries: entries)
             if updatedSynchronizationIndexes.count != entries.count {
                 print("Sent \(entries.count) to server but only received \(updatedSynchronizationIndexes.count) indexes")
             } else {
@@ -1154,7 +1151,7 @@ public actor SyncClient
         }
         
         isClosed = true
-        print("📝 Database logger closed")
+        print("📝 Database syncClient closed")
     }
     
     isolated deinit

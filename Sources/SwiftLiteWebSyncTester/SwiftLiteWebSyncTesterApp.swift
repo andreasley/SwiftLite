@@ -4,7 +4,7 @@ import SwiftLiteTestModels
 import SwiftLiteTestViews
 
 @main
-struct SwiftLiteTesterWebSocketSyncApp: App
+struct SwiftLiteWebSyncTesterApp: App
 {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     
@@ -56,8 +56,8 @@ struct SwiftLiteTesterWebSocketSyncApp: App
                             Task {
                                 let databaseDirectory = URL.databaseFilesDirectory(for: databaseIdentifier)
                                 let databaseFile = databaseDirectory.appendingPathComponent("database.sqlite", isDirectory: false)
-                                let connector = WebSocketSyncTransport(server: server, databaseIdentifier: databaseIdentifier)
-                                let db = try await Database(storage: .file(databaseFile), sync: .enabled(connector))
+                                let connector = WebConnector(server: server, databaseIdentifier: databaseIdentifier)
+                                let db = try await Database(storage: .file(databaseFile), sync: .enabled(using: connector))
                                 self.database = db
                             }
                         }

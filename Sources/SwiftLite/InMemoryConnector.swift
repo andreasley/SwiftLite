@@ -1,6 +1,6 @@
 import Foundation
 
-public actor SharedLocalSimulatedSyncTransport: SyncConnector
+public actor InMemoryConnector: SyncConnector
 {
     public private(set) var status: SyncConnectorStatus = .connecting
     

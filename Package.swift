@@ -25,8 +25,8 @@ let package = Package(
             targets: ["SwiftLiteTesterHeadless"]
         ),
         .executable(
-            name: "SwiftLiteTesterWebSocketSyncServer",
-            targets: ["SwiftLiteTesterWebSocketSyncServer"]
+            name: "SwiftLiteWebSyncServer",
+            targets: ["SwiftLiteWebSyncServer"]
         ),
     ],
     dependencies: [
@@ -49,11 +49,11 @@ let package = Package(
 
         .executableTarget(name: "SwiftLiteTesterHeadless", dependencies: ["SwiftLite", "SwiftLiteTestModels"]),
         .executableTarget(name: "SwiftLiteTesterLocal", dependencies: ["SwiftLite", "SwiftLiteTestModels", "SwiftLiteTestViews"]),
-        .executableTarget(name: "SwiftLiteTesterLocalSync", dependencies: ["SwiftLite", "SwiftLiteTestModels", "SwiftLiteTestViews"]),
-        .executableTarget(name: "SwiftLiteTesterWebSocketSync", dependencies: ["SwiftLite", "SwiftLiteTestModels", "SwiftLiteTestViews"]),
+        .executableTarget(name: "SwiftLiteInMemorySyncTester", dependencies: ["SwiftLite", "SwiftLiteTestModels", "SwiftLiteTestViews"]),
+        .executableTarget(name: "SwiftLiteWebSyncTester", dependencies: ["SwiftLite", "SwiftLiteTestModels", "SwiftLiteTestViews"]),
 
         .executableTarget(
-            name: "SwiftLiteTesterWebSocketSyncServer",
+            name: "SwiftLiteWebSyncServer",
             dependencies: [
                 "SwiftLite",
                 .product(name: "Hummingbird", package: "hummingbird"),

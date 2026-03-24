@@ -23,7 +23,7 @@ public actor Database: Observable
 
     public enum SyncType {
         case disabled
-        case enabled(any SyncConnector)
+        case enabled(using: any SyncConnector)
     }
 
     public enum CacheSize {
@@ -508,7 +508,7 @@ public actor Database: Observable
         let result = sqlite3_close(self.connectionHandle)
 
         Task {
-            // Close the logger first
+            // Close the syncClient first
             try? await syncClient?.close()
         }
 
@@ -533,9 +533,9 @@ public actor Database: Observable
             sqlite3_close(self.connectionHandle)
         }
         
-        let logger = self.syncClient
+        let syncClient = self.syncClient
         Task {
-            try? await logger?.close()
+            try? await syncClient?.close()
         }
     }
 }

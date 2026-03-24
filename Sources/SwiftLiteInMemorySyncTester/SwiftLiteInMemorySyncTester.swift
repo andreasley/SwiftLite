@@ -4,21 +4,21 @@ import SwiftLiteTestModels
 import SwiftLiteTestViews
 
 @main
-struct SwiftLiteTesterLocalSyncApp: App
+struct SwiftLiteInMemorySyncTesterApp: App
 {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     
-    @State private var connector: SharedLocalSimulatedSyncTransport = SharedLocalSimulatedSyncTransport(clientIdentifier: "test")
+    @State private var connector: InMemoryConnector = InMemoryConnector(clientIdentifier: "test")
     
     var body: some Scene {
         WindowGroup {
-            MainWindow(transport: connector)
+            MainWindow(connector: connector)
         }
     }
     
     struct MainWindow: View
     {
-        let transport: SharedLocalSimulatedSyncTransport
+        let connector: InMemoryConnector
         
         @State private var database: Database?
         @State private var engine: Engine.Snapshot?
@@ -32,7 +32,7 @@ struct SwiftLiteTesterLocalSyncApp: App
                 ProgressView("Opening database...")
                     .task {
                         do {
-                            let db = try await Database(storage: .inMemory, sync: .enabled(transport))
+                            let db = try await Database(storage: .inMemory, sync: .enabled(using: connector))
                             try await db.register(models: Car.self, Engine.self, Interior.self, Passenger.self)
                             self.database = db
                             let firstEngine = try await db.get(Engine.Snapshot.self).first

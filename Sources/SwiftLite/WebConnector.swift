@@ -1,6 +1,6 @@
 import Foundation
 
-public actor WebSocketSyncTransport: SyncConnector
+public actor WebConnector: SyncConnector
 {
     // MARK: - Properties
     
@@ -65,7 +65,7 @@ public actor WebSocketSyncTransport: SyncConnector
         statusContinuation?.finish()
     }
 
-    // MARK: - SyncTransport Protocol
+    // MARK: - SyncConnector Protocol
 
     public func onHighestRemoteIndexIncrease(_ callback: @escaping IndexIncreaseHandler)
     {
@@ -158,7 +158,7 @@ public actor WebSocketSyncTransport: SyncConnector
             
             return mapping
         } catch {
-            print("WebSocket Sync Transport: Server returned an error: \(error)")
+            print("WebConnector: Server returned an error: \(error)")
             addError(error)
             return [:]
         }
@@ -192,7 +192,7 @@ public actor WebSocketSyncTransport: SyncConnector
 
             return entries
         } catch {
-            print("WebSocket Sync Transport: Server returned an error: \(error)")
+            print("WebConnector: Server returned an error: \(error)")
             addError(error)
             return []
         }

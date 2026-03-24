@@ -15,11 +15,13 @@ actor ServerDatabaseManager
     
     private let encoder = JSONEncoder.forSwiftLiteSync
     private let decoder = JSONDecoder.forSwiftLiteSync
+    
+    private let dataDir: URL
 
     init() async throws {
         // Ensure data directory exists
-        let dataDir = URL.applicationSupportDirectory
-            .appendingPathComponent("SwiftLiteWebSocketSyncServer", isDirectory: true)
+        self.dataDir = URL.applicationSupportDirectory
+            .appendingPathComponent("SwiftLiteWebSyncServer", isDirectory: true)
         try FileManager.default.createDirectory(at: dataDir, withIntermediateDirectories: true)
     }
     
@@ -83,7 +85,7 @@ actor ServerDatabaseManager
             return existing
         }
         
-        let newDatabase = try await ServerDatabase(databaseId: databaseId)
+        let newDatabase = try await ServerDatabase(dataDir: dataDir, databaseId: databaseId)
         databases[databaseId] = newDatabase
         return newDatabase
     }
@@ -98,13 +100,11 @@ actor ServerDatabase
     public private(set) var highestIndex: Int64 = 0
     let gate = TransactionGate()
     
-    init(databaseId: String) async throws
+    init(dataDir: URL, databaseId: String) async throws
     {
         self.databaseId = databaseId
         
         // Create database file path
-        let dataDir = URL.applicationSupportDirectory
-            .appendingPathComponent("SwiftLiteWebSocketSyncServer", isDirectory: true)
         self.databaseURL = dataDir.appendingPathComponent("\(databaseId).sqlite", isDirectory: false)
         
         // Open database

@@ -1,5 +1,4 @@
 - Store fatal error in the configuration database; fail Database initializer if broken
-- Sync Transport errors: Show in client
 - Client: Handle errors the server throws while inserting uploaded log entries
 
 - Server: Don't send entries back to the device that just sent it
@@ -16,11 +15,11 @@
 - 
 
 - Reconnect Websocket after connection status change; send entries
-- DatabaseLogger: Try "sendUnsynchronized()" again after the connection status of the Transport changes
+- SyncClient: Try "sendUnsynchronized()" again after the connection status of the Transport changes
 - Unique database ID to detect (in SyncTransport) a serverside full reset or wrong database at the URL
 - Test what happens to logging when saving on quit
 
-- Make more stuff in DatabaseLogger non-throwing, closing the database instead and setting fatalError
+- Make more stuff in SyncClient non-throwing, closing the database instead and setting fatalError
 
 - History
 	- Surface errors and stop sync/history and potentially Database access (or just fatalError?)
@@ -32,7 +31,6 @@
 - Show saving errors in SwiftUI
 	- Log them? The view might be gone already...
 
-- Use a ANY column in the log for new field values; use `sqlite3_column_type` to convert them back to SQLValue
 	
 ================================================
 Backlog
