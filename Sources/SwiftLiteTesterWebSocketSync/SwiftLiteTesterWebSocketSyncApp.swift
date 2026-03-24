@@ -8,7 +8,6 @@ struct SwiftLiteTesterWebSocketSyncApp: App
 {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     
-    @State private var transport: WebSocketSyncTransport?
     @State private var database: Database?
     @State private var engine: Engine.Snapshot?
     @State private var databaseOpenError: Error?
@@ -25,19 +24,18 @@ struct SwiftLiteTesterWebSocketSyncApp: App
                     .environment(\.defaultEngine, engine)
             } else if let databaseOpenError {
                 ContentUnavailableView("Failed to open database", systemImage: "externaldrive.badge.xmark", description: Text(databaseOpenError.localizedDescription))
-            } else if let transport {
+            } else if let database {
                 ProgressView("Opening database...")
                     .task {
                         do {
-                            let db = try await Database(storage: .distributed(transport))
-                            try await db.register(models: Car.self, Engine.self, Interior.self, Passenger.self)
-                            self.database = db
-                            let firstEngine = try await db.get(Engine.Snapshot.self).first
+                            await database.logger?.sync()
+                            try await database.register(models: Car.self, Engine.self, Interior.self, Passenger.self)
+                            let firstEngine = try await database.get(Engine.Snapshot.self).first
                             if firstEngine == nil {
-                                let newEngine = Engine(db: db)
+                                let newEngine = Engine(db: database)
                                 newEngine.name = "V12"
                                 try await newEngine.save()
-                                self.engine = try await db.get(from: newEngine)
+                                self.engine = try await database.get(from: newEngine)
                             } else {
                                 self.engine = firstEngine
                             }
@@ -46,6 +44,8 @@ struct SwiftLiteTesterWebSocketSyncApp: App
                             print("Failed to open database", error.localizedDescription)
                         }
                     }
+                SwiftLiteTestViews.StatusView()
+                    .environment(database)
             } else {
                 Form {
                     Section {
@@ -53,7 +53,11 @@ struct SwiftLiteTesterWebSocketSyncApp: App
                         TextField("Database Identifier", text: $databaseIdentifier)
                     } footer: {
                         Button("Connect") {
-                            transport = WebSocketSyncTransport(server: server, databaseIdentifier: databaseIdentifier)
+                            Task {
+                                let transport = WebSocketSyncTransport(server: server, databaseIdentifier: databaseIdentifier)
+                                let db = try await Database(storage: .distributed(transport))
+                                self.database = db
+                            }
                         }
                         .disabled(!hasValidServer)
                         .frame(maxWidth: .infinity, alignment: .trailing)
