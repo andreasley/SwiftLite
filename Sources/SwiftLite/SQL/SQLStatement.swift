@@ -86,11 +86,16 @@ public nonisolated enum SQLStatementPreset
 
     public struct Insert: SQLStatementProvider
     {
+        enum ConstraintFailureMode {
+            case skip
+            case fail
+        }
+        
         let table: String
         
         public let sqlStatement: SQLStatement
         
-        init(table: String, updatedFields: [String: SQLValue])
+        init(table: String, updatedFields: [String: SQLValue], constraintFailureMode: ConstraintFailureMode = .fail)
         {
             self.table = table
             
@@ -100,7 +105,8 @@ public nonisolated enum SQLStatementPreset
             let fieldsText = updatedFields.map(\.key).joined(separator: ",")
             let valuesText = Array(repeating: "?", count: updatedFields.count).joined(separator: ",")
 
-            let text = "INSERT INTO \(table) (\(fieldsText)) VALUES (\(valuesText))"
+            let constraintFailureModeText = constraintFailureMode == .skip ? "OR IGNORE" : ""
+            let text = "INSERT \(constraintFailureModeText) INTO \(table) (\(fieldsText)) VALUES (\(valuesText))"
             
             self.sqlStatement = SQLStatement(text: text, values: values)
         }

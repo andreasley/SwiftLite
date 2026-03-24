@@ -246,7 +246,7 @@ extension Database
                     
                     print("📋 Replaying: Row created - \(tableName)[\(objectId)] with \(fields.count) fields")
                     
-                    let insertStatement = SQLStatementPreset.Insert(table: tableName, updatedFields: fields)
+                    let insertStatement = SQLStatementPreset.Insert(table: tableName, updatedFields: fields, constraintFailureMode: .skip)
                     try execute(insertStatement.sqlStatement)
                     
                     // Create ChangedObject for creation
