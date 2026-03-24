@@ -4,9 +4,10 @@ public actor InMemoryConnector: SyncConnector
 {
     public private(set) var status: SyncConnectorStatus = .connecting
     
-    public nonisolated let databaseIdentifier: String = "test"
+    public nonisolated let databaseName: String = "test"
     public nonisolated let clientIdentifier: String
     
+    private var databaseId: UUID? = UUID()
     private var indexIncreaseCallbacks: [IndexIncreaseHandler] = []
     private var serverLogEntries: [SyncClient.LogEntry] = []
     
@@ -25,7 +26,12 @@ public actor InMemoryConnector: SyncConnector
     
     public private(set) var errors: [SyncConnectorError] = []
     
-    public func connect() async
+    public func getDatabaseId() async throws -> UUID?
+    {
+        databaseId
+    }
+    
+    public func connect(databaseId: UUID) async throws
     {
         status = .connected
         statusContinuation.yield(.connected)

@@ -1,6 +1,6 @@
 import Foundation
 
-extension URL
+public nonisolated extension URL
 {
     func createParentDirectoryIfNotExists() throws
     {

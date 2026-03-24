@@ -12,7 +12,23 @@ struct WebSyncServerApp
         
         let router = Router(context: BasicWebSocketRequestContext.self)
         
-        let groupForDatabase = router.group(":databaseId")
+        // HTTP GET endpoint for name to id conversion
+        router.get(":databaseName/id") { request, context async throws -> Response in
+            let databaseName = try context.parameters.require("databaseName")
+            
+            let id = try await databaseManager.getOrCreateDatabaseId(databaseName: databaseName)
+            
+            let encoder = JSONEncoder.forSwiftLiteSync
+            let responseData = try encoder.encode(id)
+            
+            return Response(
+                status: .ok,
+                headers: [.contentType: "application/json"],
+                body: .init(byteBuffer: ByteBuffer(data: responseData))
+            )
+        }
+
+        let groupForDatabase = router.group("id/:databaseId")
         
         // WebSocket endpoint for real-time index updates
         groupForDatabase.ws("sync") { request, context in
@@ -28,8 +44,8 @@ struct WebSyncServerApp
         
         // HTTP POST endpoint for uploading entries
         groupForDatabase.post("upload") { request, context async throws -> Response in
-            let databaseId = try context.parameters.require("databaseId")
-            
+            let databaseId = try context.parameters.require("databaseId", as: UUID.self)
+
             // Collect all ByteBuffer chunks from the request body
             var bodyBuffer = ByteBuffer()
             for try await chunk in request.body {
@@ -43,8 +59,8 @@ struct WebSyncServerApp
             let entries = try decoder.decode([SyncClient.LogEntry].self, from: data)
             
             let mapping = try await databaseManager.storeEntries(
-                entries: entries,
-                databaseId: databaseId
+                databaseId: databaseId,
+                entries: entries
             )
             
             let encoder = JSONEncoder.forSwiftLiteSync
@@ -69,7 +85,7 @@ struct WebSyncServerApp
         
         // HTTP GET endpoint for highest index
         groupForDatabase.get("highestIndex") { request, context async throws -> Response in
-            let databaseId = try context.parameters.require("databaseId")
+            let databaseId = try context.parameters.require("databaseId", as: UUID.self)
             
             let highestIndex = try await databaseManager.getHighestIndex(databaseId: databaseId)
             
@@ -85,8 +101,8 @@ struct WebSyncServerApp
 
         // HTTP GET endpoint for downloading entries
         groupForDatabase.get("download") { request, context async throws -> Response in
-            let databaseId = try context.parameters.require("databaseId")
-            
+            let databaseId = try context.parameters.require("databaseId", as: UUID.self)
+
             guard let fromIndexString = request.uri.queryParameters["from"], let fromIndex = Int64(fromIndexString) else {
                 return Response(status: .badRequest)
             }
@@ -99,8 +115,8 @@ struct WebSyncServerApp
             }
             
             let entries = try await databaseManager.getEntries(
-                fromIndex: fromIndex,
                 databaseId: databaseId,
+                fromIndex: fromIndex,
                 limit: limit
             )
             
@@ -123,10 +139,11 @@ struct WebSyncServerApp
         )
         
         print("🚀 Sync Server starting on http://localhost:8080")
-        print("   WebSocket: /:databaseId/sync")
-        print("   Upload:    POST /:databaseId/upload")
-        print("   Index:     GET  /:databaseId/highestIndex")
-        print("   Download:  GET  /:databaseId/download?from=index&limit=1000")
+        print("   ID:        GET  /:databaseName/id")
+        print("   WebSocket:      /id/:databaseId/sync")
+        print("   Upload:    POST /id/:databaseId/upload")
+        print("   Index:     GET  /id/:databaseId/highestIndex")
+        print("   Download:  GET  /id/:databaseId/download?from=index&limit=1000")
         try await app.runService()
     }
     
@@ -150,7 +167,7 @@ struct WebSyncServerApp
             
             do {
                 let decoder = JSONDecoder.forSwiftLiteSync
-                let webSocketMessage = try decoder.decode(WebSocketMessage.self, from: data)
+                let webSocketMessage = try decoder.decode(WebSocketSyncMessage.self, from: data)
 
                 let response = try await processMessage(
                     webSocketMessage,
@@ -165,7 +182,7 @@ struct WebSyncServerApp
                 }
             } catch {
                 print("Error processing message: \(error)")
-                let errorMessage = WebSocketMessage.error(message: error.localizedDescription)
+                let errorMessage = WebSocketSyncMessage.error(message: error.localizedDescription)
                 let encoder = JSONEncoder()
                 encoder.dateEncodingStrategy = .iso8601
                 let errorData = try encoder.encode(errorMessage)
@@ -180,11 +197,11 @@ struct WebSyncServerApp
     }
     
     static func processMessage(
-        _ message: WebSocketMessage,
+        _ message: WebSocketSyncMessage,
         clientSession: inout ClientSession?,
         databaseManager: ServerDatabaseManager,
         outbound: WebSocketOutboundWriter
-    ) async throws -> WebSocketMessage? {
+    ) async throws -> WebSocketSyncMessage? {
         switch message {
         case .handshake(let databaseId):
             let session = ClientSession(databaseId: databaseId)
@@ -204,7 +221,7 @@ struct WebSyncServerApp
 
 struct ClientSession: Identifiable, Sendable {
     let id = UUID.v7()
-    let databaseId: String
+    let databaseId: UUID
 }
 
 enum ServerError: LocalizedError {

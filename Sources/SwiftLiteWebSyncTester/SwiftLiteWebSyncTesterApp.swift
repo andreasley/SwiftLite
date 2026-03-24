@@ -12,7 +12,7 @@ struct SwiftLiteWebSyncTesterApp: App
     @State private var engine: Engine.Snapshot?
     @State private var databaseOpenError: Error?
     @AppStorage("server") private var server: String = "localhost:8080"
-    @State private var databaseIdentifier: String = "test"
+    @State private var databaseName: String = "test"
     @State private var hasValidServer: Bool = false
 
     
@@ -24,6 +24,9 @@ struct SwiftLiteWebSyncTesterApp: App
                     .environment(\.defaultEngine, engine)
             } else if let databaseOpenError {
                 ContentUnavailableView("Failed to open database", systemImage: "externaldrive.badge.xmark", description: Text(databaseOpenError.localizedDescription))
+                Button("Reset") {
+                    self.databaseOpenError = nil
+                }
             } else if let database {
                 ProgressView("Opening database...")
                     .task {
@@ -41,7 +44,7 @@ struct SwiftLiteWebSyncTesterApp: App
                             }
                         } catch {
                             self.databaseOpenError = error
-                            print("Failed to open database", error.localizedDescription)
+                            print("Failed to register models and start sync", error.localizedDescription)
                         }
                     }
                 SwiftLiteTestViews.StatusView()
@@ -50,15 +53,20 @@ struct SwiftLiteWebSyncTesterApp: App
                 Form {
                     Section {
                         TextField("URL", text: $server)
-                        TextField("Database Identifier", text: $databaseIdentifier)
+                        TextField("Database name", text: $databaseName)
                     } footer: {
                         Button("Connect") {
                             Task {
-                                let databaseDirectory = URL.databaseFilesDirectory(for: databaseIdentifier)
-                                let databaseFile = databaseDirectory.appendingPathComponent("database.sqlite", isDirectory: false)
-                                let connector = WebConnector(server: server, databaseIdentifier: databaseIdentifier)
-                                let db = try await Database(storage: .file(databaseFile), sync: .enabled(using: connector))
-                                self.database = db
+                                do {
+                                    let databaseDirectory = URL.databaseFilesDirectory(for: databaseName)
+                                    let databaseFile = databaseDirectory.appendingPathComponent("database.sqlite", isDirectory: false)
+                                    let connector = WebConnector(server: server, databaseName: databaseName)
+                                    let db = try await Database(storage: .file(databaseFile), sync: .enabled(using: connector))
+                                    self.database = db
+                                } catch {
+                                    self.databaseOpenError = error
+                                    print("Failed to open database", error.localizedDescription)
+                                }
                             }
                         }
                         .disabled(!hasValidServer)

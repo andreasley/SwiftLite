@@ -2,8 +2,6 @@ import Foundation
 
 public actor WebConnector: SyncConnector
 {
-    // MARK: - Properties
-    
     private var indexIncreaseCallback: IndexIncreaseHandler?
     private var didComeOnlineCallback: DidComeOnlineHandler?
 
@@ -16,18 +14,22 @@ public actor WebConnector: SyncConnector
         }
     }
 
-    public nonisolated let databaseIdentifier: String
-    
+    public nonisolated let databaseName: String
+    public private(set) var databaseId: UUID?
+
     public private(set) var errors: [SyncConnectorError] = []
     
     private var webSocketTask: URLSessionWebSocketTask?
     private let session: URLSession
     private var reconnectTask: Task<Void, Never>?
 
-    public let syncUrl: URL
-    public let uploadUrl: URL
-    public let downloadUrl: URL
-    public let indexUrl: URL
+    public let server: String
+    public let databaseIdUrl: URL
+
+    public var syncUrl: URL?
+    public var uploadUrl: URL?
+    public var downloadUrl: URL?
+    public var indexUrl: URL?
 
     private let encoder = JSONEncoder.forSwiftLiteSync
     private let decoder = JSONDecoder.forSwiftLiteSync
@@ -37,16 +39,12 @@ public actor WebConnector: SyncConnector
     public nonisolated let statusStream: AsyncStream<SyncConnectorStatus>
     
     
-    // MARK: - Initialization
-    
-    public init(server: String, databaseIdentifier: String = "test", session: URLSession = .shared)
+    public init(server: String, databaseName: String, session: URLSession = .shared)
     {
-        self.syncUrl = URL(string: "ws://\(server)/\(databaseIdentifier)/sync")!
-        self.uploadUrl = URL(string: "http://\(server)/\(databaseIdentifier)/upload")!
-        self.downloadUrl = URL(string: "http://\(server)/\(databaseIdentifier)/download")!
-        self.indexUrl = URL(string: "http://\(server)/\(databaseIdentifier)/highestIndex")!
+        self.server = server
+        self.databaseIdUrl = URL(string: "http://\(server)/\(databaseName)/id")!
 
-        self.databaseIdentifier = databaseIdentifier
+        self.databaseName = databaseName
         self.session = session
         
         // Create the status stream
@@ -65,8 +63,6 @@ public actor WebConnector: SyncConnector
         statusContinuation?.finish()
     }
 
-    // MARK: - SyncConnector Protocol
-
     public func onHighestRemoteIndexIncrease(_ callback: @escaping IndexIncreaseHandler)
     {
         indexIncreaseCallback = callback
@@ -77,23 +73,31 @@ public actor WebConnector: SyncConnector
         didComeOnlineCallback = callback
     }
 
-    public func connect() async
+    public func connect(databaseId: UUID) async throws
     {
         status = .connecting
+
+        self.databaseId = databaseId
         
-        // Create WebSocket task
+        let basePath = "\(server)/id/\(databaseId)"
+        self.syncUrl = URL(string: "ws://\(basePath)/sync")!
+        self.uploadUrl = URL(string: "http://\(basePath)/upload")!
+        self.downloadUrl = URL(string: "http://\(basePath)/download")!
+        self.indexUrl = URL(string: "http://\(basePath)/highestIndex")!
+
+        guard let syncUrl else { throw Error.urlNotConfigured }
+        
         webSocketTask = session.webSocketTask(with: syncUrl)
         webSocketTask?.resume()
-        
-        // Send initial handshake
+
+
         do {
-            let handshake = WebSocketMessage.handshake(databaseName: databaseIdentifier)
+            let handshake = WebSocketSyncMessage.handshake(databaseId: databaseId)
             try await send(message: handshake)
             status = .connected
             
-            // Start listening for incoming messages (index updates)
             Task {
-                await startListening()
+                await startListeningForIndexIncreaseNotifications()
             }
         } catch {
             status = .offline
@@ -101,10 +105,35 @@ public actor WebConnector: SyncConnector
             await scheduleReconnect()
         }
     }
+    
+    public func getDatabaseId() async throws -> UUID?
+    {
+        var request = URLRequest(url: databaseIdUrl)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        
+        let (data, response) = try await session.data(for: request)
 
+        guard let httpResponse = response as? HTTPURLResponse else {
+            addError(Error.invalidResponse)
+            return nil
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            addError(Error.invalidResponse)
+            return nil
+        }
+        
+        let databaseId = try decoder.decode(UUID.self, from: data)
+        
+        return databaseId
+    }
+    
     public func getHighestRemoteIndex() async -> Int64?
     {
         do {
+            guard let indexUrl else { throw Error.urlNotConfigured }
+            
             var request = URLRequest(url: indexUrl)
             request.httpMethod = "GET"
             request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -133,6 +162,8 @@ public actor WebConnector: SyncConnector
     public func sendEntries(entries: [SyncClient.LogEntry]) async -> [UUID : Int64]
     {
         do {
+            guard let uploadUrl else { throw Error.urlNotConfigured }
+
             status = .transferring
             defer { status = .connected }
             
@@ -167,6 +198,8 @@ public actor WebConnector: SyncConnector
     public func getEntries(from index: Int64, limit: Int64 = 10_000) async -> [SyncClient.LogEntry]
     {
         do {
+            guard let downloadUrl else { throw Error.urlNotConfigured }
+
             status = .transferring
             defer { status = .connected }
             
@@ -199,9 +232,7 @@ public actor WebConnector: SyncConnector
     }
     
     
-    // MARK: - Private Methods
-    
-    private func startListening() async {
+    private func startListeningForIndexIncreaseNotifications() async {
         guard let webSocketTask = webSocketTask else { return }
         
         while status == .connected {
@@ -240,7 +271,7 @@ public actor WebConnector: SyncConnector
         }
     }
     
-    private func send(message: WebSocketMessage) async throws {
+    private func send(message: WebSocketSyncMessage) async throws {
         guard let webSocketTask = webSocketTask else {
             throw Error.notConnected
         }
@@ -251,7 +282,7 @@ public actor WebConnector: SyncConnector
         try await webSocketTask.send(urlMessage)
     }
     
-    private func parseMessage(_ message: URLSessionWebSocketTask.Message) throws -> WebSocketMessage {
+    private func parseMessage(_ message: URLSessionWebSocketTask.Message) throws -> WebSocketSyncMessage {
         let data: Data
         
         switch message {
@@ -266,17 +297,18 @@ public actor WebConnector: SyncConnector
             throw Error.invalidMessage
         }
         
-        return try decoder.decode(WebSocketMessage.self, from: data)
+        return try decoder.decode(WebSocketSyncMessage.self, from: data)
     }
     
     private func scheduleReconnect() async {
         reconnectTask?.cancel()
         
+        guard let databaseId else { return }
         reconnectTask = Task {
             try? await Task.sleep(for: .seconds(5))
             
             if !Task.isCancelled {
-                await connect()
+                try? await connect(databaseId: databaseId)
             }
         }
     }
@@ -293,8 +325,6 @@ public actor WebConnector: SyncConnector
 }
 
 
-// MARK: - Custom Errors
-
 public nonisolated extension WebConnector
 {
     enum Error: LocalizedError {
@@ -303,19 +333,25 @@ public nonisolated extension WebConnector
         case invalidResponse
         case unexpectedResponse
         case serverError(String)
-        
+        case failedToFindDatabaseId
+        case urlNotConfigured
+
         public var errorDescription: String? {
-            switch self {
+            return switch self {
             case .notConnected:
-                return "WebSocket is not connected"
+                "WebSocket is not connected"
             case .invalidMessage:
-                return "Received invalid message format"
+                "Received invalid message format"
             case .invalidResponse:
-                return "Received invalid HTTP response"
+                "Received invalid HTTP response"
             case .unexpectedResponse:
-                return "Received unexpected response from server"
+                "Received unexpected response from server"
             case .serverError(let message):
-                return "Server error: \(message)"
+                "Server error: \(message)"
+            case .failedToFindDatabaseId:
+                "Failed to find database ID"
+            case .urlNotConfigured:
+                "URL not configured; Database ID not found?"
             }
         }
     }

@@ -5,19 +5,24 @@ import SwiftLite
 /// Represents a single database on the server (one per client database ID)
 actor ServerDatabase
 {
-    private let databaseId: String
-    private let databaseURL: URL
-    private let connectionHandle: OpaquePointer
-    public private(set) var highestIndex: Int64 = 0
+    private let isFirstRun: Bool
+    public let databaseName: String
+    public let databaseId: UUID
+    public let databaseURL: URL
     
-    init(dataDir: URL, databaseId: String) async throws
+    private let connectionHandle: OpaquePointer
+    
+    public private(set) var highestIndex: Int64 = .max
+    
+    init(dataDir: URL, databaseName: String) async throws
     {
-        self.databaseId = databaseId
+        self.databaseName = databaseName
         
-        // Create database file path
-        self.databaseURL = dataDir.appendingPathComponent("\(databaseId).sqlite", isDirectory: false)
+        let databaseFileName = databaseName + ".sqlite"
+
+        self.databaseURL = dataDir.appendingPathComponent(databaseFileName, isDirectory: false)
+        self.isFirstRun = databaseURL.exists
         
-        // Open database
         var handle: OpaquePointer?
         let status = SQLiteStatus(sqlite3_open(databaseURL.path, &handle))
         guard status == .ok, let handle else {
@@ -25,13 +30,15 @@ actor ServerDatabase
         }
         self.connectionHandle = handle
         
-        // Initialize schema
-        try initializeSchema()
+        if isFirstRun {
+            try Self.initializeSchema(connectionHandle: handle)
+            try Self.initializeConfiguration(connectionHandle: handle)
+        }
         
-        // Load highest index
+        self.databaseId = try Self.getServerDatabaseId(connectionHandle: handle)
         self.highestIndex = try fetchHighestIndex()
-        
-        print("📂 Database \(databaseId) opened at: \(self.databaseURL.path(percentEncoded: false))")
+
+        print("📂 Database \(databaseName) with ID \(databaseId.uuidString) opened at: \(self.databaseURL.path(percentEncoded: false))")
         print("Highest index: \(highestIndex)")
     }
     
@@ -187,7 +194,8 @@ actor ServerDatabase
     
     // MARK: - Private Helpers
     
-    private func initializeSchema() throws {
+    private static func initializeSchema(connectionHandle: OpaquePointer?) throws
+    {
         let createTableSQL = """
         CREATE TABLE IF NOT EXISTS operation_log (
             synchronized_index INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -213,13 +221,35 @@ actor ServerDatabase
             "CREATE INDEX IF NOT EXISTS idx_object_id ON operation_log(object_id);",
         ]
         
-        try execute(sql: createTableSQL)
+        try execute(sql: createTableSQL, connectionHandle: connectionHandle)
 
         for indexSQL in createIndexSQL {
-            try execute(sql: indexSQL)
+            try execute(sql: indexSQL, connectionHandle: connectionHandle)
         }
+
+        // Create configuration table
+        let createConfigTableSQL = """
+        CREATE TABLE IF NOT EXISTS log_config (
+            key TEXT PRIMARY KEY NOT NULL,
+            value ANY
+        ) STRICT;
+        """
+        
+        try execute(sql: createConfigTableSQL, connectionHandle: connectionHandle)
     }
-    
+
+    /// Initialize configuration values on first run
+    private static func initializeConfiguration(connectionHandle: OpaquePointer?) throws
+    {
+        let creationTimestamp = Date().timeIntervalSince1970
+        let serverDatabaseId = UUID.v7()
+        
+        try setConfigValue(key: "server_database_id", value: .string(serverDatabaseId.uuidString), connectionHandle: connectionHandle)
+        try setConfigValue(key: "creation_timestamp", value: .double(creationTimestamp), connectionHandle: connectionHandle)
+        
+        print("📝 Initialized log configuration with client ID: \(serverDatabaseId.uuidString)")
+    }
+
     private func fetchHighestIndex() throws -> Int64 {
         let querySQL = "SELECT MAX(synchronized_index) FROM operation_log"
         
@@ -236,17 +266,100 @@ actor ServerDatabase
         let value = sqlite3_column_int64(stmt, 0)
         return value
     }
-    
-    private func execute(sql: String) throws
+
+    private static func execute(sql: String, connectionHandle: OpaquePointer?) throws
     {
-        let result = sqlite3_exec(self.connectionHandle, sql, nil, nil, nil)
+        let result = sqlite3_exec(connectionHandle, sql, nil, nil, nil)
         guard result == SQLiteStatus.ok.rawValue else {
-            let errmsg = String(cString: sqlite3_errmsg(self.connectionHandle))
+            let errmsg = String(cString: sqlite3_errmsg(connectionHandle))
             print("🔴 Error while executing query: \(errmsg)")
             throw ServerError.databaseError("Error while executing query: \(errmsg)")
         }
     }
+
+    private func execute(sql: String) throws
+    {
+        try Self.execute(sql: sql, connectionHandle: self.connectionHandle)
+    }
     
+    private static func getConfigValue(key: String, connectionHandle: OpaquePointer?) throws -> SQLValue? {
+        let sql = "SELECT value FROM log_config WHERE key = ?"
+        
+        var statement: OpaquePointer?
+        let prepareResult = sqlite3_prepare_v2(connectionHandle, sql, -1, &statement, nil)
+        defer { sqlite3_finalize(statement) }
+        
+        guard let statement, prepareResult == SQLiteStatus.ok.rawValue else {
+            throw Error.failedToGetConfigurationValue(key)
+        }
+        
+        // Bind key
+        sqlite3_bind_text(statement, 1, key, -1, SQLITE_TRANSIENT)
+        
+        guard sqlite3_step(statement) == SQLITE_ROW else {
+            return nil
+        }
+        
+        let columnType = sqlite3_column_type(statement, 0)
+        switch columnType {
+        case SQLITE_INTEGER:
+            return .int(sqlite3_column_int64(statement, 0))
+        case SQLITE_FLOAT:
+            return .double(sqlite3_column_double(statement, 0))
+        case SQLITE_TEXT:
+            return .string(String(cString: sqlite3_column_text(statement, 0)))
+        case SQLITE_BLOB:
+            if let blobPointer = sqlite3_column_blob(statement, 0) {
+                let blobSize = Int(sqlite3_column_bytes(statement, 0))
+                let data = Data(bytes: blobPointer, count: blobSize)
+                return .data(data)
+            } else {
+                return nil
+            }
+        case SQLITE_NULL:
+            return .null
+        default:
+            return nil
+        }
+    }
+    
+    private static func setConfigValue(key: String, value: SQLValue, connectionHandle: OpaquePointer?) throws {
+        let sql = """
+        INSERT OR REPLACE INTO log_config (key, value)
+        VALUES (?, ?)
+        """
+        
+        var statement: OpaquePointer?
+        let prepareResult = sqlite3_prepare_v2(connectionHandle, sql, -1, &statement, nil)
+        defer { sqlite3_finalize(statement) }
+        
+        guard let statement, prepareResult == SQLiteStatus.ok.rawValue else {
+            throw Error.failedToSetConfigurationValue(key)
+        }
+        
+        // Bind key
+        sqlite3_bind_text(statement, 1, key, -1, SQLITE_TRANSIENT)
+        
+        value.bind(to: statement, at: 2)
+        
+        let stepResult = sqlite3_step(statement)
+        guard stepResult == SQLITE_DONE else {
+            throw Error.failedToSetConfigurationValue(key)
+        }
+    }
+
+    /// Get the server database ID
+    public static func getServerDatabaseId(connectionHandle: OpaquePointer?) throws -> UUID
+    {
+        guard let value = try getConfigValue(key: "server_database_id", connectionHandle: connectionHandle),
+              case .string(let uuidString) = value,
+              let uuid = UUID(uuidString: uuidString)
+        else {
+            throw Error.failedToGetConfigurationValue("server_database_id")
+        }
+        return uuid
+    }
+
     private func parseLogEntry(from stmt: OpaquePointer?) throws -> SyncClient.LogEntry
     {
         guard let idString = sqlite3_column_text(stmt, 0).map({ String(cString: $0) }),
@@ -316,5 +429,13 @@ actor ServerDatabase
             user: user,
             synchronizedIndex: synchronizedIndex
         )
+    }
+}
+
+extension ServerDatabase
+{
+    enum Error: LocalizedError {
+        case failedToGetConfigurationValue(String)
+        case failedToSetConfigurationValue(String)
     }
 }

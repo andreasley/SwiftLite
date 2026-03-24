@@ -1,14 +1,14 @@
 import Foundation
 
-public enum WebSocketMessage: Codable
+public enum WebSocketSyncMessage: Codable
 {
-    case handshake(databaseName: String)
+    case handshake(databaseId: UUID)
     case indexUpdate(highestIndex: Int64)
     case error(message: String)
     
     enum CodingKeys: String, CodingKey {
         case type
-        case databaseName
+        case databaseId
         case highestIndex
         case message
     }
@@ -26,8 +26,8 @@ public enum WebSocketMessage: Codable
         
         switch type {
         case .handshake:
-            let databaseName = try container.decode(String.self, forKey: .databaseName)
-            self = .handshake(databaseName: databaseName)
+            let databaseId = try container.decode(UUID.self, forKey: .databaseId)
+            self = .handshake(databaseId: databaseId)
         case .indexUpdate:
             let highestIndex = try container.decode(Int64.self, forKey: .highestIndex)
             self = .indexUpdate(highestIndex: highestIndex)
@@ -42,9 +42,9 @@ public enum WebSocketMessage: Codable
         var container = encoder.container(keyedBy: CodingKeys.self)
         
         switch self {
-        case .handshake(let databaseName):
+        case .handshake(let databaseId):
             try container.encode(MessageType.handshake, forKey: .type)
-            try container.encode(databaseName, forKey: .databaseName)
+            try container.encode(databaseId, forKey: .databaseId)
         case .indexUpdate(let highestIndex):
             try container.encode(MessageType.indexUpdate, forKey: .type)
             try container.encode(highestIndex, forKey: .highestIndex)

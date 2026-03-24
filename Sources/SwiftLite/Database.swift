@@ -50,17 +50,17 @@ public actor Database: Observable
 
     public init(storage: StorageType, sync: SyncType = .disabled, cacheSizeLimit: CacheSize? = nil) async throws
     {
-        var flags = [SQLITE_OPEN_READWRITE, SQLITE_OPEN_CREATE, SQLITE_OPEN_FULLMUTEX] // see https://sqlite.org/c3ref/open.html
+        var flags = [SQLITE_OPEN_READWRITE, SQLITE_OPEN_CREATE, SQLITE_OPEN_FULLMUTEX]
         var databaseFileUrl: URL?
 
         switch storage {
         case .file(let url):
             guard url.isFileURL else { throw Error.notAFileUrl(url) }
             if url.exists {
-                print("Opening database at \(url)")
+                print("Opening database at \(url.filePath)")
                 isFirstOpening = false
             } else {
-                print("Creating database at \(url)")
+                print("Creating database at \(url.filePath)")
                 try url.createParentDirectoryIfNotExists()
                 isFirstOpening = true
             }
@@ -75,11 +75,6 @@ public actor Database: Observable
         case .disabled:
             break
         case .enabled(let syncConnector):
-            await syncConnector.connect()
-            // As long as the log file exists, the datbase file can be created by replaying the log file. However, if the log file is missing, this must be a new (or broken) database that can't be opened if the sync endpoint isn't online.
-            if await syncConnector.status != .connected, isFirstOpening {
-                throw Error.syncIsOfflineAndNoLocalDatabaseExists
-            }
             self.syncClient = try await SyncClient(connector: syncConnector, databaseStorage: storage)
         }
         
