@@ -239,22 +239,23 @@ public actor DatabaseLogger
         let totalCount = self.pendingLocalCount + (self.pendingRemoteCount ?? 0)
         let progress = Progress(totalUnitCount: totalCount)
         self.currentSyncProgress = progress
+        defer { self.currentSyncProgress = nil }
         
         guard totalCount > 0 || force else { return }
         
         while (self.pendingRemoteCount ?? 0) > 0 {
+            guard !isClosed else { return }
             await fetchAndUpdate()
             let remainingCount = self.pendingLocalCount + (self.pendingRemoteCount ?? 0)
             progress.completedUnitCount = Int64(totalCount - remainingCount)
         }
         
         while pendingLocalCount > 0 {
+            guard !isClosed else { return }
             await sendUnsynchronized()
             let remainingCount = self.pendingLocalCount + (self.pendingRemoteCount ?? 0)
             progress.completedUnitCount = Int64(totalCount - remainingCount)
         }
-        
-        self.currentSyncProgress = nil
         
         if let newHighestRemoteIndex = await self.transport.getHighestRemoteIndex() {
             self.setHighestRemoteIndex(newHighestRemoteIndex)
@@ -277,8 +278,6 @@ public actor DatabaseLogger
         print("Highest remote index \(highestRemoteIndex) (\(pendingRemoteCount) pending remote)")
         
         do {
-            guard !isClosed else { return }
-
             // TODO: publish progress information somewhere
             
             print("Fetching new entries, starting from index \(highestSyncedLocalIndex)")
