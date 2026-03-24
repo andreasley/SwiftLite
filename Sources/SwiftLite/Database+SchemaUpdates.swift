@@ -83,7 +83,7 @@ extension Database
                 // Collect column addition for batch logging
                 if currentTransactionId != nil {
                     pendingSchemaChanges.append(
-                        DatabaseLogger.SchemaChange(
+                        SyncClient.SchemaChange(
                             operationType: .columnAdded,
                             tableName: table.name,
                             columnName: column.name,
@@ -101,7 +101,7 @@ extension Database
                 // Collect index removal for batch logging
                 if currentTransactionId != nil {
                     pendingSchemaChanges.append(
-                        DatabaseLogger.SchemaChange(
+                        SyncClient.SchemaChange(
                             operationType: .indexDropped,
                             tableName: table.name,
                             metadata: ["indexName": index.name]
@@ -118,7 +118,7 @@ extension Database
                 // Collect index creation for batch logging
                 if currentTransactionId != nil {
                     pendingSchemaChanges.append(
-                        DatabaseLogger.SchemaChange(
+                        SyncClient.SchemaChange(
                             operationType: .indexCreated,
                             tableName: table.name,
                             metadata: [
@@ -143,7 +143,7 @@ extension Database
         // Collect table creation for batch logging
         if currentTransactionId != nil {
             pendingSchemaChanges.append(
-                DatabaseLogger.SchemaChange(
+                SyncClient.SchemaChange(
                     operationType: .tableCreated,
                     tableName: table.name
                 )
@@ -160,7 +160,7 @@ extension Database
                 }
                 
                 pendingSchemaChanges.append(
-                    DatabaseLogger.SchemaChange(
+                    SyncClient.SchemaChange(
                         operationType: .columnAdded,
                         tableName: table.name,
                         columnName: column.name,
@@ -179,7 +179,7 @@ extension Database
         if currentTransactionId != nil {
             for index in table.indexes {
                 pendingSchemaChanges.append(
-                    DatabaseLogger.SchemaChange(
+                    SyncClient.SchemaChange(
                         operationType: .indexCreated,
                         tableName: table.name,
                         metadata: [

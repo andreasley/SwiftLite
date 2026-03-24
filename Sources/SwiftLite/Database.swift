@@ -8,7 +8,7 @@ public actor Database: Observable
     nonisolated public struct Status: Sendable
     {
         public let localStatus: LocalDatabaseStatus
-        public let syncStatus: DatabaseLogger.Status
+        public let syncStatus: SyncClient.Status
     }
     
     public enum LocalDatabaseStatus: Sendable {
@@ -16,12 +16,16 @@ public actor Database: Observable
         case fatalError(Swift.Error)
     }
 
-    public enum StorageType {
+    public enum StorageType: Sendable, Hashable {
         case file(URL)
         case inMemory
-        case distributed(any SyncTransport)
     }
-    
+
+    public enum SyncType {
+        case disabled
+        case enabled(any SyncConnector)
+    }
+
     public enum CacheSize {
         case megabytes(Int)
         case pages(Int)
@@ -38,42 +42,48 @@ public actor Database: Observable
     public nonisolated let statusUpdates = AsyncStreams<Status>()
 
     // Logging for distributed sync
-    public private(set) var logger: DatabaseLogger?
+    public private(set) var syncClient: SyncClient?
     internal var currentTransactionId: UUID?
-    internal var pendingSchemaChanges: [DatabaseLogger.SchemaChange] = []
+    internal var pendingSchemaChanges: [SyncClient.SchemaChange] = []
+    
+    public let isFirstOpening: Bool
 
-    public init(storage: StorageType, cacheSizeLimit: CacheSize? = nil) async throws
+    public init(storage: StorageType, sync: SyncType = .disabled, cacheSizeLimit: CacheSize? = nil) async throws
     {
         var flags = [SQLITE_OPEN_READWRITE, SQLITE_OPEN_CREATE, SQLITE_OPEN_FULLMUTEX] // see https://sqlite.org/c3ref/open.html
-        var databaseFilePath: String?
-        
-        if case .inMemory = storage {
+        var databaseFileUrl: URL?
+
+        switch storage {
+        case .file(let url):
+            guard url.isFileURL else { throw Error.notAFileUrl(url) }
+            if url.exists {
+                print("Opening database at \(url)")
+                isFirstOpening = false
+            } else {
+                print("Creating database at \(url)")
+                try url.createParentDirectoryIfNotExists()
+                isFirstOpening = true
+            }
+            databaseFileUrl = url
+        case .inMemory:
+            isFirstOpening = true
             flags.append(SQLITE_OPEN_MEMORY)
             print("Opening database in memory")
-            // In-memory databases don't get logging
-        } else {
-            let url: URL
-            if case .file(let preferredUrl) = storage {
-                guard preferredUrl.isFileURL else { throw Error.notAFileUrl(preferredUrl) }
-                url = preferredUrl
-                try url.createParentDirectoryIfNotExists()
-                databaseFilePath = url.path(percentEncoded: false)
-                print("Opening database at \(url.absoluteString)")
-            } else if case .distributed(let transport) = storage {
-                url = await transport.localDatabaseUrl
-                await transport.connect()
-                // As long as the log file exists, the datbase file can be created by replaying the log file. However, if the log file is missing, this must be a new (or broken) database that can't be opened if the sync endpoint isn't online.
-                if await transport.status != .connected, await !transport.localDatabaseLogUrl.exists {
-                    throw Error.syncIsOfflineAndNoLocalDatabaseExists
-                }
-                try url.createParentDirectoryIfNotExists()
-                databaseFilePath = url.path(percentEncoded: false)
-                self.logger = try await DatabaseLogger(transport: transport)
-                print("Opening local database at \(url.absoluteString) for distributed database \(transport.databaseIdentifier)")
-            } else {
-                throw Error.unhandledStorageType
-            }
         }
+        
+        switch sync {
+        case .disabled:
+            break
+        case .enabled(let syncConnector):
+            await syncConnector.connect()
+            // As long as the log file exists, the datbase file can be created by replaying the log file. However, if the log file is missing, this must be a new (or broken) database that can't be opened if the sync endpoint isn't online.
+            if await syncConnector.status != .connected, isFirstOpening {
+                throw Error.syncIsOfflineAndNoLocalDatabaseExists
+            }
+            self.syncClient = try await SyncClient(connector: syncConnector, databaseStorage: storage)
+        }
+        
+        let databaseFilePath = databaseFileUrl?.filePath
         
         var pointer: OpaquePointer?
         let openStatus = sqlite3_open_v2(databaseFilePath, &pointer, flags.reduce(0, |), nil)
@@ -100,16 +110,16 @@ public actor Database: Observable
 
         self.connectionHandle = pointer
         
-        if let logger {
+        if let syncClient {
             Task {
-                for await syncStatus in logger.statusStream {
+                for await syncStatus in syncClient.statusStream {
                     let updatedStatus = Status(localStatus: localStatus, syncStatus: syncStatus)
                     statusUpdates.yield(updatedStatus)
                 }
             }
         }
 
-        await logger?.setDatabase(self)
+        await syncClient?.setDatabase(self)
     }
 
     func setPragma(name: String, value: String) throws
@@ -170,7 +180,7 @@ public actor Database: Observable
                 
                 // Transaction succeeded - log all schema changes in a batch
                 if !pendingSchemaChanges.isEmpty {
-                    try? await logger?.logTransactionBatch(
+                    try? await syncClient?.logTransactionBatch(
                         transactionId: transactionId,
                         schemaChanges: pendingSchemaChanges,
                         dataChanges: []
@@ -464,7 +474,7 @@ public actor Database: Observable
                 transactionCompletedSuccessfully = true
                 
                 // Transaction succeeded - log all data changes in a batch
-                try? await logger?.logTransactionBatch(
+                try? await syncClient?.logTransactionBatch(
                     transactionId: transactionId,
                     schemaChanges: [],
                     dataChanges: changeset.changes
@@ -499,7 +509,7 @@ public actor Database: Observable
 
         Task {
             // Close the logger first
-            try? await logger?.close()
+            try? await syncClient?.close()
         }
 
         guard result == SQLiteStatus.ok else {
@@ -523,7 +533,7 @@ public actor Database: Observable
             sqlite3_close(self.connectionHandle)
         }
         
-        let logger = self.logger
+        let logger = self.syncClient
         Task {
             try? await logger?.close()
         }

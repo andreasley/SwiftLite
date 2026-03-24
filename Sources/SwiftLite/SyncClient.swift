@@ -5,7 +5,7 @@ import SQLite3
 /// This log is essential for distributed sync, providing a complete audit trail
 /// of all schema changes and data modifications with timestamps and transaction IDs.
 /// Only successful transactions are logged - failed/rolled back transactions are not recorded.
-public actor DatabaseLogger
+public actor SyncClient
 {
     public enum Error: LocalizedError {
         case failedToOpen(SQLiteStatus)
@@ -35,7 +35,7 @@ public actor DatabaseLogger
     
     public nonisolated struct Status: Sendable
     {
-        public let transportStatus: TransportStatus
+        public let connectorStatus: SyncConnectorStatus
         public let currentSyncProgress: Progress?
         public let pendingLocalChanges: Int64
         public let pendingRemoteChanges: Int64
@@ -107,8 +107,8 @@ public actor DatabaseLogger
         }
     }
     private let isFirstRun: Bool
-    private let logFileURL: URL
-    public let transport: SyncTransport
+    private let databaseFileUrl: URL?
+    public let transport: SyncConnector
     
     public private(set) var highestSyncedLocalIndex: Int64 = 0 { didSet { updateStatus() }}
     public private(set) var highestRemoteIndex: Int64? { didSet { updateStatus() }}
@@ -122,37 +122,41 @@ public actor DatabaseLogger
 
     // Status stream support
     private var status: Status
-    private var syncStatus: TransportStatus
+    private var syncStatus: SyncConnectorStatus
     private var statusContinuation: AsyncStream<Status>.Continuation?
     public nonisolated let statusStream: AsyncStream<Status>
 
     private(set) weak var database: Database!
     
-    public init(transport: SyncTransport) async throws
+    public init(connector: SyncConnector, databaseStorage: Database.StorageType) async throws
     {
-        guard await transport.localDatabaseLogUrl.isFileURL else {
-            throw Error.failedToInitialize("Log URL must be a file URL")
+        switch databaseStorage {
+        case .file(let url):
+            let urlForSyncDatabase = url.deletingPathExtension().appendingPathExtension("sync.sqlite")
+            isFirstRun = urlForSyncDatabase.exists
+            databaseFileUrl = urlForSyncDatabase
+        case .inMemory:
+            isFirstRun = true
+            databaseFileUrl = nil
+            break
         }
-        
-        self.logFileURL = await transport.localDatabaseLogUrl
-        isFirstRun = !logFileURL.exists
 
         var pointer: OpaquePointer?
         let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX
         
-        let openStatus = sqlite3_open_v2(logFileURL.path, &pointer, flags, nil)
+        let openStatus = sqlite3_open_v2(databaseFileUrl?.filePath, &pointer, flags, nil)
         
         guard let pointer, openStatus == SQLiteStatus.ok else {
             throw Error.failedToOpen(SQLiteStatus(openStatus))
         }
         
         self.connectionHandle = pointer
-        self.transport = transport
+        self.transport = connector
 
-        let transportStatus = await transport.status
+        let transportStatus = await connector.status
         self.syncStatus = transportStatus
 
-        let initialStatus = Status(transportStatus: transportStatus, currentSyncProgress: nil, pendingLocalChanges: 0, pendingRemoteChanges: 00, highestSyncedLocalIndex: 0, fatalError: fatalError)
+        let initialStatus = Status(connectorStatus: transportStatus, currentSyncProgress: nil, pendingLocalChanges: 0, pendingRemoteChanges: 00, highestSyncedLocalIndex: 0, fatalError: fatalError)
         self.status = initialStatus
         
 
@@ -166,17 +170,17 @@ public actor DatabaseLogger
         
         self.highestSyncedLocalIndex = try getHighestSynchronizedIndex()
         self.pendingLocalCount = try getPendingLocalCount()
-        self.highestRemoteIndex = await transport.getHighestRemoteIndex()
+        self.highestRemoteIndex = await connector.getHighestRemoteIndex()
         
         updateStatus()
         continuation?.yield(self.status)
 
-        print("📝 Database logger initialized at \(logFileURL.path)")
+        print("📝 Database logger initialized; storage:", databaseFileUrl?.path ?? "in memory")
         print("Starting log from index \(self.highestSyncedLocalIndex)")
         print("Number of unsynchronized log entries: \(self.pendingLocalCount)")
 
         Task {
-            for await syncStatus in transport.statusStream {
+            for await syncStatus in connector.statusStream {
                 self.syncStatus = syncStatus
                 self.updateStatus()
                 statusContinuation?.yield(self.status)
@@ -187,7 +191,7 @@ public actor DatabaseLogger
     func updateStatus()
     {
         self.status = Status(
-            transportStatus: syncStatus,
+            connectorStatus: syncStatus,
             currentSyncProgress: currentSyncProgress,
             pendingLocalChanges: pendingLocalCount,
             pendingRemoteChanges: pendingRemoteCount ?? 0,

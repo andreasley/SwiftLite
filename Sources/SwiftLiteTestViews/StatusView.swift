@@ -33,7 +33,7 @@ public struct StatusView: View
                 ProgressView(value: progress.fractionCompleted, total: 1)
                     .progressViewStyle(.linear)
             }
-            if let transportStatus = status?.syncStatus.transportStatus {
+            if let transportStatus = status?.syncStatus.connectorStatus {
                 switch transportStatus {
                 case .connecting:
                     Label("Connecting", systemImage: "circle.dotted")

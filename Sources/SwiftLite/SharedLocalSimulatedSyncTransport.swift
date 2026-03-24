@@ -1,49 +1,29 @@
 import Foundation
 
-public actor SharedLocalSimulatedSyncTransport: SyncTransport
+public actor SharedLocalSimulatedSyncTransport: SyncConnector
 {
-    public private(set) var status: TransportStatus = .connecting
+    public private(set) var status: SyncConnectorStatus = .connecting
     
     public nonisolated let databaseIdentifier: String = "test"
     public nonisolated let clientIdentifier: String
     
     private var indexIncreaseCallbacks: [IndexIncreaseHandler] = []
-    private var serverLogEntries: [DatabaseLogger.LogEntry] = []
+    private var serverLogEntries: [SyncClient.LogEntry] = []
     
     private var clientIndex = 1
     
-    private let statusContinuation: AsyncStream<TransportStatus>.Continuation
-    public nonisolated let statusStream: AsyncStream<TransportStatus>
+    private let statusContinuation: AsyncStream<SyncConnectorStatus>.Continuation
+    public nonisolated let statusStream: AsyncStream<SyncConnectorStatus>
     
     public init(clientIdentifier: String) {
         self.clientIdentifier = clientIdentifier
         
-        var continuation: AsyncStream<TransportStatus>.Continuation!
+        var continuation: AsyncStream<SyncConnectorStatus>.Continuation!
         self.statusStream = AsyncStream { continuation = $0 }
         self.statusContinuation = continuation
     }
     
-    public private(set) var syncErrors: [SyncError] = []
-    
-    public var localDatabaseUrl: URL {
-        clientIndex += 1
-        return databaseFilesDirectoryUrl
-            .appendingPathComponent(clientIdentifier, isDirectory: false)
-            .appendingPathComponent("database\(clientIndex).sqlite", isDirectory: false)
-    }
-    
-    public var localDatabaseLogUrl: URL {
-        databaseFilesDirectoryUrl
-            .appendingPathComponent(clientIdentifier, isDirectory: false)
-            .appendingPathComponent("database\(clientIndex).log.sqlite", isDirectory: false)
-    }
-    
-    var databaseFilesDirectoryUrl: URL {
-        let appSupportURL = URL.applicationSupportDirectory
-        let applicationDirectory = appSupportURL.appendingPathComponent(Bundle.main.bundleIdentifier ?? "SwiftLiteWebSocketSyncTransport", isDirectory: true)
-        let databaseFilesDirectory = applicationDirectory.appendingPathComponent(databaseIdentifier, isDirectory: true)
-        return databaseFilesDirectory
-    }
+    public private(set) var errors: [SyncConnectorError] = []
     
     public func connect() async
     {
@@ -56,13 +36,13 @@ public actor SharedLocalSimulatedSyncTransport: SyncTransport
         Int64(serverLogEntries.count)
     }
     
-    public func sendEntries(entries: [DatabaseLogger.LogEntry]) async -> [UUID: Int64]
+    public func sendEntries(entries: [SyncClient.LogEntry]) async -> [UUID: Int64]
     {
         var updatedIndexes = [UUID: Int64]()
         var nextIndex = Int64(serverLogEntries.count + 1)
         for entry in entries {
             guard entries.contains(where: { $0.id == entry.id && $0.synchronizedIndex == nil }) else { continue }
-            let entryWithIndex = DatabaseLogger.LogEntry(
+            let entryWithIndex = SyncClient.LogEntry(
                 id: entry.id,
                 timestamp: entry.timestamp,
                 transactionId: entry.transactionId,
@@ -87,7 +67,7 @@ public actor SharedLocalSimulatedSyncTransport: SyncTransport
         return updatedIndexes
     }
     
-    public func getEntries(from index: Int64, limit: Int64) async -> [DatabaseLogger.LogEntry]
+    public func getEntries(from index: Int64, limit: Int64) async -> [SyncClient.LogEntry]
     {
         Array(serverLogEntries.dropFirst(Int(index)))
     }

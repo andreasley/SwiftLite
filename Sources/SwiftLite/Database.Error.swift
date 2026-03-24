@@ -15,7 +15,6 @@ extension Database
         case failedToMigrateSchema
         case unexpectedStatementValuesForRun
         case syncIsOfflineAndNoLocalDatabaseExists
-        case unhandledStorageType
 
         var errorDescription: String? {
             return switch self {
@@ -43,8 +42,6 @@ extension Database
                 "The SQL statement passed to run unexpectedly contained values"
             case .syncIsOfflineAndNoLocalDatabaseExists:
                 "The sync endpoint is offline and no local database exists."
-            case .unhandledStorageType:
-                "Unhandled storage type"
             }
         }
     }

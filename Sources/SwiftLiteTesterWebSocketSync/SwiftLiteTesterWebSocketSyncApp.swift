@@ -28,7 +28,7 @@ struct SwiftLiteTesterWebSocketSyncApp: App
                 ProgressView("Opening database...")
                     .task {
                         do {
-                            await database.logger?.sync()
+                            await database.syncClient?.sync()
                             try await database.register(models: Car.self, Engine.self, Interior.self, Passenger.self)
                             let firstEngine = try await database.get(Engine.Snapshot.self).first
                             if firstEngine == nil {
@@ -54,8 +54,10 @@ struct SwiftLiteTesterWebSocketSyncApp: App
                     } footer: {
                         Button("Connect") {
                             Task {
-                                let transport = WebSocketSyncTransport(server: server, databaseIdentifier: databaseIdentifier)
-                                let db = try await Database(storage: .distributed(transport))
+                                let databaseDirectory = URL.databaseFilesDirectory(for: databaseIdentifier)
+                                let databaseFile = databaseDirectory.appendingPathComponent("database.sqlite", isDirectory: false)
+                                let connector = WebSocketSyncTransport(server: server, databaseIdentifier: databaseIdentifier)
+                                let db = try await Database(storage: .file(databaseFile), sync: .enabled(connector))
                                 self.database = db
                             }
                         }

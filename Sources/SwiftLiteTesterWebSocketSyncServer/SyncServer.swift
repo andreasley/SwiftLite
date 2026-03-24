@@ -38,7 +38,7 @@ struct SyncServer {
             let data = Data(buffer: bodyBuffer)
             
             let decoder = JSONDecoder.forSwiftLiteSync
-            let entries = try decoder.decode([DatabaseLogger.LogEntry].self, from: data)
+            let entries = try decoder.decode([SyncClient.LogEntry].self, from: data)
             
             let mapping = try await databaseManager.storeEntries(
                 entries: entries,

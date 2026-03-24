@@ -68,12 +68,12 @@ actor ServerDatabaseManager
         }
     }
     
-    func storeEntries(entries: [DatabaseLogger.LogEntry], databaseId: String) async throws -> [UUID: Int64] {
+    func storeEntries(entries: [SyncClient.LogEntry], databaseId: String) async throws -> [UUID: Int64] {
         let database = try await getOrCreateDatabase(databaseId: databaseId)
         return try await database.storeEntries(entries: entries)
     }
     
-    func getEntries(fromIndex: Int64, databaseId: String, limit: Int64) async throws -> [DatabaseLogger.LogEntry] {
+    func getEntries(fromIndex: Int64, databaseId: String, limit: Int64) async throws -> [SyncClient.LogEntry] {
         let database = try await getOrCreateDatabase(databaseId: databaseId)
         return try await database.getEntries(fromIndex: fromIndex, limit: limit)
     }
@@ -130,7 +130,7 @@ actor ServerDatabase
         sqlite3_close(connectionHandle)
     }
     
-    func storeEntries(entries: [DatabaseLogger.LogEntry]) throws -> [UUID: Int64]
+    func storeEntries(entries: [SyncClient.LogEntry]) throws -> [UUID: Int64]
     {
         let insertSQL = """
         INSERT OR IGNORE INTO operation_log (
@@ -236,7 +236,7 @@ actor ServerDatabase
         return mapping
     }
     
-    func getEntries(fromIndex: Int64, limit: Int64) throws -> [DatabaseLogger.LogEntry]
+    func getEntries(fromIndex: Int64, limit: Int64) throws -> [SyncClient.LogEntry]
     {
         let querySQL = """
         SELECT id, timestamp, transaction_id, operation_type,
@@ -265,7 +265,7 @@ actor ServerDatabase
         sqlite3_bind_int64(stmt, 1, fromIndex)
         sqlite3_bind_int64(stmt, 2, limit)
 
-        var entries: [DatabaseLogger.LogEntry] = []
+        var entries: [SyncClient.LogEntry] = []
         
         while sqlite3_step(stmt) == SQLITE_ROW {
             let entry = try parseLogEntry(from: stmt)
@@ -337,7 +337,7 @@ actor ServerDatabase
         }
     }
     
-    private func parseLogEntry(from stmt: OpaquePointer?) throws -> DatabaseLogger.LogEntry
+    private func parseLogEntry(from stmt: OpaquePointer?) throws -> SyncClient.LogEntry
     {
         guard let idString = sqlite3_column_text(stmt, 0).map({ String(cString: $0) }),
               let id = UUID(uuidString: idString) else {
@@ -352,7 +352,7 @@ actor ServerDatabase
         }
         
         guard let operationTypeString = sqlite3_column_text(stmt, 3).map({ String(cString: $0) }),
-              let operationType = DatabaseLogger.OperationType(rawValue: operationTypeString) else {
+              let operationType = SyncClient.OperationType(rawValue: operationTypeString) else {
             throw ServerError.databaseError("Invalid operation type")
         }
 
@@ -393,7 +393,7 @@ actor ServerDatabase
             synchronizedIndex = nil
         }
                 
-        return DatabaseLogger.LogEntry(
+        return SyncClient.LogEntry(
             id: id,
             timestamp: timestamp,
             transactionId: transactionId,

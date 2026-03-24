@@ -1,13 +1,13 @@
 import Foundation
 
-public actor WebSocketSyncTransport: SyncTransport
+public actor WebSocketSyncTransport: SyncConnector
 {
     // MARK: - Properties
     
     private var indexIncreaseCallback: IndexIncreaseHandler?
     private var didComeOnlineCallback: DidComeOnlineHandler?
 
-    public private(set) var status: TransportStatus = .connecting {
+    public private(set) var status: SyncConnectorStatus = .connecting {
         didSet {
             statusContinuation?.yield(status)
             if oldValue == .offline {
@@ -18,7 +18,7 @@ public actor WebSocketSyncTransport: SyncTransport
 
     public nonisolated let databaseIdentifier: String
     
-    public private(set) var syncErrors: [SyncError] = []
+    public private(set) var errors: [SyncConnectorError] = []
     
     private var webSocketTask: URLSessionWebSocketTask?
     private let session: URLSession
@@ -33,25 +33,9 @@ public actor WebSocketSyncTransport: SyncTransport
     private let decoder = JSONDecoder.forSwiftLiteSync
 
     // Status stream support
-    private var statusContinuation: AsyncStream<TransportStatus>.Continuation?
-    public nonisolated let statusStream: AsyncStream<TransportStatus>
+    private var statusContinuation: AsyncStream<SyncConnectorStatus>.Continuation?
+    public nonisolated let statusStream: AsyncStream<SyncConnectorStatus>
     
-    // MARK: - Database URLs
-    
-    public var localDatabaseUrl: URL {
-        databaseFilesDirectoryUrl.appendingPathComponent("database.sqlite", isDirectory: false)
-    }
-
-    public var localDatabaseLogUrl: URL {
-        databaseFilesDirectoryUrl.appendingPathComponent("database.log.sqlite", isDirectory: false)
-    }
-    
-    public var databaseFilesDirectoryUrl: URL {
-        let appSupportURL = URL.applicationSupportDirectory
-        let applicationDirectory = appSupportURL.appendingPathComponent(Bundle.main.bundleIdentifier ?? "SwiftLiteWebSocketSyncTransport", isDirectory: true)
-        let databaseFilesDirectory = applicationDirectory.appendingPathComponent(databaseIdentifier, isDirectory: true)
-        return databaseFilesDirectory
-    }
     
     // MARK: - Initialization
     
@@ -66,7 +50,7 @@ public actor WebSocketSyncTransport: SyncTransport
         self.session = session
         
         // Create the status stream
-        var continuation: AsyncStream<TransportStatus>.Continuation?
+        var continuation: AsyncStream<SyncConnectorStatus>.Continuation?
         self.statusStream = AsyncStream { cont in
             continuation = cont
             // Yield the initial status
@@ -146,7 +130,7 @@ public actor WebSocketSyncTransport: SyncTransport
         }
     }
 
-    public func sendEntries(entries: [DatabaseLogger.LogEntry]) async -> [UUID : Int64]
+    public func sendEntries(entries: [SyncClient.LogEntry]) async -> [UUID : Int64]
     {
         do {
             status = .transferring
@@ -180,7 +164,7 @@ public actor WebSocketSyncTransport: SyncTransport
         }
     }
     
-    public func getEntries(from index: Int64, limit: Int64 = 10_000) async -> [DatabaseLogger.LogEntry]
+    public func getEntries(from index: Int64, limit: Int64 = 10_000) async -> [SyncClient.LogEntry]
     {
         do {
             status = .transferring
@@ -202,7 +186,7 @@ public actor WebSocketSyncTransport: SyncTransport
                 return []
             }
             
-            let entries = try decoder.decode([DatabaseLogger.LogEntry].self, from: data)
+            let entries = try decoder.decode([SyncClient.LogEntry].self, from: data)
             
             defer { status = .connected }
 
@@ -298,12 +282,12 @@ public actor WebSocketSyncTransport: SyncTransport
     }
     
     private func addError(_ error: Error) {
-        let syncError = SyncError(date: Date(), error: error)
-        syncErrors.append(syncError)
+        let syncError = SyncConnectorError(date: Date(), error: error)
+        errors.append(syncError)
         
         // Keep only the last 100 errors
-        if syncErrors.count > 100 {
-            syncErrors.removeFirst(syncErrors.count - 100)
+        if errors.count > 100 {
+            errors.removeFirst(errors.count - 100)
         }
     }
 }

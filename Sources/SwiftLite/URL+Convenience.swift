@@ -11,4 +11,8 @@ extension URL
     var exists: Bool {
         FileManager.default.fileExists(atPath: self.path(percentEncoded: false))
     }
+    
+    var filePath: String {
+        self.path(percentEncoded: false)
+    }
 }
