@@ -221,12 +221,9 @@ public actor DatabaseLogger
                 await sync()
             }
         }
-
-        // Do initial sync here, so the most recent changes are already integrated into the database when the `Database` initializer completes
-        await sync()
     }
     
-    private func sync(force: Bool = false) async
+    public func sync(force: Bool = false) async
     {
         guard await transport.status != .offline else { return }
 
