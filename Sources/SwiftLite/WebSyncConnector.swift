@@ -1,6 +1,6 @@
 import Foundation
 
-public actor WebConnector: SyncConnector
+public actor WebSyncConnector: SyncConnector
 {
     private var indexIncreaseCallback: IndexIncreaseHandler?
     private var didComeOnlineCallback: DidComeOnlineHandler?
@@ -324,7 +324,7 @@ public actor WebConnector: SyncConnector
 }
 
 
-public nonisolated extension WebConnector
+public nonisolated extension WebSyncConnector
 {
     enum Error: LocalizedError {
         case notConnected

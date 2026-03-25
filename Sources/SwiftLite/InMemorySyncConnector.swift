@@ -1,6 +1,6 @@
 import Foundation
 
-public actor InMemoryConnector: SyncConnector
+public actor InMemorySyncConnector: SyncConnector
 {
     public private(set) var status: SyncConnectorStatus = .connecting
     

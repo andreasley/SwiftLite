@@ -8,7 +8,7 @@ struct SwiftLiteInMemorySyncTesterApp: App
 {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     
-    @State private var connector: InMemoryConnector = InMemoryConnector(clientIdentifier: "test")
+    @State private var connector: InMemorySyncConnector = InMemorySyncConnector(clientIdentifier: "test")
     
     var body: some Scene {
         WindowGroup {
@@ -18,7 +18,7 @@ struct SwiftLiteInMemorySyncTesterApp: App
     
     struct MainWindow: View
     {
-        let connector: InMemoryConnector
+        let connector: InMemorySyncConnector
         
         @State private var database: Database?
         @State private var engine: Engine.Snapshot?

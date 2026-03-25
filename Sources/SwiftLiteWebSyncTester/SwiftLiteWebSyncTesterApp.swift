@@ -60,7 +60,7 @@ struct SwiftLiteWebSyncTesterApp: App
                                 do {
                                     let databaseDirectory = URL.databaseFilesDirectory(for: databaseName)
                                     let databaseFile = databaseDirectory.appendingPathComponent("database.sqlite", isDirectory: false)
-                                    let connector = WebConnector(server: server, databaseName: databaseName)
+                                    let connector = WebSyncConnector(server: server, databaseName: databaseName)
                                     let db = try await Database(storage: .file(databaseFile), sync: .enabled(using: connector))
                                     self.database = db
                                 } catch {
