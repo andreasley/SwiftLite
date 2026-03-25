@@ -3,6 +3,16 @@ import Foundation
 
 @Model public nonisolated final class Car
 {
+    public enum Color: String, StorableEnum, CaseIterable, Identifiable {
+        public var id: String { rawValue }
+        
+        public static var fallbackValue: Self { .red }
+        case red
+        case blue
+        case silver
+        case black
+    }
+    
     static let names = [
         "Toyota Corolla",
         "Toyota Camry",
@@ -32,7 +42,10 @@ import Foundation
     
     @Stored(defaultValue: UUID.v7())
     public let publicId: UUID
-    
+
+    @Stored(fallbackValue: Color.red)
+    public var color: Color
+
     @Related
     public var engine: Engine.Snapshot
     

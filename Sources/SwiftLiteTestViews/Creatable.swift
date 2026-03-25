@@ -13,7 +13,7 @@ extension Car.Snapshot: Creatable
 {
     static func create(database: Database, defaultEngine: Engine.Snapshot) -> Car
     {
-        Car(db: database, engine: defaultEngine)
+        Car(db: database, color: .black, engine: defaultEngine)
     }
 }
 

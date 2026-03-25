@@ -16,6 +16,13 @@ struct CarDetailView: View
             ModelPicker("Engine", items: engines, selection: $car.engine) { engine in
                 Text(engine.name)
             }
+            Picker("Color", selection: $car.color) {
+                ForEach(Car.Color.allCases) { color in
+                    Text(color.rawValue)
+                        .tag(color)
+                }
+            }
+
             Section {
                 List(car.passengers) { passenger in
                     HStack {
