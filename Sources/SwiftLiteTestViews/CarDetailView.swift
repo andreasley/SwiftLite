@@ -24,6 +24,21 @@ struct CarDetailView: View
             }
 
             Section {
+                List($car.otherColors) { otherColor in
+                    Picker("Accessory color", selection: otherColor) {
+                        ForEach(Car.Color.allCases) { color in
+                            Text(color.rawValue)
+                                .tag(color)
+                        }
+                    }
+                }
+            } footer: {
+                Button("Add accessory color") {
+                    car.otherColors.append(.blue)
+                }
+            }
+
+            Section {
                 List(car.passengers) { passenger in
                     HStack {
                         PassengerView(passenger: passenger)

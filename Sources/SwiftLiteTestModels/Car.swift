@@ -3,7 +3,7 @@ import Foundation
 
 @Model public nonisolated final class Car
 {
-    public enum Color: String, StorableEnum, CaseIterable, Identifiable {
+    public enum Color: String, StorableEnum, CaseIterable, Identifiable, Codable {
         public var id: String { rawValue }
         
         public static var fallbackValue: Self { .red }
@@ -45,6 +45,9 @@ import Foundation
 
     @Stored(fallbackValue: Color.red)
     public var color: Color
+
+    @Stored(defaultValue: [], fallbackValue: [])
+    public var otherColors: [Color]
 
     @Related
     public var engine: Engine.Snapshot
