@@ -2,7 +2,7 @@
 import Foundation
 
 // Store `Decimal` as an Int64 (preserving four decimal places). This way it's possible to store the value in an `INTEGER` column (rather than `TEXT`) and keep the ability to INDEX and ORDER.
-nonisolated extension Decimal: StorageConvertible.Integer
+nonisolated extension Decimal: Storable
 {
     static var decimalPlaces: Int { 4 }
     

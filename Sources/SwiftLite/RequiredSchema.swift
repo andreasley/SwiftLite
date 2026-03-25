@@ -24,7 +24,7 @@ public nonisolated enum RequiredSchema
         public let storageClass: StorageClass
         public let referencedTable: String?
 
-        public init(name: String, type: Any.Type, referencedTable: String? = nil)
+        public init(name: String, type: any SQLValueConvertible.Type, referencedTable: String? = nil)
         {
             self.name = name
             self.storageClass = StorageClass(for: type)

@@ -1,7 +1,7 @@
 #if canImport(Foundation)
 import Foundation
 
-nonisolated extension UUID: StorageConvertible.Text
+nonisolated extension UUID: Storable
 {
     public var storageValue: String {
         self.uuidString
@@ -10,7 +10,7 @@ nonisolated extension UUID: StorageConvertible.Text
     public init(storageValue: String) throws
     {
         guard let uuid = UUID(uuidString: storageValue) else {
-            throw StorageConvertible.ConversionError.failedToConvert
+            throw StorageConversionError.failedToConvert
         }
         self = uuid
     }

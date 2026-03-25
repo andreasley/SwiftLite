@@ -41,7 +41,7 @@ public nonisolated extension Database
             self.columns = columns
         }
 
-        public func nonOptionalValue<T>(_ value: T?, fallback: T?, error: Swift.Error = StorageConvertible.ConversionError.unexpectedNull) throws -> T
+        public func nonOptionalValue<T>(_ value: T?, fallback: T?, error: Swift.Error = StorageConversionError.unexpectedNull) throws -> T
         {
             if let value {
                 return value
@@ -51,61 +51,17 @@ public nonisolated extension Database
                 throw error
             }
         }
-
-        // MARK: String
         
-        public func get<T>(_ name: String, as type: T.Type = T.self, fallback: T? = nil) throws -> T where T: StorageConvertible.Text
+        public func get<T>(_ name: String, as type: T.Type = T.self, fallback: T? = nil) throws -> T where T: Storable
         {
             let value: T? = try get(name)
             return try nonOptionalValue(value, fallback: fallback)
         }
         
-        public func get<T>(_ name: String, as type: T.Type = T.self) throws -> T? where T: StorageConvertible.Text
+        public func get<T>(_ name: String, as type: T.Type = T.self) throws -> T? where T: Storable
         {
-            guard case .string(let string) = columns[name] else { return nil }
-            return try T(storageValue: string)
-        }
-        
-        // MARK: Integer
-        
-        public func get<T>(_ name: String, as type: T.Type = T.self, fallback: T? = nil) throws -> T where T: StorageConvertible.Integer
-        {
-            let value: T? = try get(name)
-            return try nonOptionalValue(value, fallback: fallback)
-        }
-        
-        public func get<T>(_ name: String, as type: T.Type = T.self) throws -> T? where T: StorageConvertible.Integer
-        {
-            guard case .int(let int) = columns[name] else { return nil }
-            return try T(storageValue: int)
-        }
-        
-        // MARK: Real
-        
-        public func get<T>(_ name: String, as type: T.Type = T.self, fallback: T? = nil) throws -> T where T: StorageConvertible.Real
-        {
-            let value: T? = try get(name)
-            return try nonOptionalValue(value, fallback: fallback)
-        }
-        
-        public func get<T>(_ name: String, as type: T.Type = T.self) throws -> T? where T: StorageConvertible.Real
-        {
-            guard case .double(let double) = columns[name] else { return nil }
-            return try T(storageValue: double)
-        }
-        
-        // MARK: Blob
-        
-        public func get<T>(_ name: String, as type: T.Type = T.self, fallback: T? = nil) throws -> T where T: StorageConvertible.Blob
-        {
-            let value: T? = try get(name)
-            return try nonOptionalValue(value, fallback: fallback)
-        }
-        
-        public func get<T>(_ name: String, as type: T.Type = T.self) throws -> T? where T: StorageConvertible.Blob
-        {
-            guard case .data(let data) = columns[name] else { return nil }
-            return try T(storageValue: data)
+            guard let sqlValue = columns[name] else { return nil }
+            return try T(sqlValue: sqlValue)
         }
         
         // MARK: Referenced Model or Snapshot
@@ -158,5 +114,21 @@ public nonisolated extension Database
         {
             try await InverseManyToMany(keyPath: keyPath, db: db, elementId: elementId)
         }
+        
+        // MARK: StorableEnum
+        
+        public func get<T>(_ name: String, as type: T.Type = T.self, fallback: T? = nil) throws -> T where T: StorableEnum
+        {
+            let value: T? = try get(name)
+            return try nonOptionalValue(value, fallback: fallback)
+        }
+        
+        public func get<T>(_ name: String, as type: T.Type = T.self) throws -> T? where T: StorableEnum
+        {
+            guard let sqlValue = columns[name] else { return nil }
+            let matchingCase = try T(sqlValue: sqlValue)
+            return matchingCase
+        }
+
     }
 }

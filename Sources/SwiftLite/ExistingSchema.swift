@@ -4,19 +4,14 @@ public nonisolated enum ExistingSchema
 {
     public struct Table: Sendable, InitializableFromResultRow, Hashable
     {
-        public enum TableType: String, Sendable, StorageConvertible.Text {
-            public var storageValue: String { rawValue }
+        public enum TableType: String, Sendable, StorableEnum {
+            public static var fallbackValue: Self { .unknown }
             
             case table
             case view
             case shadow
             case virtual
             case unknown
-            
-            public init(storageValue: String) throws
-            {
-                self = .init(rawValue: storageValue) ?? .unknown
-            }
         }
         
         public let schema: String
@@ -84,23 +79,13 @@ public nonisolated enum ExistingSchema
     
     public struct Index: Sendable, InitializableFromResultRow
     {
-        public enum Origin: String, Sendable, StorageConvertible.Text {
-            public var storageValue: String { rawValue }
+        public enum Origin: String, Sendable, StorableEnum {
+            public static var fallbackValue: Self { .unknown }
 
-            case createIndex
-            case uniqueConstraint
-            case primaryKeyConstraint
+            case createIndex = "c"
+            case uniqueConstraint = "u"
+            case primaryKeyConstraint = "pk"
             case unknown
-            
-            public init(storageValue: String) throws
-            {
-                self = switch storageValue {
-                case "c": .createIndex
-                case "u": .uniqueConstraint
-                case "pk": .primaryKeyConstraint
-                default: .unknown
-                }
-            }
         }
         
         public let sequence: Int32

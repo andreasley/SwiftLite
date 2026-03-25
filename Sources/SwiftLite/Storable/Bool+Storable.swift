@@ -1,4 +1,4 @@
-nonisolated extension Bool: StorageConvertible.Integer
+nonisolated extension Bool: Storable
 {
     public var storageValue: Int64 {
         self ? 1 : 0
@@ -11,7 +11,7 @@ nonisolated extension Bool: StorageConvertible.Integer
         } else if storageValue == 0 {
             self = false
         } else {
-            throw StorageConvertible.ConversionError.valueOutsideConvertibleRange
+            throw StorageConversionError.valueOutsideConvertibleRange
         }
     }
 }

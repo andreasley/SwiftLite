@@ -1,7 +1,7 @@
 import Foundation
 
-public nonisolated enum StorageClass: String, Equatable, Sendable, StorageConvertible.Text {
-    public var storageValue: String { rawValue }
+public nonisolated enum StorageClass: String, Equatable, Sendable, StorableEnum {
+    public static var fallbackValue: Self { .undefined }
     
     case text
     case integer
@@ -10,24 +10,19 @@ public nonisolated enum StorageClass: String, Equatable, Sendable, StorageConver
     case any
     case undefined = ""
 
-    init(for type: Any.Type)
-    {
-        switch type {
-        case is StorageConvertible.Integer.Type:
-            self = .integer
-        case is StorageConvertible.Text.Type, is any Fetchable.Type:
-            self = .text
-        case is StorageConvertible.Blob.Type:
-            self = .blob
-        case is StorageConvertible.Real.Type:
-            self = .real
-        default:
-            self = .any
+    public init?(rawValue: String) {
+        self = switch rawValue.lowercased() {
+        case "text": .text
+        case "integer": .integer
+        case "real": .real
+        case "blob": .blob
+        case "any": .any
+        default: .undefined
         }
     }
     
-    public init(storageValue: String) throws
+    init(for type: any SQLValueConvertible.Type)
     {
-        self = .init(rawValue: storageValue.lowercased()) ?? .undefined
+        self = type.storageClass
     }
 }

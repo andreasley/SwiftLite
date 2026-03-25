@@ -24,3 +24,20 @@ public nonisolated extension Fetchable
         hasher.combine(_metadata.lastRead)
     }
 }
+
+public nonisolated extension Fetchable
+{
+    static var storageClass: StorageClass { .text }
+
+    init(db: Database, sqlValue: SQLValue) async throws
+    {
+        let id: UUID = try await .init(db: db, sqlValue: sqlValue)
+        let result = try await db.get(Self.self, id: id)
+        guard let result else { throw Database.Error.failedToFindReferencedObject(table: Self.Model.Schema.table.name, id: id)}
+        self = result
+    }
+
+    func convertToSQLValue() -> SQLValue {
+        .string(id.uuidString)
+    }
+}
