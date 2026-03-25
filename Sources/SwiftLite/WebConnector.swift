@@ -100,7 +100,6 @@ public actor WebConnector: SyncConnector
                 await startListeningForIndexIncreaseNotifications()
             }
         } catch {
-            status = .offline
             addError(error)
             await scheduleReconnect()
         }

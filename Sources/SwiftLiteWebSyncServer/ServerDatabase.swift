@@ -2,10 +2,9 @@ import SQLite3
 import Foundation
 import SwiftLite
 
-/// Represents a single database on the server (one per client database ID)
+/// Represents a single database on the server (one per database name)
 actor ServerDatabase
 {
-    private let isFirstRun: Bool
     public let databaseName: String
     public let databaseId: UUID
     public let databaseURL: URL
@@ -21,7 +20,7 @@ actor ServerDatabase
         let databaseFileName = databaseName + ".sqlite"
 
         self.databaseURL = dataDir.appendingPathComponent(databaseFileName, isDirectory: false)
-        self.isFirstRun = databaseURL.exists
+        let shouldCreateDatabase = !databaseURL.exists
         
         var handle: OpaquePointer?
         let status = SQLiteStatus(sqlite3_open(databaseURL.path, &handle))
@@ -30,7 +29,7 @@ actor ServerDatabase
         }
         self.connectionHandle = handle
         
-        if isFirstRun {
+        if shouldCreateDatabase {
             try Self.initializeSchema(connectionHandle: handle)
             try Self.initializeConfiguration(connectionHandle: handle)
         }
@@ -250,7 +249,8 @@ actor ServerDatabase
         print("📝 Initialized log configuration with client ID: \(serverDatabaseId.uuidString)")
     }
 
-    private func fetchHighestIndex() throws -> Int64 {
+    private func fetchHighestIndex() throws -> Int64
+    {
         let querySQL = "SELECT MAX(synchronized_index) FROM operation_log"
         
         var stmt: OpaquePointer?

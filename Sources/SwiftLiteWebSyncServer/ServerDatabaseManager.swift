@@ -69,32 +69,11 @@ actor ServerDatabaseManager
     
     func getOrCreateDatabaseId(databaseName: String) async throws -> UUID
     {
-        guard let existingDatabase = databases[databaseName] else {
-            throw Error.databaseNotFound
-        }
-        
+        let existingDatabase = try await getDatabase(databaseName: databaseName)
         return existingDatabase.databaseId
     }
-    
-    func getHighestIndex(databaseName: String, databaseId: UUID) async throws -> Int64
-    {
-        let database = try await getDatabase(databaseName: databaseName, databaseId: databaseId)
-        return await database.highestIndex
-    }
 
-    func storeEntries(databaseName: String, databaseId: UUID, entries: [SyncClient.LogEntry]) async throws -> [UUID: Int64]
-    {
-        let database = try await getDatabase(databaseName: databaseName, databaseId: databaseId)
-        return try await database.storeEntries(entries: entries)
-    }
-    
-    func getEntries(databaseName: String, databaseId: UUID, fromIndex: Int64, limit: Int64) async throws -> [SyncClient.LogEntry]
-    {
-        let database = try await getDatabase(databaseName: databaseName, databaseId: databaseId)
-        return try await database.getEntries(fromIndex: fromIndex, limit: limit)
-    }
-    
-    private func getDatabase(databaseName: String, databaseId: UUID) async throws -> ServerDatabase
+    func getDatabase(databaseName: String) async throws -> ServerDatabase
     {
         let database: ServerDatabase
         if let existingDatabase = databases[databaseName] {
@@ -104,6 +83,30 @@ actor ServerDatabaseManager
             databases[databaseName] = newDatabase
             database = newDatabase
         }
+        return database
+    }
+
+    func getHighestIndex(databaseName: String, databaseId: UUID) async throws -> Int64
+    {
+        let database = try await getDatabaseAndCheckId(databaseName: databaseName, databaseId: databaseId)
+        return await database.highestIndex
+    }
+
+    func storeEntries(databaseName: String, databaseId: UUID, entries: [SyncClient.LogEntry]) async throws -> [UUID: Int64]
+    {
+        let database = try await getDatabaseAndCheckId(databaseName: databaseName, databaseId: databaseId)
+        return try await database.storeEntries(entries: entries)
+    }
+    
+    func getEntries(databaseName: String, databaseId: UUID, fromIndex: Int64, limit: Int64) async throws -> [SyncClient.LogEntry]
+    {
+        let database = try await getDatabaseAndCheckId(databaseName: databaseName, databaseId: databaseId)
+        return try await database.getEntries(fromIndex: fromIndex, limit: limit)
+    }
+    
+    private func getDatabaseAndCheckId(databaseName: String, databaseId: UUID) async throws -> ServerDatabase
+    {
+        let database = try await getDatabase(databaseName: databaseName)
         
         guard database.databaseId == databaseId else {
             throw Error.databaseIdWrong
