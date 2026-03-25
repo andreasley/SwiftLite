@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(Network)
+import Network
+#endif
 
 public actor WebSyncConnector: SyncConnector
 {
@@ -33,6 +36,10 @@ public actor WebSyncConnector: SyncConnector
 
     private let encoder = JSONEncoder.forSwiftLiteSync
     private let decoder = JSONDecoder.forSwiftLiteSync
+    
+    #if canImport(Network)
+    private let monitor = NWPathMonitor()
+    #endif
 
     // Status stream support
     private var statusContinuation: AsyncStream<SyncConnectorStatus>.Continuation?
@@ -55,12 +62,35 @@ public actor WebSyncConnector: SyncConnector
             cont.yield(.connecting)
         }
         self.statusContinuation = continuation
+        
+        #if canImport(Network)
+        monitor.pathUpdateHandler = { [weak self] path in
+            Task {
+                await self?.setIsOffline(path.status != .satisfied)
+            }
+        }
+        monitor.start(queue: .global())
+        #endif
     }
     
     deinit
     {
         reconnectTask?.cancel()
         statusContinuation?.finish()
+        
+        #if canImport(Network)
+        monitor.cancel()
+        #endif
+    }
+    
+    func setIsOffline(_ isOffline: Bool) async
+    {
+        if isOffline {
+            status = .offline
+        } else {
+            guard let databaseId else { return }
+            try? await connect(databaseId: databaseId)
+        }
     }
 
     public func onHighestRemoteIndexIncrease(_ callback: @escaping IndexIncreaseHandler)
