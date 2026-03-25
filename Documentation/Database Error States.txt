@@ -1,24 +1,24 @@
-Local database file
-- OK
+Local database file / In-memory database
+- OK / idle
 - Broken for this session (e.g. I/O error, nested transactions, ...)
 
+SyncClient
+- OK / idle
+- Synchronizing
+- Broken for this session
+    - broken locally (e.g. I/O error, nested transactions, ...)
+    - broken logging (e.g. I/O error, conflift/unable to replay)
 
-In-memory database
-- OK
-- Broken for this session (e.g. I/O error, nested transactions, ...)
 
-
-Synchronized database
+Connector
 - Offline (local only)
 - Connected
-	- nothing to do
-	- temporary error (e.g. HTTP errors, server unreachable, ...)
-- Synchronizing
+- Temporary error
+	- HTTP errors, server unreachable, ...
 - Broken for this session
 	- broken locally (e.g. I/O error, nested transactions, ...)
 	- broken logging (e.g. I/O error, conflift/unable to replay)
 	- broken synchronization (authentication failure)
-	
 	
 	
 ======================================
