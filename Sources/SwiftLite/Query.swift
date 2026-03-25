@@ -27,7 +27,7 @@ public nonisolated protocol WithNamedKeyPaths
 @dynamicMemberLookup
 public nonisolated struct Queryable<QueryProxy: WithNamedKeyPaths>
 {
-    subscript<Value>(dynamicMember keyPath: KeyPath<QueryProxy, Value>) -> Expression<Value>
+    public subscript<Value>(dynamicMember keyPath: KeyPath<QueryProxy, Value>) -> Expression<Value>
     {
         Expression(keyPath: keyPath)
     }
@@ -38,7 +38,7 @@ public nonisolated struct Queryable<QueryProxy: WithNamedKeyPaths>
         Predicate(sql: "\(QueryProxy.nameForKeyPath(keyPath: keyPath)) = ?", bindings: [.int(1)])
     }
 
-    nonisolated struct Expression<Value> where Value: SQLValueConvertible
+    nonisolated public struct Expression<Value> where Value: SQLValueConvertible
     {
         fileprivate let keyPath: KeyPath<QueryProxy, Value>
         
