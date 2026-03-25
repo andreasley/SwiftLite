@@ -4,7 +4,7 @@ public nonisolated enum ExistingSchema
 {
     public struct Table: Sendable, InitializableFromResultRow, Hashable
     {
-        public enum TableType: String, Sendable, StorableEnum {
+        public enum TableType: String, Sendable, StorableEnumWithFallback {
             public static var fallbackValue: Self { .unknown }
             
             case table
@@ -79,7 +79,7 @@ public nonisolated enum ExistingSchema
     
     public struct Index: Sendable, InitializableFromResultRow
     {
-        public enum Origin: String, Sendable, StorableEnum {
+        public enum Origin: String, Sendable, StorableEnumWithFallback {
             public static var fallbackValue: Self { .unknown }
 
             case createIndex = "c"

@@ -3,9 +3,7 @@ import Foundation
 
 @Model public nonisolated final class Car
 {
-    public enum Color: String, StorableEnum, CaseIterable, Identifiable, Codable {
-        public var id: String { rawValue }
-        
+    public enum Color: String, StorableEnumWithFallback, CaseIterable, Codable {
         public static var fallbackValue: Self { .red }
         case red
         case blue
