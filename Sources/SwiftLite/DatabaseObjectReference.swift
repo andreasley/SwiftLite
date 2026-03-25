@@ -32,17 +32,3 @@ public nonisolated struct DatabaseObjectReference<T>: ObjectReference, Hashable 
         self.db = reference.db
     }
 }
-
-public nonisolated extension DatabaseObjectReference
-{
-    enum ResolutionError: Error {
-        case notFound
-    }
-    
-    nonisolated(nonsending) func resolve() async throws -> T
-    {
-        let result = try await db.get(T.self, id: self.id)
-        guard let result else { throw ResolutionError.notFound }
-        return result
-    }
-}
