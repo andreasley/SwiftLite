@@ -415,6 +415,7 @@ public actor Database: Observable
                 } catch {
                     try? await self.run("ROLLBACK")
                     print("✴️ ROLLED BACK READ TRANSACTION")
+                    print("Error while executing read transaction:", error.localizedDescription)
                     throw error
                 }
             }
