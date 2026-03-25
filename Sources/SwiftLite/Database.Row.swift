@@ -41,7 +41,7 @@ public nonisolated extension Database
             self.columns = columns
         }
 
-        @inline(__always) public func nonOptionalValue<T>(_ value: T?, fallback: T?, error: Swift.Error = StorageConvertible.ConversionError.unexpectedNull) throws -> T
+        public func nonOptionalValue<T>(_ value: T?, fallback: T?, error: Swift.Error = StorageConvertible.ConversionError.unexpectedNull) throws -> T
         {
             if let value {
                 return value
@@ -54,13 +54,13 @@ public nonisolated extension Database
 
         // MARK: String
         
-        @inline(__always) public func get<T>(_ name: String, as type: T.Type = T.self, fallback: T? = nil) throws -> T where T: StorageConvertible.Text
+        public func get<T>(_ name: String, as type: T.Type = T.self, fallback: T? = nil) throws -> T where T: StorageConvertible.Text
         {
             let value: T? = try get(name)
             return try nonOptionalValue(value, fallback: fallback)
         }
         
-        @inline(__always) public func get<T>(_ name: String, as type: T.Type = T.self) throws -> T? where T: StorageConvertible.Text
+        public func get<T>(_ name: String, as type: T.Type = T.self) throws -> T? where T: StorageConvertible.Text
         {
             guard case .string(let string) = columns[name] else { return nil }
             return try T(storageValue: string)
@@ -68,13 +68,13 @@ public nonisolated extension Database
         
         // MARK: Integer
         
-        @inline(__always) public func get<T>(_ name: String, as type: T.Type = T.self, fallback: T? = nil) throws -> T where T: StorageConvertible.Integer
+        public func get<T>(_ name: String, as type: T.Type = T.self, fallback: T? = nil) throws -> T where T: StorageConvertible.Integer
         {
             let value: T? = try get(name)
             return try nonOptionalValue(value, fallback: fallback)
         }
         
-        @inline(__always) public func get<T>(_ name: String, as type: T.Type = T.self) throws -> T? where T: StorageConvertible.Integer
+        public func get<T>(_ name: String, as type: T.Type = T.self) throws -> T? where T: StorageConvertible.Integer
         {
             guard case .int(let int) = columns[name] else { return nil }
             return try T(storageValue: int)
@@ -82,13 +82,13 @@ public nonisolated extension Database
         
         // MARK: Real
         
-        @inline(__always) public func get<T>(_ name: String, as type: T.Type = T.self, fallback: T? = nil) throws -> T where T: StorageConvertible.Real
+        public func get<T>(_ name: String, as type: T.Type = T.self, fallback: T? = nil) throws -> T where T: StorageConvertible.Real
         {
             let value: T? = try get(name)
             return try nonOptionalValue(value, fallback: fallback)
         }
         
-        @inline(__always) public func get<T>(_ name: String, as type: T.Type = T.self) throws -> T? where T: StorageConvertible.Real
+        public func get<T>(_ name: String, as type: T.Type = T.self) throws -> T? where T: StorageConvertible.Real
         {
             guard case .double(let double) = columns[name] else { return nil }
             return try T(storageValue: double)
@@ -96,13 +96,13 @@ public nonisolated extension Database
         
         // MARK: Blob
         
-        @inline(__always) public func get<T>(_ name: String, as type: T.Type = T.self, fallback: T? = nil) throws -> T where T: StorageConvertible.Blob
+        public func get<T>(_ name: String, as type: T.Type = T.self, fallback: T? = nil) throws -> T where T: StorageConvertible.Blob
         {
             let value: T? = try get(name)
             return try nonOptionalValue(value, fallback: fallback)
         }
         
-        @inline(__always) public func get<T>(_ name: String, as type: T.Type = T.self) throws -> T? where T: StorageConvertible.Blob
+        public func get<T>(_ name: String, as type: T.Type = T.self) throws -> T? where T: StorageConvertible.Blob
         {
             guard case .data(let data) = columns[name] else { return nil }
             return try T(storageValue: data)
