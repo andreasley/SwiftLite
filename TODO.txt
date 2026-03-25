@@ -1,9 +1,12 @@
+- In sync, check both index and number of items. If they match, there's no need for a client to download the updates it just sent.
+
+- Check if server holds on to gone clients for too long
+
 - Store fatal error in the configuration database; fail Database initializer if broken
 - Client: Handle errors the server throws while inserting uploaded log entries
 
 - Server: Don't send entries back to the device that just sent it
 
-- Server database needs a unique ID, so the client can check if it's the correct database or if a client reset is required
 - Client database needs a unique ID?
 
 - Implement ping/pong for WebSocket
