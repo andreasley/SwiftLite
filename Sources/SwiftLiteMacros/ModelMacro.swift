@@ -321,7 +321,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
     }
     
     private static func collectPropertyInfo(from classDecl: ClassDeclSyntax) throws -> PropertyInfo {
-        var storedProperties: [(name: String, type: String, hasDefault: Bool, defaultValue: String?, fallbackValue: String?, isIndexed: Bool, isUnique: Bool)] = []
+        var storedProperties: [(name: String, type: String, isOptional: Bool, hasDefault: Bool, defaultValue: String?, fallbackValue: String?, isIndexed: Bool, isUnique: Bool)] = []
         var relatedProperties: [(name: String, type: String, isOptional: Bool, onDelete: String?)] = []
         var relatedManyProperties: [(name: String, elementType: String, schemaType: String, onDelete: String?)] = []
         var inverseRelatedProperties: [(name: String, type: String, referencingField: String)] = []
@@ -433,10 +433,11 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
                 }
             }
             
+            let isOptional = typeAnnotation.hasSuffix("?")
+
             if isStored {
-                storedProperties.append((name: propertyName, type: typeAnnotation, hasDefault: defaultValue != nil, defaultValue: defaultValue, fallbackValue: fallbackValue, isIndexed: isIndexed, isUnique: isUnique))
+                storedProperties.append((name: propertyName, type: typeAnnotation, isOptional: isOptional, hasDefault: defaultValue != nil, defaultValue: defaultValue, fallbackValue: fallbackValue, isIndexed: isIndexed, isUnique: isUnique))
             } else if isRelated {
-                let isOptional = typeAnnotation.hasSuffix("?")
                 relatedProperties.append((name: propertyName, type: typeAnnotation, isOptional: isOptional, onDelete: onDelete))
             } else if isRelatedMany, let element = elementType {
                 let schemaName = "\(propertyName.prefix(1).uppercased())\(propertyName.dropFirst())RelationSchema"
@@ -459,7 +460,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
     }
     
     private struct PropertyInfo {
-        let stored: [(name: String, type: String, hasDefault: Bool, defaultValue: String?, fallbackValue: String?, isIndexed: Bool, isUnique: Bool)]
+        let stored: [(name: String, type: String, isOptional: Bool, hasDefault: Bool, defaultValue: String?, fallbackValue: String?, isIndexed: Bool, isUnique: Bool)]
         let related: [(name: String, type: String, isOptional: Bool, onDelete: String?)]
         let relatedMany: [(name: String, elementType: String, schemaType: String, onDelete: String?)]
         let inverseRelated: [(name: String, type: String, referencingField: String)]
@@ -542,6 +543,8 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         for prop in propertyInfo.stored {
             if prop.hasDefault {
                 parameters.append("\(prop.name): \(prop.type) = DefaultValues.\(prop.name)")
+            } else if prop.isOptional {
+                parameters.append("\(prop.name): \(prop.type) = nil")
             } else {
                 parameters.append("\(prop.name): \(prop.type)")
             }

@@ -38,6 +38,9 @@ import Foundation
         name + "zzz"
     }
     
+    @Stored
+    public var owner: String?
+    
     @Stored(defaultValue: UUID.v7())
     public let publicId: UUID
 
