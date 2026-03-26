@@ -1,4 +1,5 @@
 import SwiftLite
+import SwiftLiteTestModels
 import Foundation
 
 let temporaryDirectory = URL.temporaryDirectory.appending(component: "SwiftLiteDevelopment", directoryHint: .isDirectory)
@@ -6,7 +7,7 @@ let fileUrl = temporaryDirectory.appending(component: "test.sqlite", directoryHi
 
 try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
 
-let db = try Database(storage: .file(fileUrl))
+let db = try await Database(storage: .file(fileUrl))
 try await db.register(models: Car.self)
 
 let defaultEngine: Engine.Snapshot
@@ -21,11 +22,11 @@ if let firstEngine = try await db.get(Engine.Snapshot.self).first {
     defaultEngine = newEngineSnapshot
 }
 
-let car = Car(db: db, name: "test", engine: defaultEngine)
+let car = Car(db: db, color: .red, name: "test", engine: defaultEngine)
 try await car.save()
 
 for _ in 0..<100 {
-    let car = Car(db: db, name: "test", engine: defaultEngine)
+    let car = Car(db: db, color: .blue, name: "test", engine: defaultEngine)
     try await car.save()
 }
 
@@ -34,7 +35,7 @@ try await withThrowingTaskGroup(of: Void.self) { group in
     for _ in 0..<10 {
         group.addTask {
             for _ in 0..<10 {
-                let car = Car(db: db, name: "test", engine: defaultEngine)
+                let car = Car(db: db, color: .silver, name: "test", engine: defaultEngine)
                 try await car.save()
             }
         }
