@@ -156,6 +156,7 @@ public actor Database: Observable
             print("▶️ BEGINNING SCHEMA UPDATE TRANSACTION")
             try self.run("BEGIN")
             do {
+                // Note: The order in which the tables are created is irrelevant while in a transaction, regardless if they reference each other.
                 for table in requiredTables {
                     print("Checking table \(table.name)...")
                     let existingTableForModel = existingTables.first { $0.name == table.name }

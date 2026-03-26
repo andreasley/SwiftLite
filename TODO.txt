@@ -1,3 +1,4 @@
+
 - In sync, check both index and number of items. If they match, there's no need for a client to download the updates it just sent.
 
 - Check if server holds on to gone clients for too long
@@ -39,9 +40,18 @@
 Backlog
 ================================================
 
+- Lazy iteration
+	- e.g. return proxy object from Database for .get which can then be iterated, counted etc.
+
+- Check for memory leaks
+- 100 Tests
+
+- Provide a @StoredCodable property wrapper?
+
 - Check return value for all uses of sqlite3_bind_*
 
-- Create a UNIQUE index for schema operations, so they aren't duplicated after multiple clients make the upgrade (while offline)
+- Create a UNIQUE index for schema operations, so they aren't duplicated after multiple clients make the upgrade (while offline)?
+	- Not trivial, since the client needs to get an index back for the changelog row it created.
 
 - Implement a repair function for invalid references caused by deletions.
 	- When replaying transactions, deletions always commit (because foreign key checks are disabled for these transactions). This is important, because otherwise a conflicting deletion can't be replayed and the database breaks
@@ -69,7 +79,6 @@ Backlog
 	- Probably should find another way to delete anyway (not dependent in materialized graph but schema details instead)
 - Enable queries for nested models (using Subquery?), making them available in `QueryProxy`
 - Enable cascaded deletion for objects in inverse collections?
-- Build model graph in Database.register() to make sure the referenced tables exist before creating the referencing ones
 
 - ManyToMany: Support ordered items?
 - Could the plain String `referencingField` for `Inverse` a problem at runtime, or is this sufficiently checked by the KeyPath in the macro? 
@@ -92,3 +101,12 @@ Backlog
 - Add a function to check the whole database (read every row into a `Model`)
 - Use `PRAGMA checksum_verification` and/or `PRAGMA page_checksum`?
 - When to do `PRAGMA integrity_check` or `PRAGMA quick_check`? 
+
+
+================================================
+Bad ideas
+================================================
+
+- @RelatedMany requires type RelatedCollection<T>, so the type wouldn't have to be passed as parameter to `RelatedMany`. Could even use @Related and just check if the type is `RelatedCollection`.
+	=> That doesn't work, because the RelatedCollection can contain Snapshots while the annotation must refer to the actual Model
+	=> Check that again, because the Macro currently doesn't allow it
