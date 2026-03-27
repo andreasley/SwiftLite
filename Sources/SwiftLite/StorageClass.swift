@@ -1,8 +1,6 @@
 import Foundation
 
-public nonisolated enum StorageClass: String, Equatable, Sendable, StorableEnumWithFallback {
-    public static var fallbackValue: Self { .undefined }
-    
+public nonisolated enum StorageClass: String, Storable, Equatable, Sendable {
     case text
     case integer
     case real
