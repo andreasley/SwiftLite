@@ -4,9 +4,7 @@ public nonisolated enum ExistingSchema
 {
     public struct Table: Sendable, InitializableFromResultRow, Hashable
     {
-        public enum TableType: String, Sendable, StorableEnumWithFallback {
-            public static var fallbackValue: Self { .unknown }
-            
+        public enum TableType: String, Sendable, Storable {
             case table
             case view
             case shadow
@@ -79,9 +77,7 @@ public nonisolated enum ExistingSchema
     
     public struct Index: Sendable, InitializableFromResultRow
     {
-        public enum Origin: String, Sendable, StorableEnumWithFallback {
-            public static var fallbackValue: Self { .unknown }
-
+        public enum Origin: String, Sendable, Storable {
             case createIndex = "c"
             case uniqueConstraint = "u"
             case primaryKeyConstraint = "pk"

@@ -114,21 +114,5 @@ public nonisolated extension Database
         {
             try await InverseManyToMany(keyPath: keyPath, db: db, elementId: elementId)
         }
-        
-        // MARK: StorableEnum
-        
-        public func get<T>(_ name: String, as type: T.Type = T.self, fallback: T? = nil) throws -> T where T: StorableEnum
-        {
-            let value: T? = try get(name)
-            return try nonOptionalValue(value, fallback: fallback)
-        }
-        
-        public func get<T>(_ name: String, as type: T.Type = T.self) throws -> T? where T: StorableEnum
-        {
-            guard let sqlValue = columns[name] else { return nil }
-            let matchingCase = try T(sqlValue: sqlValue)
-            return matchingCase
-        }
-
     }
 }
