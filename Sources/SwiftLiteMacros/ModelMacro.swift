@@ -321,7 +321,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
     }
     
     private static func collectPropertyInfo(from classDecl: ClassDeclSyntax) throws -> PropertyInfo {
-        var storedProperties: [(name: String, type: String, isOptional: Bool, hasDefault: Bool, defaultValue: String?, fallbackValue: String?, isIndexed: Bool, isUnique: Bool)] = []
+        var storedProperties: [(name: String, type: String, isOptional: Bool, hasDefault: Bool, defaultValue: String?, fallbackValue: String?, isIndexed: Bool, isUnique: Bool, isLet: Bool)] = []
         var relatedProperties: [(name: String, type: String, isOptional: Bool, onDelete: String?)] = []
         var relatedManyProperties: [(name: String, elementType: String, schemaType: String, onDelete: String?)] = []
         var inverseRelatedProperties: [(name: String, type: String, referencingField: String)] = []
@@ -337,6 +337,9 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             
             let propertyName = identifier.identifier.text
             let typeAnnotation = binding.typeAnnotation?.type.trimmedDescription ?? ""
+            
+            // Check if it's declared with 'let' or 'var'
+            let isLet = varDecl.bindingSpecifier.tokenKind == .keyword(.let)
             
             // Check if it's a computed property
             if let accessor = binding.accessorBlock {
@@ -436,7 +439,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             let isOptional = typeAnnotation.hasSuffix("?")
 
             if isStored {
-                storedProperties.append((name: propertyName, type: typeAnnotation, isOptional: isOptional, hasDefault: defaultValue != nil, defaultValue: defaultValue, fallbackValue: fallbackValue, isIndexed: isIndexed, isUnique: isUnique))
+                storedProperties.append((name: propertyName, type: typeAnnotation, isOptional: isOptional, hasDefault: defaultValue != nil, defaultValue: defaultValue, fallbackValue: fallbackValue, isIndexed: isIndexed, isUnique: isUnique, isLet: isLet))
             } else if isRelated {
                 relatedProperties.append((name: propertyName, type: typeAnnotation, isOptional: isOptional, onDelete: onDelete))
             } else if isRelatedMany, let element = elementType {
@@ -460,7 +463,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
     }
     
     private struct PropertyInfo {
-        let stored: [(name: String, type: String, isOptional: Bool, hasDefault: Bool, defaultValue: String?, fallbackValue: String?, isIndexed: Bool, isUnique: Bool)]
+        let stored: [(name: String, type: String, isOptional: Bool, hasDefault: Bool, defaultValue: String?, fallbackValue: String?, isIndexed: Bool, isUnique: Bool, isLet: Bool)]
         let related: [(name: String, type: String, isOptional: Bool, onDelete: String?)]
         let relatedMany: [(name: String, elementType: String, schemaType: String, onDelete: String?)]
         let inverseRelated: [(name: String, type: String, referencingField: String)]
@@ -608,11 +611,14 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         bodyLines.append("")
         bodyLines.append("self.id = id")
         
-        // Assign stored properties to self
-        for prop in propertyInfo.stored {
+        // Separate stored properties into let and var
+        let letProperties = propertyInfo.stored.filter { $0.isLet }
+        
+        // Assign let properties
+        for prop in letProperties {
             bodyLines.append("self.\(prop.name) = \(prop.name)")
         }
-        
+                
         bodyLines.append("")
         
         // Read-only data needs to be added to the changelog, so it will be committed to the database when this object is saved for the first time
@@ -707,8 +713,11 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         bodyLines.append("")
         bodyLines.append("self.id = id")
         
-        // Assign stored properties to self
-        for prop in propertyInfo.stored {
+        // Separate stored properties into let and var
+        let letProperties = propertyInfo.stored.filter { $0.isLet }
+        
+        // Assign let properties
+        for prop in letProperties {
             bodyLines.append("self.\(prop.name) = \(prop.name)")
         }
         
