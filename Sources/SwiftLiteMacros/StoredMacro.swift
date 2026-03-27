@@ -148,9 +148,15 @@ public struct StoredMacro: PeerMacro
         
         // Ensure parentheses are present (needed when original had no arguments)
         if original.leftParen == nil {
+            // Strip trailing trivia from the attribute name to avoid space before '('
             newAttribute = newAttribute
+                .with(\.attributeName, original.attributeName.with(\.trailingTrivia, []))
                 .with(\.leftParen, .leftParenToken())
-                .with(\.rightParen, .rightParenToken())
+                .with(\.rightParen, .rightParenToken(trailingTrivia: .space))
+        } else if let leftParen = original.leftParen {
+            // If parentheses already exist, ensure no leading trivia on left paren
+            newAttribute = newAttribute
+                .with(\.leftParen, leftParen.with(\.leadingTrivia, []))
         }
         
         return newAttribute
