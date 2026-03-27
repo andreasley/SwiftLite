@@ -21,7 +21,7 @@ public nonisolated extension ObjectReference
         DatabaseObjectReference<Model>(id: id, db: db)
     }
     
-    func resolve() async throws -> Model
+    nonisolated(nonsending) func resolve() async throws -> Model
     {
         let result = try await db.get(Model.self, id: self.id)
         guard let result else { throw ObjectReferenceResolutionError.notFound }
