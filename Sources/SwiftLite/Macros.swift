@@ -19,7 +19,7 @@ public macro Stored(columName: String? = nil, defaultValue: Any? = nil, fallback
 
 
 @attached(peer)
-public macro Related(onDelete: DeletionPolicy = .ignore) = #externalMacro(module: "SwiftLiteMacros", type: "RelatedMacro")
+public macro Related(onDelete: DeletionPolicy = .ignore, defaultValue: Any? = nil, fallbackValue: Any? = nil, isUnique: Bool = false) = #externalMacro(module: "SwiftLiteMacros", type: "RelatedMacro")
 
 
 @attached(peer)

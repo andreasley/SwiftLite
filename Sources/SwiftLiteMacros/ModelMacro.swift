@@ -322,7 +322,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
     
     private static func collectPropertyInfo(from classDecl: ClassDeclSyntax) throws -> PropertyInfo {
         var storedProperties: [(name: String, type: String, isOptional: Bool, hasDefault: Bool, defaultValue: String?, fallbackValue: String?, isIndexed: Bool, isUnique: Bool, isLet: Bool)] = []
-        var relatedProperties: [(name: String, type: String, isOptional: Bool, onDelete: String?)] = []
+        var relatedProperties: [(name: String, type: String, isOptional: Bool, hasDefault: Bool, defaultValue: String?, fallbackValue: String?, isUnique: Bool, onDelete: String?, isLet: Bool)] = []
         var relatedManyProperties: [(name: String, elementType: String, schemaType: String, onDelete: String?)] = []
         var inverseRelatedProperties: [(name: String, type: String, referencingField: String)] = []
         var inverseRelatedManyProperties: [(name: String, type: String, keyPath: String)] = []
@@ -394,7 +394,15 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
                     isRelated = true
                     if let arguments = attr.arguments?.as(LabeledExprListSyntax.self) {
                         for argument in arguments {
-                            if argument.label?.text == "onDelete" {
+                            if argument.label?.text == "defaultValue" {
+                                defaultValue = argument.expression.trimmedDescription
+                            } else if argument.label?.text == "fallbackValue" {
+                                fallbackValue = argument.expression.trimmedDescription
+                            } else if argument.label?.text == "isUnique" {
+                                // Parse boolean value
+                                let exprText = argument.expression.trimmedDescription
+                                isUnique = exprText == "true"
+                            } else if argument.label?.text == "onDelete" {
                                 onDelete = argument.expression.trimmedDescription
                             }
                         }
@@ -441,7 +449,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             if isStored {
                 storedProperties.append((name: propertyName, type: typeAnnotation, isOptional: isOptional, hasDefault: defaultValue != nil, defaultValue: defaultValue, fallbackValue: fallbackValue, isIndexed: isIndexed, isUnique: isUnique, isLet: isLet))
             } else if isRelated {
-                relatedProperties.append((name: propertyName, type: typeAnnotation, isOptional: isOptional, onDelete: onDelete))
+                relatedProperties.append((name: propertyName, type: typeAnnotation, isOptional: isOptional, hasDefault: defaultValue != nil, defaultValue: defaultValue, fallbackValue: fallbackValue, isUnique: isUnique, onDelete: onDelete, isLet: isLet))
             } else if isRelatedMany, let element = elementType {
                 let schemaName = "\(propertyName.prefix(1).uppercased())\(propertyName.dropFirst())RelationSchema"
                 relatedManyProperties.append((name: propertyName, elementType: element, schemaType: schemaName, onDelete: onDelete))
@@ -464,7 +472,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
     
     private struct PropertyInfo {
         let stored: [(name: String, type: String, isOptional: Bool, hasDefault: Bool, defaultValue: String?, fallbackValue: String?, isIndexed: Bool, isUnique: Bool, isLet: Bool)]
-        let related: [(name: String, type: String, isOptional: Bool, onDelete: String?)]
+        let related: [(name: String, type: String, isOptional: Bool, hasDefault: Bool, defaultValue: String?, fallbackValue: String?, isUnique: Bool, onDelete: String?, isLet: Bool)]
         let relatedMany: [(name: String, elementType: String, schemaType: String, onDelete: String?)]
         let inverseRelated: [(name: String, type: String, referencingField: String)]
         let inverseRelatedMany: [(name: String, type: String, keyPath: String)]
@@ -498,7 +506,14 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             """
         )
         
-        if !propertyInfo.stored.isEmpty || !propertyInfo.related.isEmpty || !propertyInfo.relatedMany.isEmpty || !propertyInfo.inverseRelated.isEmpty || !propertyInfo.inverseRelatedMany.isEmpty {
+        // Only generate _editableData if there are properties marked with @EditableValue or collections
+        let hasEditableData = propertyInfo.stored.contains(where: { !$0.isLet })
+            || propertyInfo.related.contains(where: { !$0.isLet })
+            || !propertyInfo.relatedMany.isEmpty
+            || !propertyInfo.inverseRelated.isEmpty 
+            || !propertyInfo.inverseRelatedMany.isEmpty
+        
+        if hasEditableData {
             members.append(
                 """
                 let _editableData: EditableData
@@ -555,8 +570,10 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         
         // Add related properties (required ones first, optional ones with defaults)
         for prop in propertyInfo.related {
-            if prop.isOptional {
+            if prop.hasDefault {
                 parameters.append("\(prop.name): \(prop.type) = DefaultValues.\(prop.name)")
+            } else if prop.isOptional {
+                parameters.append("\(prop.name): \(prop.type) = nil")
             } else {
                 parameters.append("\(prop.name): \(prop.type)")
             }
@@ -587,13 +604,19 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         bodyLines.append("")
         bodyLines.append("self._metadata = Metadata(db: db, table: Schema.table.name, id: id, isNew: true)")
         
-        // Build EditableData initialization
-        if !propertyInfo.stored.isEmpty || !propertyInfo.related.isEmpty || !propertyInfo.relatedMany.isEmpty || !propertyInfo.inverseRelated.isEmpty || !propertyInfo.inverseRelatedMany.isEmpty {
+        // Build EditableData initialization only with @EditableValue properties
+        let hasEditableData = propertyInfo.stored.contains(where: { !$0.isLet })
+            || propertyInfo.related.contains(where: { !$0.isLet })
+            || !propertyInfo.relatedMany.isEmpty
+            || !propertyInfo.inverseRelated.isEmpty 
+            || !propertyInfo.inverseRelatedMany.isEmpty
+        
+        if hasEditableData {
             var editableParams: [String] = []
-            for prop in propertyInfo.stored {
+            for prop in propertyInfo.stored where !prop.isLet {
                 editableParams.append("\(prop.name): \(prop.name)")
             }
-            for prop in propertyInfo.related {
+            for prop in propertyInfo.related where !prop.isLet {
                 editableParams.append("\(prop.name): \(prop.name)")
             }
             for prop in propertyInfo.relatedMany {
@@ -611,14 +634,18 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         bodyLines.append("")
         bodyLines.append("self.id = id")
         
-        // Separate stored properties into let and var
-        let letProperties = propertyInfo.stored.filter { $0.isLet }
-        
         // Assign let properties
-        for prop in letProperties {
+        let storedLetProperties = propertyInfo.stored.filter { $0.isLet }
+        let relatedLetProperties = propertyInfo.related.filter { $0.isLet }
+
+        for prop in storedLetProperties {
             bodyLines.append("self.\(prop.name) = \(prop.name)")
         }
-                
+
+        for prop in relatedLetProperties {
+            bodyLines.append("self.\(prop.name) = \(prop.name)")
+        }
+
         bodyLines.append("")
         
         // Read-only data needs to be added to the changelog, so it will be committed to the database when this object is saved for the first time
@@ -665,7 +692,11 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         
         // Extract related properties from row
         for prop in propertyInfo.related {
-            bodyLines.append("let \(prop.name): \(prop.type) = try await row.get(\"\(prop.name)\")")
+            if prop.fallbackValue != nil {
+                bodyLines.append("let \(prop.name): \(prop.type) = try await row.get(\"\(prop.name)\", fallback: FallbackValues.\(prop.name))")
+            } else {
+                bodyLines.append("let \(prop.name): \(prop.type) = try await row.get(\"\(prop.name)\")")
+            }
         }
         
         // Extract many-to-many relationships from row
@@ -689,13 +720,19 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         bodyLines.append("")
         bodyLines.append("self._metadata = Metadata(db: db, table: Schema.table.name, id: id, isNew: false)")
         
-        // Build EditableData initialization
-        if !propertyInfo.stored.isEmpty || !propertyInfo.related.isEmpty || !propertyInfo.relatedMany.isEmpty || !propertyInfo.inverseRelated.isEmpty || !propertyInfo.inverseRelatedMany.isEmpty {
+        // Build EditableData initialization only with @EditableValue properties
+        let hasEditableData = propertyInfo.stored.contains(where: { !$0.isLet })
+            || propertyInfo.related.contains(where: { !$0.isLet })
+            || !propertyInfo.relatedMany.isEmpty
+            || !propertyInfo.inverseRelated.isEmpty 
+            || !propertyInfo.inverseRelatedMany.isEmpty
+            
+        if hasEditableData {
             var editableParams: [String] = []
-            for prop in propertyInfo.stored {
+            for prop in propertyInfo.stored where !prop.isLet {
                 editableParams.append("\(prop.name): \(prop.name)")
             }
-            for prop in propertyInfo.related {
+            for prop in propertyInfo.related where !prop.isLet {
                 editableParams.append("\(prop.name): \(prop.name)")
             }
             for prop in propertyInfo.relatedMany {
@@ -713,14 +750,18 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         bodyLines.append("")
         bodyLines.append("self.id = id")
         
-        // Separate stored properties into let and var
-        let letProperties = propertyInfo.stored.filter { $0.isLet }
-        
         // Assign let properties
-        for prop in letProperties {
+        let storedLetProperties = propertyInfo.stored.filter { $0.isLet }
+        let relatedLetProperties = propertyInfo.related.filter { $0.isLet }
+
+        for prop in storedLetProperties {
             bodyLines.append("self.\(prop.name) = \(prop.name)")
         }
-        
+
+        for prop in relatedLetProperties {
+            bodyLines.append("self.\(prop.name) = \(prop.name)")
+        }
+
         let bodyString = bodyLines.joined(separator: "\n        ")
         
         return """
@@ -746,10 +787,20 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         // _beginAutoupdating
         var autoupdatingCalls = ["_metadata._beginAutoupdating(model: self)"]
         for prop in propertyInfo.related {
-            if prop.isOptional {
-                autoupdatingCalls.append("\(prop.name)?._beginAutoupdating()")
+            if prop.isLet {
+                // Non-editable properties are direct properties
+                if prop.isOptional {
+                    autoupdatingCalls.append("\(prop.name)?._beginAutoupdating()")
+                } else {
+                    autoupdatingCalls.append("\(prop.name)._beginAutoupdating()")
+                }
             } else {
-                autoupdatingCalls.append("\(prop.name)._beginAutoupdating()")
+                // Editable properties are in _editableData
+                if prop.isOptional {
+                    autoupdatingCalls.append("_editableData.\(prop.name)?._beginAutoupdating()")
+                } else {
+                    autoupdatingCalls.append("_editableData.\(prop.name)._beginAutoupdating()")
+                }
             }
         }
         for prop in propertyInfo.relatedMany {
@@ -773,10 +824,20 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         // _hasPendingChanges
         var hasPendingChecks = ["_metadata._hasPendingChanges"]
         for prop in propertyInfo.related {
-            if prop.isOptional {
-                hasPendingChecks.append("\(prop.name)?._hasPendingChanges")
+            if prop.isLet {
+                // Non-editable properties are direct properties
+                if prop.isOptional {
+                    hasPendingChecks.append("\(prop.name)?._hasPendingChanges")
+                } else {
+                    hasPendingChecks.append("\(prop.name)._hasPendingChanges")
+                }
             } else {
-                hasPendingChecks.append("\(prop.name)._hasPendingChanges")
+                // Editable properties are in _editableData
+                if prop.isOptional {
+                    hasPendingChecks.append("_editableData.\(prop.name)?._hasPendingChanges")
+                } else {
+                    hasPendingChecks.append("_editableData.\(prop.name)._hasPendingChanges")
+                }
             }
         }
         for prop in propertyInfo.relatedMany {
@@ -802,10 +863,20 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         // _beginSaving
         var beginSavingCalls = ["try _metadata._beginSaving(changeset: changeset)"]
         for prop in propertyInfo.related {
-            if prop.isOptional {
-                beginSavingCalls.append("try \(prop.name)?._beginSaving(changeset: changeset)")
+            if prop.isLet {
+                // Non-editable properties are direct properties
+                if prop.isOptional {
+                    beginSavingCalls.append("try \(prop.name)?._beginSaving(changeset: changeset)")
+                } else {
+                    beginSavingCalls.append("try \(prop.name)._beginSaving(changeset: changeset)")
+                }
             } else {
-                beginSavingCalls.append("try \(prop.name)._beginSaving(changeset: changeset)")
+                // Editable properties are in _editableData
+                if prop.isOptional {
+                    beginSavingCalls.append("try _editableData.\(prop.name)?._beginSaving(changeset: changeset)")
+                } else {
+                    beginSavingCalls.append("try _editableData.\(prop.name)._beginSaving(changeset: changeset)")
+                }
             }
         }
         for prop in propertyInfo.relatedMany {
@@ -830,10 +901,20 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             "_metadata._endSaving(success: success, transactionId: transactionId)"
         ]
         for prop in propertyInfo.related {
-            if prop.isOptional {
-                endSavingCalls.append("\(prop.name)?._endSaving(success: success, transactionId: transactionId)")
+            if prop.isLet {
+                // Non-editable properties are direct properties
+                if prop.isOptional {
+                    endSavingCalls.append("\(prop.name)?._endSaving(success: success, transactionId: transactionId)")
+                } else {
+                    endSavingCalls.append("\(prop.name)._endSaving(success: success, transactionId: transactionId)")
+                }
             } else {
-                endSavingCalls.append("\(prop.name)._endSaving(success: success, transactionId: transactionId)")
+                // Editable properties are in _editableData
+                if prop.isOptional {
+                    endSavingCalls.append("_editableData.\(prop.name)?._endSaving(success: success, transactionId: transactionId)")
+                } else {
+                    endSavingCalls.append("_editableData.\(prop.name)._endSaving(success: success, transactionId: transactionId)")
+                }
             }
         }
         for prop in propertyInfo.relatedMany {
@@ -859,10 +940,10 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         
         // _update
         var updateCalls = [String]()
-        for prop in propertyInfo.stored {
+        for prop in propertyInfo.stored where !prop.isLet {
             updateCalls.append("try await update(field: \"\(prop.name)\", writableKeyPath: \\._editableData.\(prop.name), newValue: updatedFields[\"\(prop.name)\"])")
         }
-        for prop in propertyInfo.related {
+        for prop in propertyInfo.related where !prop.isLet {
             updateCalls.append("try await update(field: \"\(prop.name)\", writableKeyPath: \\._editableData.\(prop.name), newValue: updatedFields[\"\(prop.name)\"])")
         }
         
@@ -886,10 +967,20 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         var cascadeCalls = ["_metadata._cascadeDeletion()"]
         for prop in propertyInfo.related {
             if prop.onDelete == ".cascade" {
-                if prop.isOptional {
-                    cascadeCalls.append("\(prop.name)?._cascadeDeletion()")
+                if prop.isLet {
+                    // Non-editable properties are direct properties
+                    if prop.isOptional {
+                        cascadeCalls.append("\(prop.name)?._cascadeDeletion()")
+                    } else {
+                        cascadeCalls.append("\(prop.name)._cascadeDeletion()")
+                    }
                 } else {
-                    cascadeCalls.append("\(prop.name)._cascadeDeletion()")
+                    // Editable properties are in _editableData
+                    if prop.isOptional {
+                        cascadeCalls.append("_editableData.\(prop.name)?._cascadeDeletion()")
+                    } else {
+                        cascadeCalls.append("_editableData.\(prop.name)._cascadeDeletion()")
+                    }
                 }
             }
         }
@@ -1027,7 +1118,13 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
                 fallbackVars.append("\(publicModifier)static var \(prop.name): \(prop.type) { \(fallbackValue) }")
             }
         }
-        
+
+        for prop in propertyInfo.related {
+            if let fallbackValue = prop.fallbackValue {
+                fallbackVars.append("\(publicModifier)static var \(prop.name): \(prop.type) { \(fallbackValue) }")
+            }
+        }
+
         guard !fallbackVars.isEmpty else {
             return """
             \(raw: publicModifier)struct FallbackValues {}
@@ -1047,18 +1144,20 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         var initParams = [String]()
         var initAssignments = [String]()
         
-        for prop in propertyInfo.stored {
+        // Only include var properties
+        for prop in propertyInfo.stored where !prop.isLet {
             properties.append("var \(prop.name): \(prop.type)")
             initParams.append("\(prop.name): \(prop.type)")
             initAssignments.append("self.\(prop.name) = \(prop.name)")
         }
         
-        for prop in propertyInfo.related {
+        for prop in propertyInfo.related where !prop.isLet {
             properties.append("var \(prop.name): \(prop.type)")
             initParams.append("\(prop.name): \(prop.type)")
             initAssignments.append("self.\(prop.name) = \(prop.name)")
         }
         
+        // RelatedMany, InverseRelated, and InverseRelatedMany are always included in EditableData
         for prop in propertyInfo.relatedMany {
             properties.append("var \(prop.name): ManyToMany<\(prop.schemaType)>")
             initParams.append("\(prop.name): ManyToMany<\(prop.schemaType)>")
