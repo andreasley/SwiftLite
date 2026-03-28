@@ -1068,7 +1068,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         className: String,
         property: (name: String, elementType: String, schemaType: String, onDelete: String?)
     ) throws -> DeclSyntax {
-        let deletionPolicy = property.onDelete ?? ".nullify"
+        let deletionPolicy = property.onDelete ?? ".ignore"
         let tableName = "\(className)_\(property.name)__\(property.elementType)"
         
         return """
