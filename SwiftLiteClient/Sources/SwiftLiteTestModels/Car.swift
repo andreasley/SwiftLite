@@ -34,6 +34,7 @@ import Foundation
         "Mercedes-Benz C-Class",
     ]
     
+    @SnapshotCompatible
     public var combinedName: String {
         name + "zzz"
     }

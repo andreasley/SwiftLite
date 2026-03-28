@@ -29,6 +29,9 @@ public macro Transient() = #externalMacro(module: "SwiftLiteMacros", type: "Tran
 @attached(peer)
 public macro File() = #externalMacro(module: "SwiftLiteMacros", type: "FileMacro")
 
+@attached(peer)
+public macro SnapshotCompatible() = #externalMacro(module: "SwiftLiteMacros", type: "SnapshotCompatibleMacro")
+
 
 @attached(accessor, names: named(get), named(set))
 public macro EditableValue() = #externalMacro(module: "SwiftLiteMacros", type: "EditableValueMacro")

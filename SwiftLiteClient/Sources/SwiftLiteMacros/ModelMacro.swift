@@ -345,7 +345,19 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             if let accessor = binding.accessorBlock {
                 if let codeBlock = accessor.accessors.as(CodeBlockItemListSyntax.self) {
                     let body = codeBlock.trimmedDescription
-                    computedProperties.append((name: propertyName, body: body))
+                    
+                    // Check if it has @SnapshotCompatible attribute
+                    let hasSnapshotCompatible = varDecl.attributes.contains { attribute in
+                        guard case let .attribute(attr) = attribute,
+                              let attrName = attr.attributeName.as(IdentifierTypeSyntax.self)?.name.text else {
+                            return false
+                        }
+                        return attrName == "SnapshotCompatible"
+                    }
+                    
+                    if hasSnapshotCompatible {
+                        computedProperties.append((name: propertyName, body: body))
+                    }
                 }
                 continue
             }
