@@ -344,6 +344,13 @@ public actor Database: Observable
         let preset = T.Model.Schema.table.defaultSelectStatement.withConditions(try predicate.toSQL())
         return try await objects(type: T.self, sqlStatement: preset.sqlStatement)
     }
+    
+    public nonisolated(nonsending) func find<T: Fetchable>(_ type: T.Type, where predicate: Predicate<T.Model.QueryProxy>, sortBy: [SortDescriptor<T.Model.QueryProxy>]? = nil) async throws -> [T]
+    {
+        let orderByClause = sortBy?.toSQL()
+        let preset = T.Model.Schema.table.defaultSelectStatement.withConditions(try predicate.toSQL(), orderBy: orderByClause)
+        return try await objects(type: T.self, sqlStatement: preset.sqlStatement)
+    }
 
     public nonisolated(nonsending) func find<T: Fetchable>(_ type: T.Type, condition: SQLCondition) async throws -> [T]
     {
@@ -354,6 +361,15 @@ public actor Database: Observable
     public nonisolated(nonsending) func get<T: Fetchable>(_ type: T.Type) async throws -> [T]
     {
         let preset = T.Model.Schema.table.defaultSelectStatement
+        return try await objects(type: T.self, sqlStatement: preset.sqlStatement)
+    }
+    
+    public nonisolated(nonsending) func get<T: Fetchable>(_ type: T.Type, sortBy: [SortDescriptor<T.Model.QueryProxy>]? = nil) async throws -> [T]
+    {
+        var preset = T.Model.Schema.table.defaultSelectStatement
+        if let sortBy {
+            preset = preset.withOrderBy(sortBy.toSQL())
+        }
         return try await objects(type: T.self, sqlStatement: preset.sqlStatement)
     }
 

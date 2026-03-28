@@ -9,12 +9,14 @@ public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
     @State private var storage = Storage()
 
     private let initialPredicate: Predicate<T.Model.QueryProxy>?
+    private let initialSortBy: [SortDescriptor<T.Model.QueryProxy>]?
     public var wrappedValue: [T] { storage.results }
     public var projectedValue: Storage { storage }
     
-    public init(_ type: T.Type = T.self, where predicate: Predicate<T.Model.QueryProxy>? = nil)
+    public init(_ type: T.Type = T.self, where predicate: Predicate<T.Model.QueryProxy>? = nil, sortBy: [SortDescriptor<T.Model.QueryProxy>]? = nil)
     {
         self.initialPredicate = predicate
+        self.initialSortBy = sortBy
     }
     
     public func update()
@@ -24,6 +26,9 @@ public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
         storage.status = .loading
         if let initialPredicate, storage.predicate == nil {
             storage.predicate = initialPredicate
+        }
+        if let initialSortBy, storage.sortBy == nil {
+            storage.sortBy = initialSortBy
         }
 
         Task {
@@ -39,6 +44,7 @@ public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
         public var results: [T] = []
 
         public var predicate: Predicate<T.Model.QueryProxy>? { didSet { reload() }}
+        public var sortBy: [SortDescriptor<T.Model.QueryProxy>]? { didSet { reload() }}
 
         @ObservationIgnored
         public var database: Database?
@@ -71,8 +77,12 @@ public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
             status = .loading
             
             do {
-                if let predicate {
+                if let predicate, let sortBy {
+                    results = try await db.find(T.self, where: predicate, sortBy: sortBy)
+                } else if let predicate {
                     results = try await db.find(T.self, where: predicate)
+                } else if let sortBy {
+                    results = try await db.get(T.self, sortBy: sortBy)
                 } else {
                     results = try await db.get(T.self)
                 }

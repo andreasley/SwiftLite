@@ -19,7 +19,7 @@ public nonisolated enum SQLStatementPreset
         
         public let sqlStatement: SQLStatement
         
-        init(table: String, columns: [String]? = nil, conditions: [SQLCondition]? = nil, limit: Int? = nil)
+        init(table: String, columns: [String]? = nil, conditions: [SQLCondition]? = nil, orderBy: String? = nil, limit: Int? = nil)
         {
             self.table = table
             self.columns = columns
@@ -32,6 +32,10 @@ public nonisolated enum SQLStatementPreset
                 values = conditions.map(\.value)
                 text += " WHERE \(conditionsText)"
             }
+            
+            if let orderBy, !orderBy.isEmpty {
+                text += " ORDER BY \(orderBy)"
+            }
 
             if let limit {
                 text += " LIMIT \(limit)"
@@ -40,13 +44,17 @@ public nonisolated enum SQLStatementPreset
             self.sqlStatement = SQLStatement(text: text, values: values)
         }
 
-        init(table: String, columns: [String]? = nil, conditions expression: any SQLExpression, limit: Int? = nil)
+        init(table: String, columns: [String]? = nil, conditions expression: any SQLExpression, orderBy: String? = nil, limit: Int? = nil)
         {
             self.table = table
             self.columns = columns
             
             let values = expression.values
             var text = "SELECT \(columns?.joined(separator: ", ") ?? "*") FROM \(table) WHERE \(expression.text)"
+            
+            if let orderBy, !orderBy.isEmpty {
+                text += " ORDER BY \(orderBy)"
+            }
             
             if let limit {
                 text += " LIMIT \(limit)"
@@ -55,14 +63,19 @@ public nonisolated enum SQLStatementPreset
             self.sqlStatement = SQLStatement(text: text, values: values)
         }
         
-        func withConditions(_ expression: any SQLExpression, limit: Int? = nil) -> Self
+        func withConditions(_ expression: any SQLExpression, orderBy: String? = nil, limit: Int? = nil) -> Self
         {
-            .init(table: table, columns: columns, conditions: expression, limit: limit)
+            .init(table: table, columns: columns, conditions: expression, orderBy: orderBy, limit: limit)
         }
 
-        func withCondition(_ condition: SQLCondition, limit: Int? = nil) -> Self
+        func withCondition(_ condition: SQLCondition, orderBy: String? = nil, limit: Int? = nil) -> Self
         {
-            .init(table: table, columns: columns, conditions: condition, limit: limit)
+            .init(table: table, columns: columns, conditions: condition, orderBy: orderBy, limit: limit)
+        }
+        
+        func withOrderBy(_ orderBy: String) -> Self
+        {
+            .init(table: table, columns: columns, conditions: nil, orderBy: orderBy, limit: nil)
         }
     }
 

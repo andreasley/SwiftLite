@@ -1,7 +1,3 @@
-- LiveCollection: 
-	- Sorting
-	- Setting filters
-
 
 - Can Fetchables just @Stored? If so, prevent that.
 
@@ -45,6 +41,8 @@
 ================================================
 Backlog
 ================================================
+
+- Find a more robust solution for SortDescriptor's conversion of property name to a String
 
 - Extend Predicate
 	- support "starts(with:)" and similar
