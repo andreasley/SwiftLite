@@ -8,11 +8,11 @@ public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
     @Environment(Database.self) private var database
     @State private var storage = Storage()
 
-    private let initialPredicate: Predicate<T>?
+    private let initialPredicate: Predicate<T.Model.QueryProxy>?
     public var wrappedValue: [T] { storage.results }
     public var projectedValue: Storage { storage }
     
-    public init(_ type: T.Type = T.self, where predicate: Predicate<T>? = nil)
+    public init(_ type: T.Type = T.self, where predicate: Predicate<T.Model.QueryProxy>? = nil)
     {
         self.initialPredicate = predicate
     }
@@ -38,7 +38,7 @@ public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
         public var status: LoadingStatus = .initial
         public var results: [T] = []
 
-        public var predicate: Predicate<T>? { didSet { reload() }}
+        public var predicate: Predicate<T.Model.QueryProxy>? { didSet { reload() }}
 
         @ObservationIgnored
         public var database: Database?

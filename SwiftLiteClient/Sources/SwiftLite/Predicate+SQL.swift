@@ -8,14 +8,8 @@ extension Predicate
         let values: [SQLValue]
     }
     
-    func toSQL() -> SQLWhereClause where repeat (each Input): Fetchable
+    func toSQL() -> SQLWhereClause where repeat (each Input): QueryProxy
     {
-//        var tableNames: [String] = []
-//        for item in repeat (each Input).self {
-//            tableNames.append(item.Model.Schema.table.name)
-//        }
-//
-//        let tableName = tableNames.first
         let expression = self.expression
         var parameters: [SQLValue] = []
         

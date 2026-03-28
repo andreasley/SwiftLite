@@ -215,7 +215,7 @@ public nonisolated extension ManyToMany
             element._endSaving(success: success, transactionId: transactionId)
         }
 
-        public nonisolated struct QueryProxy
+        public nonisolated struct QueryProxy: SwiftLite.QueryProxy
         {
             let id: UUID
             let parent: UUID

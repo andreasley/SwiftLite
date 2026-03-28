@@ -1240,7 +1240,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         }
         
         return """
-        nonisolated \(raw: publicModifier)struct QueryProxy
+        nonisolated \(raw: publicModifier)struct QueryProxy: SwiftLite.QueryProxy
         {
             \(raw: properties.joined(separator: "\n    "))
         }
