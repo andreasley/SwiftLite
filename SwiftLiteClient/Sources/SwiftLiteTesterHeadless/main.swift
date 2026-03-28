@@ -51,3 +51,6 @@ print(carCount)
 
 let cars = try await db.get(Car.self)
 print(cars.count)
+
+let carWithName = try await db.find(Car.self) { $0.name == "test" }
+print("Car with name `test`", carWithName)
