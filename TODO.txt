@@ -1,4 +1,6 @@
 
+- Can Fetchables just @Stored? If so, prevent that.
+
 - In sync, check both index and number of items. If they match, there's no need for a client to download the updates it just sent.
 
 - Check if server holds on to gone clients for too long
@@ -39,6 +41,8 @@
 ================================================
 Backlog
 ================================================
+
+- Do the indexes on @Related fields make any sense?
 
 - Lazy iteration
 	- e.g. return proxy object from Database for .get which can then be iterated, counted etc.
