@@ -38,7 +38,7 @@ public nonisolated struct Queryable<QueryProxy: WithNamedKeyPaths>
         Predicate(sql: "\(QueryProxy.nameForKeyPath(keyPath: keyPath)) = ?", bindings: [.int(1)])
     }
 
-    nonisolated public struct Expression<Value> where Value: SQLValueConvertible
+    public nonisolated struct Expression<Value> where Value: SQLValueConvertible
     {
         fileprivate let keyPath: KeyPath<QueryProxy, Value>
         
@@ -46,17 +46,17 @@ public nonisolated struct Queryable<QueryProxy: WithNamedKeyPaths>
             QueryProxy.nameForKeyPath(keyPath: keyPath)
         }
 
-        static func == (lhs: Self, rhs: Value) -> Predicate
+        public static func == (lhs: Self, rhs: Value) -> Predicate
         {
             Predicate(sql: "\(lhs.columnName) = ?", bindings: [rhs.convertToSQLValue()])
         }
 
-        static func > (lhs: Self, rhs: Value) -> Predicate
+        public static func > (lhs: Self, rhs: Value) -> Predicate
         {
             Predicate(sql: "\(lhs.columnName) > ?", bindings: [rhs.convertToSQLValue()])
         }
 
-        static func < (lhs: Self, rhs: Value) -> Predicate
+        public static func < (lhs: Self, rhs: Value) -> Predicate
         {
             Predicate(sql: "\(lhs.columnName) < ?", bindings: [rhs.convertToSQLValue()])
         }
@@ -67,17 +67,17 @@ public nonisolated struct Queryable<QueryProxy: WithNamedKeyPaths>
         let sql: String
         let bindings: [SQLValue]
         
-        static func && (lhs: Self, rhs: Self) -> Self
+        public static func && (lhs: Self, rhs: Self) -> Self
         {
             Predicate(sql: "(\(lhs.sql)) AND (\(rhs.sql))", bindings: lhs.bindings + rhs.bindings)
         }
 
-        static func || (lhs: Self, rhs: Self) -> Self
+        public static func || (lhs: Self, rhs: Self) -> Self
         {
             Predicate(sql: "(\(lhs.sql)) OR (\(rhs.sql))", bindings: lhs.bindings + rhs.bindings)
         }
 
-        static prefix func ! (predicate: Self) -> Self
+        public static prefix func ! (predicate: Self) -> Self
         {
             Predicate(sql:"NOT (\(predicate.sql))", bindings: predicate.bindings)
         }
