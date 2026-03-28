@@ -1,3 +1,7 @@
+- LiveCollection: 
+	- Sorting
+	- Setting filters
+
 
 - Can Fetchables just @Stored? If so, prevent that.
 
@@ -41,6 +45,11 @@
 ================================================
 Backlog
 ================================================
+
+- Extend Predicate
+	- support "starts(with:)" and similar
+	- Don't use Mirror so much
+	- 
 
 - Do the indexes on @Related fields make any sense?
 
