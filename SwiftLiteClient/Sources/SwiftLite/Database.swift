@@ -330,7 +330,7 @@ public actor Database: Observable
         let columnName = "COUNT(*)"
         var preset = SQLStatementPreset.Select(table: T.Model.Schema.table.name, columns: [columnName])
         if let predicate {
-            preset = preset.withConditions(predicate.toSQL())
+            preset = preset.withConditions(try predicate.toSQL())
         }
         let rows = try await execute(preset.sqlStatement)
         guard let count = try rows.first?.get(columnName, as: Int.self) else {
@@ -341,7 +341,7 @@ public actor Database: Observable
 
     public nonisolated(nonsending) func find<T: Fetchable>(_ type: T.Type, predicate: Predicate<T.Model.QueryProxy>) async throws -> [T]
     {
-        let preset = T.Model.Schema.table.defaultSelectStatement.withConditions(predicate.toSQL())
+        let preset = T.Model.Schema.table.defaultSelectStatement.withConditions(try predicate.toSQL())
         return try await objects(type: T.self, sqlStatement: preset.sqlStatement)
     }
 

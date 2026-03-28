@@ -1,5 +1,9 @@
 import Foundation
 
+enum SQLPredicateError: Swift.Error {
+    case unsupportedExpression(String)
+}
+
 extension Predicate
 {
     struct SQLWhereClause: SQLExpression
@@ -8,12 +12,13 @@ extension Predicate
         let values: [SQLValue]
     }
     
-    func toSQL() -> SQLWhereClause where repeat (each Input): QueryProxy
+    func toSQL() throws -> SQLWhereClause where repeat (each Input): QueryProxy
     {
         let expression = self.expression
         var parameters: [SQLValue] = []
         
-        func visitExpression(_ expr: any StandardPredicateExpression<Bool>) -> String {
+        func visitExpression(_ expr: any StandardPredicateExpression<Bool>) throws -> String
+        {
             let mirror = Mirror(reflecting: expr)
             let typeName = String(describing: type(of: expr))
             
@@ -21,8 +26,8 @@ extension Predicate
             if typeName.contains("Disjunction") {
                 if let lhs = mirror.children.first(where: { $0.label == "lhs" })?.value as? any StandardPredicateExpression<Bool>,
                    let rhs = mirror.children.first(where: { $0.label == "rhs" })?.value as? any StandardPredicateExpression<Bool> {
-                    let lhsSQL = visitExpression(lhs)
-                    let rhsSQL = visitExpression(rhs)
+                    let lhsSQL = try visitExpression(lhs)
+                    let rhsSQL = try visitExpression(rhs)
                     return "(\(lhsSQL) OR \(rhsSQL))"
                 }
             }
@@ -31,8 +36,8 @@ extension Predicate
             if typeName.contains("Conjunction") {
                 if let lhs = mirror.children.first(where: { $0.label == "lhs" })?.value as? any StandardPredicateExpression<Bool>,
                    let rhs = mirror.children.first(where: { $0.label == "rhs" })?.value as? any StandardPredicateExpression<Bool> {
-                    let lhsSQL = visitExpression(lhs)
-                    let rhsSQL = visitExpression(rhs)
+                    let lhsSQL = try visitExpression(lhs)
+                    let rhsSQL = try visitExpression(rhs)
                     return "(\(lhsSQL) AND \(rhsSQL))"
                 }
             }
@@ -130,43 +135,11 @@ extension Predicate
                 }
             }
             
-            // Fallback: print what we couldn't handle for debugging
-            print("UNSUPPORTED: \(typeName)")
-            for child in mirror.children {
-                print("  - \(child.label ?? "unlabeled"): \(type(of: child.value))")
-            }
-            
-            return "UNSUPPORTED_EXPRESSION"
+            throw SQLPredicateError.unsupportedExpression(typeName)
         }
         
-        func extractPropertyName<Root, Value>(from keyPath: PredicateExpressions.KeyPath<PredicateExpressions.Variable<Root>, Value>) -> String {
-            let mirror = Mirror(reflecting: keyPath)
-            
-            for child in mirror.children {
-                if child.label == "keyPath" {
-                    if let kp = child.value as? PartialKeyPath<Root> {
-                        let keyPathString = String(describing: kp)
-                        let components = keyPathString.components(separatedBy: ".")
-                        if let last = components.last {
-                            return last
-                        }
-                    }
-                }
-            }
-            return "unknown"
-        }
-        
-        func extractValue<Value>(from value: PredicateExpressions.Value<Value>) -> Any {
-            let mirror = Mirror(reflecting: value)
-            for child in mirror.children {
-                if child.label == "value" {
-                    return child.value
-                }
-            }
-            return ""
-        }
-        
-        func getComparisonOperator(_ op: PredicateExpressions.ComparisonOperator) -> String {
+        func getComparisonOperator(_ op: PredicateExpressions.ComparisonOperator) -> String
+        {
             switch op {
             case .lessThan: return "<"
             case .lessThanOrEqual: return "<="
@@ -176,7 +149,7 @@ extension Predicate
             }
         }
         
-        let whereClause = visitExpression(expression)
+        let whereClause = try visitExpression(expression)
         return SQLWhereClause(text: whereClause, values: parameters)
     }
 }
