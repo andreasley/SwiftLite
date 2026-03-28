@@ -72,7 +72,7 @@ public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
             
             do {
                 if let predicate {
-                    results = try await db.find(T.self, predicate: predicate)
+                    results = try await db.find(T.self, where: predicate)
                 } else {
                     results = try await db.get(T.self)
                 }

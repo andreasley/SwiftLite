@@ -325,7 +325,7 @@ public actor Database: Observable
         }
     }
 
-    public nonisolated(nonsending) func count<T: Fetchable>(_ type: T.Type, predicate: Predicate<T.Model.QueryProxy>? = nil) async throws -> Int
+    public nonisolated(nonsending) func count<T: Fetchable>(_ type: T.Type, where predicate: Predicate<T.Model.QueryProxy>? = nil) async throws -> Int
     {
         let columnName = "COUNT(*)"
         var preset = SQLStatementPreset.Select(table: T.Model.Schema.table.name, columns: [columnName])
@@ -339,7 +339,7 @@ public actor Database: Observable
         return count
     }
 
-    public nonisolated(nonsending) func find<T: Fetchable>(_ type: T.Type, predicate: Predicate<T.Model.QueryProxy>) async throws -> [T]
+    public nonisolated(nonsending) func find<T: Fetchable>(_ type: T.Type, where predicate: Predicate<T.Model.QueryProxy>) async throws -> [T]
     {
         let preset = T.Model.Schema.table.defaultSelectStatement.withConditions(try predicate.toSQL())
         return try await objects(type: T.self, sqlStatement: preset.sqlStatement)
