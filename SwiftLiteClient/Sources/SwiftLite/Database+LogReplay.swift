@@ -6,7 +6,7 @@ extension Database
     /// Process external log entries received from distributed sync
     /// - Parameter entries: Array of log entries grouped by transaction ID
     /// - Note: Entries should be sorted by timestamp and grouped by transaction
-    public func processExternalLogEntries(_ entries: [SyncClient.LogEntry]) async throws
+    public func processExternalLogEntries(_ entries: [LogEntry]) async throws
     {
         guard !entries.isEmpty else { return }
         
@@ -32,7 +32,7 @@ extension Database
     }
     
     /// Process a single transaction's worth of log entries
-    internal func processTransaction(entries: [SyncClient.LogEntry], transactionId: UUID) async throws
+    internal func processTransaction(entries: [LogEntry], transactionId: UUID) async throws
     {
         try await gate.run {
             print("▶️ BEGINNING EXTERNAL LOG REPLAY TRANSACTION (\(transactionId))")
@@ -74,7 +74,7 @@ extension Database
     }
     
     /// Process schema change log entries
-    private func processSchemaEntries(_ entries: [SyncClient.LogEntry], transactionId: UUID) async throws
+    private func processSchemaEntries(_ entries: [LogEntry], transactionId: UUID) async throws
     {
         try self.run("BEGIN")
         
@@ -83,7 +83,7 @@ extension Database
                 let tableName = entry.tableName
                 
                 switch entry.operationType {
-                case SyncClient.OperationType.tableCreated:
+                case OperationType.tableCreated:
                     print("📋 Replaying: Table created - \(tableName)")
                     let createTableStatement = """
                     CREATE TABLE IF NOT EXISTS "\(tableName)" (
@@ -94,7 +94,7 @@ extension Database
                     try run(createTableStatement)
                     
                     
-                case SyncClient.OperationType.columnAdded:
+                case OperationType.columnAdded:
                     guard let columnName = entry.columnName else {
                         print("⚠️ Skipping column addition without column name")
                         continue
@@ -120,7 +120,7 @@ extension Database
                         print("ℹ️ Column \(tableName).\(columnName) already exists, skipping")
                     }
                     
-                case SyncClient.OperationType.indexCreated:
+                case OperationType.indexCreated:
                     guard let metadataJSON = entry.metadata,
                           let metadataData = metadataJSON.data(using: .utf8),
                           let metadata = try? JSONSerialization.jsonObject(with: metadataData) as? [String: Any],
@@ -144,7 +144,7 @@ extension Database
                         print("ℹ️ Index \(indexName) already exists, skipping")
                     }
                     
-                case SyncClient.OperationType.indexDropped:
+                case OperationType.indexDropped:
                     guard let metadataJSON = entry.metadata,
                           let metadataData = metadataJSON.data(using: .utf8),
                           let metadata = try? JSONSerialization.jsonObject(with: metadataData) as? [String: Any],
@@ -178,7 +178,7 @@ extension Database
     }
     
     /// Process data change log entries
-    private func processDataEntries(_ entries: [SyncClient.LogEntry], transactionId: UUID) async throws
+    private func processDataEntries(_ entries: [LogEntry], transactionId: UUID) async throws
     {
         var changedObjects: [ChangedObject] = []
         var transactionCompletedSuccessfully = false
@@ -196,7 +196,7 @@ extension Database
                 let objectId: UUID
             }
             
-            let groupedByObject = Dictionary(grouping: entries.compactMap { entry -> (ObjectKey, SyncClient.LogEntry)? in
+            let groupedByObject = Dictionary(grouping: entries.compactMap { entry -> (ObjectKey, LogEntry)? in
                 guard let objectId = entry.objectId else {
                     return nil
                 }
@@ -211,9 +211,9 @@ extension Database
                 let sortedObjectEntries = objectEntries.sorted { $0.timestamp < $1.timestamp }
                 
                 // Determine the operation type
-                let hasRowCreated = sortedObjectEntries.contains { $0.operationType == SyncClient.OperationType.rowCreated }
-                let hasRowDeleted = sortedObjectEntries.contains { $0.operationType == SyncClient.OperationType.rowDeleted }
-                let fieldUpdates = sortedObjectEntries.filter { $0.operationType == SyncClient.OperationType.fieldUpdated }
+                let hasRowCreated = sortedObjectEntries.contains { $0.operationType == OperationType.rowCreated }
+                let hasRowDeleted = sortedObjectEntries.contains { $0.operationType == OperationType.rowDeleted }
+                let fieldUpdates = sortedObjectEntries.filter { $0.operationType == OperationType.fieldUpdated }
                 
                 if hasRowDeleted {
                     // Delete operation

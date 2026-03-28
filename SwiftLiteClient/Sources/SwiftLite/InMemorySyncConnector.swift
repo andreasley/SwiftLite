@@ -9,7 +9,7 @@ public actor InMemorySyncConnector: SyncConnector
     
     private var databaseId: UUID? = UUID()
     private var indexIncreaseCallbacks: [IndexIncreaseHandler] = []
-    private var serverLogEntries: [SyncClient.LogEntry] = []
+    private var serverLogEntries: [LogEntry] = []
     
     private var clientIndex = 1
     
@@ -42,13 +42,13 @@ public actor InMemorySyncConnector: SyncConnector
         Int64(serverLogEntries.count)
     }
     
-    public func sendEntries(entries: [SyncClient.LogEntry]) async -> [UUID: Int64]
+    public func sendEntries(entries: [LogEntry]) async -> [UUID: Int64]
     {
         var updatedIndexes = [UUID: Int64]()
         var nextIndex = Int64(serverLogEntries.count + 1)
         for entry in entries {
             guard entries.contains(where: { $0.id == entry.id && $0.synchronizedIndex == nil }) else { continue }
-            let entryWithIndex = SyncClient.LogEntry(
+            let entryWithIndex = LogEntry(
                 id: entry.id,
                 timestamp: entry.timestamp,
                 transactionId: entry.transactionId,
@@ -73,7 +73,7 @@ public actor InMemorySyncConnector: SyncConnector
         return updatedIndexes
     }
     
-    public func getEntries(from index: Int64, limit: Int64) async -> [SyncClient.LogEntry]
+    public func getEntries(from index: Int64, limit: Int64) async -> [LogEntry]
     {
         Array(serverLogEntries.dropFirst(Int(index)))
     }

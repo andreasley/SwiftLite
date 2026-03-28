@@ -14,8 +14,8 @@ public nonisolated protocol SyncConnector: Actor, Sendable
     func getDatabaseId() async throws -> UUID?
     func connect(databaseId: UUID) async throws
     func getHighestRemoteIndex() async -> Int64?
-    func sendEntries(entries: [SyncClient.LogEntry]) async -> [UUID: Int64]
-    func getEntries(from index: Int64, limit: Int64) async -> [SyncClient.LogEntry]
+    func sendEntries(entries: [LogEntry]) async -> [UUID: Int64]
+    func getEntries(from index: Int64, limit: Int64) async -> [LogEntry]
     func onHighestRemoteIndexIncrease(_ callback: @escaping IndexIncreaseHandler)
     func onDidComeBackOnline(_ callback: @escaping DidComeOnlineHandler)
 }

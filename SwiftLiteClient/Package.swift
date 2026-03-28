@@ -24,15 +24,10 @@ let package = Package(
             name: "SwiftLiteTesterHeadless",
             targets: ["SwiftLiteTesterHeadless"]
         ),
-        .executable(
-            name: "SwiftLiteWebSyncServer",
-            targets: ["SwiftLiteWebSyncServer"]
-        ),
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "602.0.0"),
-        .package(url: "https://github.com/hummingbird-project/hummingbird", from: "2.21.0"),
-        .package(url: "https://github.com/hummingbird-project/hummingbird-websocket", from: "2.6.0"),
+        .package(path: "../SwiftLiteShared")
     ],
     targets: [
         .macro(
@@ -43,7 +38,7 @@ let package = Package(
             ]
         ),
 
-        .target(name: "SwiftLite", dependencies: ["SwiftLiteMacros"]),
+        .target(name: "SwiftLite", dependencies: ["SwiftLiteMacros", "SwiftLiteShared"]),
         .target(name: "SwiftLiteTestModels", dependencies: ["SwiftLite"]),
         .target(name: "SwiftLiteTestViews", dependencies: ["SwiftLite", "SwiftLiteTestModels"]),
 
@@ -52,16 +47,6 @@ let package = Package(
         .executableTarget(name: "SwiftLiteInMemorySyncTester", dependencies: ["SwiftLite", "SwiftLiteTestModels", "SwiftLiteTestViews"]),
         .executableTarget(name: "SwiftLiteWebSyncTester", dependencies: ["SwiftLite", "SwiftLiteTestModels", "SwiftLiteTestViews"]),
 
-        .executableTarget(
-            name: "SwiftLiteWebSyncServer",
-            dependencies: [
-                "SwiftLite",
-                .product(name: "Hummingbird", package: "hummingbird"),
-                .product(name: "HummingbirdWebSocket", package: "hummingbird-websocket"),
-            ]
-        ),
-
-        // A test target used to develop the macro implementation.
         .testTarget(
             name: "SwiftLiteTests",
             dependencies: [

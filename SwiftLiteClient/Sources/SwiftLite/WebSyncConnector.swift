@@ -184,7 +184,7 @@ public actor WebSyncConnector: SyncConnector
         }
     }
 
-    public func sendEntries(entries: [SyncClient.LogEntry]) async -> [UUID : Int64]
+    public func sendEntries(entries: [LogEntry]) async -> [UUID : Int64]
     {
         do {
             guard let uploadUrl else { throw Error.urlNotConfigured }
@@ -218,7 +218,7 @@ public actor WebSyncConnector: SyncConnector
         }
     }
     
-    public func getEntries(from index: Int64, limit: Int64 = 10_000) async -> [SyncClient.LogEntry]
+    public func getEntries(from index: Int64, limit: Int64 = 10_000) async -> [LogEntry]
     {
         do {
             guard let downloadUrl else { throw Error.urlNotConfigured }
@@ -240,7 +240,7 @@ public actor WebSyncConnector: SyncConnector
                 throw Error.serverError("HTTP \(httpResponse.statusCode)")
             }
             
-            let entries = try decoder.decode([SyncClient.LogEntry].self, from: data)
+            let entries = try decoder.decode([LogEntry].self, from: data)
             
             defer { status = .connected }
 

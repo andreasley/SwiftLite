@@ -1,5 +1,4 @@
 import Foundation
-import SwiftLite
 import SQLite3
 import HummingbirdWebSocket
 import Hummingbird
@@ -92,13 +91,13 @@ actor ServerDatabaseManager
         return await database.highestIndex
     }
 
-    func storeEntries(databaseName: String, databaseId: UUID, entries: [SyncClient.LogEntry]) async throws -> [UUID: Int64]
+    func storeEntries(databaseName: String, databaseId: UUID, entries: [LogEntry]) async throws -> [UUID: Int64]
     {
         let database = try await getDatabaseAndCheckId(databaseName: databaseName, databaseId: databaseId)
         return try await database.storeEntries(entries: entries)
     }
     
-    func getEntries(databaseName: String, databaseId: UUID, fromIndex: Int64, limit: Int64) async throws -> [SyncClient.LogEntry]
+    func getEntries(databaseName: String, databaseId: UUID, fromIndex: Int64, limit: Int64) async throws -> [LogEntry]
     {
         let database = try await getDatabaseAndCheckId(databaseName: databaseName, databaseId: databaseId)
         return try await database.getEntries(fromIndex: fromIndex, limit: limit)

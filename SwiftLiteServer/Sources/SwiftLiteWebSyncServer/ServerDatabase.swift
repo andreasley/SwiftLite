@@ -1,6 +1,5 @@
 import SQLite3
 import Foundation
-import SwiftLite
 
 /// Represents a single database on the server (one per database name)
 actor ServerDatabase
@@ -46,7 +45,7 @@ actor ServerDatabase
         sqlite3_close(connectionHandle)
     }
     
-    func storeEntries(entries: [SyncClient.LogEntry]) throws -> [UUID: Int64]
+    func storeEntries(entries: [LogEntry]) throws -> [UUID: Int64]
     {
         let insertSQL = """
         INSERT OR IGNORE INTO operation_log (
@@ -152,7 +151,7 @@ actor ServerDatabase
         return mapping
     }
     
-    func getEntries(fromIndex: Int64, limit: Int64) throws -> [SyncClient.LogEntry]
+    func getEntries(fromIndex: Int64, limit: Int64) throws -> [LogEntry]
     {
         let querySQL = """
         SELECT id, timestamp, transaction_id, operation_type,
@@ -181,7 +180,7 @@ actor ServerDatabase
         sqlite3_bind_int64(stmt, 1, fromIndex)
         sqlite3_bind_int64(stmt, 2, limit)
 
-        var entries: [SyncClient.LogEntry] = []
+        var entries: [LogEntry] = []
         
         while sqlite3_step(stmt) == SQLITE_ROW {
             let entry = try parseLogEntry(from: stmt)
@@ -360,7 +359,7 @@ actor ServerDatabase
         return uuid
     }
 
-    private func parseLogEntry(from stmt: OpaquePointer?) throws -> SyncClient.LogEntry
+    private func parseLogEntry(from stmt: OpaquePointer?) throws -> LogEntry
     {
         guard let idString = sqlite3_column_text(stmt, 0).map({ String(cString: $0) }),
               let id = UUID(uuidString: idString) else {
@@ -375,7 +374,7 @@ actor ServerDatabase
         }
         
         guard let operationTypeString = sqlite3_column_text(stmt, 3).map({ String(cString: $0) }),
-              let operationType = SyncClient.OperationType(rawValue: operationTypeString) else {
+              let operationType = OperationType(rawValue: operationTypeString) else {
             throw ServerError.databaseError("Invalid operation type")
         }
 
@@ -416,7 +415,7 @@ actor ServerDatabase
             synchronizedIndex = nil
         }
                 
-        return SyncClient.LogEntry(
+        return LogEntry(
             id: id,
             timestamp: timestamp,
             transactionId: transactionId,

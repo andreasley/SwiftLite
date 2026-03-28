@@ -3,8 +3,8 @@ import Foundation
 
 @Model public nonisolated final class Car
 {
-    public enum Color: String, StorableEnumWithFallback, CaseIterable, Codable {
-        public static var fallbackValue: Self { .red }
+    public enum Color: String, Storable, CaseIterable, Codable, Sendable, Identifiable {
+        public var id: RawValue { self.rawValue }
         case red
         case blue
         case silver
@@ -38,8 +38,11 @@ import Foundation
         name + "zzz"
     }
     
+    @Transient
+    public var dontStore = "asd"
+    
     @Stored
-    public var owner: String?
+    public let owner: String?
     
     @Stored(defaultValue: UUID.v7())
     public let publicId: UUID
@@ -54,7 +57,7 @@ import Foundation
     public var engine: Engine.Snapshot
     
     @Related(onDelete: .cascade)
-    public var interior: Interior?
+    public let interior: Interior?
     
     @RelatedMany(Passenger.self, onDelete: .cascade)
     public var passengers: RelatedCollection<Passenger>

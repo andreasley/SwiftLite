@@ -1,7 +1,6 @@
 import Foundation
 import Hummingbird
 import HummingbirdWebSocket
-import SwiftLite
 
 @main
 struct WebSyncServerApp
@@ -57,7 +56,7 @@ struct WebSyncServerApp
             let data = Data(buffer: bodyBuffer)
             
             let decoder = JSONDecoder.forSwiftLiteSync
-            let entries = try decoder.decode([SyncClient.LogEntry].self, from: data)
+            let entries = try decoder.decode([LogEntry].self, from: data)
             
             let mapping = try await databaseManager.storeEntries(
                 databaseName: databaseName,

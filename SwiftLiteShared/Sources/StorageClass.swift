@@ -1,6 +1,6 @@
 import Foundation
 
-public nonisolated enum StorageClass: String, Storable, Equatable, Sendable {
+public nonisolated enum StorageClass: String, Equatable, Sendable {
     case text
     case integer
     case real
@@ -17,10 +17,5 @@ public nonisolated enum StorageClass: String, Storable, Equatable, Sendable {
         case "any": .any
         default: .undefined
         }
-    }
-    
-    init(for type: any SQLValueConvertible.Type)
-    {
-        self = type.storageClass
-    }
+    }    
 }

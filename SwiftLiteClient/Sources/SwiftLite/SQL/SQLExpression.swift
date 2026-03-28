@@ -14,7 +14,7 @@ public nonisolated extension SQLExpression
     }
 }
 
-nonisolated extension SQLExpression
+public nonisolated extension SQLExpression
 {
     static func byParent(_ id: UUID) -> SQLCondition
     {
@@ -22,7 +22,7 @@ nonisolated extension SQLExpression
     }
 }
 
-nonisolated extension SQLExpression
+public nonisolated extension SQLExpression
 {
     static func byElement(_ id: UUID) -> SQLCondition
     {

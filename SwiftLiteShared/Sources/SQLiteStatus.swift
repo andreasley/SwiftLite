@@ -208,10 +208,10 @@ public nonisolated enum SQLiteStatus: Int32, CustomStringConvertible, Sendable
 
 // MARK: - Comparision with `Int`
 
-nonisolated func == (lhs: Int32, rhs: SQLiteStatus) -> Bool {
+public nonisolated func == (lhs: Int32, rhs: SQLiteStatus) -> Bool {
     return lhs == rhs.rawValue
 }
 
-nonisolated func == (lhs: SQLiteStatus, rhs: Int32) -> Bool {
+public nonisolated func == (lhs: SQLiteStatus, rhs: Int32) -> Bool {
     return lhs.rawValue == rhs
 }
