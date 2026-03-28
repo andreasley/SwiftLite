@@ -5,16 +5,14 @@ import SwiftUI
 @propertyWrapper
 public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
 {
-    public typealias Predicate = (Query<T>.Proxy) -> Query<T>.Proxy.Predicate
-
     @Environment(Database.self) private var database
     @State private var storage = Storage()
 
-    private let initialPredicate: Predicate?
+    private let initialPredicate: Predicate<T>?
     public var wrappedValue: [T] { storage.results }
     public var projectedValue: Storage { storage }
     
-    public init(_ type: T.Type = T.self, where predicate: Predicate? = nil)
+    public init(_ type: T.Type = T.self, where predicate: Predicate<T>? = nil)
     {
         self.initialPredicate = predicate
     }
@@ -40,7 +38,7 @@ public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
         public var status: LoadingStatus = .initial
         public var results: [T] = []
 
-        public var predicate: Predicate? { didSet { reload() }}
+        public var predicate: Predicate<T>? { didSet { reload() }}
 
         @ObservationIgnored
         public var database: Database?
@@ -74,7 +72,7 @@ public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
             
             do {
                 if let predicate {
-                    results = try await db.find(T.self, where: predicate)
+                    results = try await db.find(T.self, predicate: predicate)
                 } else {
                     results = try await db.get(T.self)
                 }

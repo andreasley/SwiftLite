@@ -3,7 +3,7 @@ import Foundation
 public nonisolated protocol Model: AnyObject, Fetchable, Observable, @MainActor AutosavingModel, @MainActor AutoupdatingModel, Saveable
 {
     associatedtype Model = Self
-    associatedtype QueryProxy: WithNamedKeyPaths
+    associatedtype QueryProxy
     associatedtype Snapshot: ModelSnapshot
     associatedtype Schema: ModelSchema
     

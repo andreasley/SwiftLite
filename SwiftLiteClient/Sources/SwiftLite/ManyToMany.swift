@@ -215,21 +215,11 @@ public nonisolated extension ManyToMany
             element._endSaving(success: success, transactionId: transactionId)
         }
 
-        public nonisolated struct QueryProxy: WithNamedKeyPaths
+        public nonisolated struct QueryProxy
         {
             let id: UUID
             let parent: UUID
             let element: Element
-            
-            public static func nameForKeyPath(keyPath: PartialKeyPath<Self>) -> String
-            {
-                switch keyPath {
-                case \.id: "id"
-                case \.parent: "parent"
-                case \.element: "element"
-                default: fatalError("Failed to find name for KeyPath")
-                }
-            }
         }
     }
 }

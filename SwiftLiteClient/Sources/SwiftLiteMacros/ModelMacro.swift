@@ -1240,17 +1240,9 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         }
         
         return """
-        nonisolated \(raw: publicModifier)struct QueryProxy: WithNamedKeyPaths
+        nonisolated \(raw: publicModifier)struct QueryProxy
         {
             \(raw: properties.joined(separator: "\n    "))
-        
-            \(raw: publicModifier)static func nameForKeyPath(keyPath: PartialKeyPath<Self>) -> String
-            {
-                switch keyPath {
-                \(raw: cases.joined(separator: "\n        "))
-                default: fatalError("Failed to find name for KeyPath")
-                }
-            }
         }
         """
     }

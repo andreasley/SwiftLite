@@ -325,18 +325,12 @@ public actor Database: Observable
         }
     }
 
-    public nonisolated(nonsending) func count<T: Fetchable>(_ type: T.Type, where queryBuilder: (Query<T>.Proxy) -> Query<T>.Proxy.Predicate) async throws -> Int
-    {
-        let query = Query<T>(queryBuilder)
-        return try await count(T.self, query: query)
-    }
-
-    public nonisolated(nonsending) func count<T: Fetchable>(_ type: T.Type, query: Query<T>? = nil) async throws -> Int
+    public nonisolated(nonsending) func count<T: Fetchable>(_ type: T.Type, predicate: Predicate<T>? = nil) async throws -> Int
     {
         let columnName = "COUNT(*)"
         var preset = SQLStatementPreset.Select(table: T.Model.Schema.table.name, columns: [columnName])
-        if let query {
-            preset = preset.withConditions(query)
+        if let predicate {
+            preset = preset.withConditions(predicate.toSQL())
         }
         let rows = try await execute(preset.sqlStatement)
         guard let count = try rows.first?.get(columnName, as: Int.self) else {
@@ -345,15 +339,9 @@ public actor Database: Observable
         return count
     }
 
-    public nonisolated(nonsending) func find<T: Fetchable>(_ type: T.Type, where queryBuilder: (Query<T>.Proxy) -> Query<T>.Proxy.Predicate) async throws -> [T]
+    public nonisolated(nonsending) func find<T: Fetchable>(_ type: T.Type, predicate: Predicate<T>) async throws -> [T]
     {
-        let query = Query<T>(queryBuilder)
-        return try await find(T.self, query: query) 
-    }
-
-    public nonisolated(nonsending) func find<T: Fetchable>(_ type: T.Type, query: Query<T>) async throws -> [T]
-    {
-        let preset = T.Model.Schema.table.defaultSelectStatement.withConditions(query)
+        let preset = T.Model.Schema.table.defaultSelectStatement.withConditions(predicate.toSQL())
         return try await objects(type: T.self, sqlStatement: preset.sqlStatement)
     }
 

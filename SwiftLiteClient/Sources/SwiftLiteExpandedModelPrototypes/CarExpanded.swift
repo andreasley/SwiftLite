@@ -210,25 +210,13 @@ nonisolated extension CarExpanded: Model
         }
     }
 
-    nonisolated struct QueryProxy: WithNamedKeyPaths
+    nonisolated struct QueryProxy
     {
         let id: UUID
         let publicId: UUID
         let name: String
         let engine: Engine
         let interior: Interior?
-
-        static func nameForKeyPath(keyPath: PartialKeyPath<Self>) -> String
-        {
-            switch keyPath {
-            case \.id: "id"
-            case \.publicId: "publicId"
-            case \.name: "name"
-            case \.engine: "engine"
-            case \.interior: "interior"
-            default: fatalError("Failed to find name for KeyPath")
-            }
-        }
     }
 
     nonisolated struct Snapshot: ModelSnapshot

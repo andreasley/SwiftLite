@@ -136,19 +136,10 @@ nonisolated extension PassengerExpanded: Model
         }
     }
     
-    nonisolated struct QueryProxy: WithNamedKeyPaths
+    nonisolated struct QueryProxy
     {
         let id: UUID
         let name: String
-
-        static func nameForKeyPath(keyPath: PartialKeyPath<Self>) -> String
-        {
-            return switch keyPath {
-            case \.id: "id"
-            case \.name: "name"
-            default: fatalError("Failed to find name for KeyPath")
-            }
-        }
     }
 
     nonisolated struct Snapshot: ModelSnapshot
