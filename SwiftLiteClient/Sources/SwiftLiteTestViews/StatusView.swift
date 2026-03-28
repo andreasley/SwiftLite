@@ -9,7 +9,7 @@ public struct StatusView: View
     public init() {}
     
     public var body: some View {
-        VStack {
+        VStack(spacing: 12) {
             if case .fatalError(let error) = status?.localStatus {
                 Group {
                     Label("Database closed", systemImage: "exclamationmark.octagon.fill")
@@ -23,30 +23,36 @@ public struct StatusView: View
             HStack {
                 if let pendingLocalChanges = status?.syncStatus.pendingLocalChanges, pendingLocalChanges > 0 {
                     Label("\(pendingLocalChanges)", systemImage: "arrow.up.circle")
+                        .frame(maxWidth: 100, alignment: .leading)
                 }
-                Spacer()
                 if let pendingRemoteChanges = status?.syncStatus.pendingRemoteChanges, pendingRemoteChanges > 0 {
                     Label("\(pendingRemoteChanges)", systemImage: "arrow.down.circle")
+                        .frame(maxWidth: 100, alignment: .leading)
                 }
             }
-            if let progress = status?.syncStatus.currentSyncProgress {
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if let progress = status?.syncStatus.currentSyncProgress, progress.fractionCompleted > 0.01 {
                 ProgressView(value: progress.fractionCompleted, total: 1)
                     .progressViewStyle(.linear)
             }
-            if let connectorStatus = status?.syncStatus.connectorStatus {
-                switch connectorStatus {
-                case .connecting:
-                    Label("Connecting", systemImage: "circle.dotted")
-                case .offline:
-                    Label("Offline", systemImage: "network.slash")
-                case .error:
-                    Label("Error", systemImage: "xmark.octagon.fill")
-                case .transferring:
-                    Label("Syncing", systemImage: "arrow.trianglehead.2.clockwise.rotate.90.icloud")
-                case .connected:
-                    Label("Connected", systemImage: "network")
+            Group {
+                if let connectorStatus = status?.syncStatus.connectorStatus {
+                    switch connectorStatus {
+                    case .connecting:
+                        Label("Connecting", systemImage: "circle.dotted")
+                    case .offline:
+                        Label("Offline", systemImage: "network.slash")
+                    case .error:
+                        Label("Disconnected", systemImage: "exclamationmark.triangle.fill")
+                    case .transferring:
+                        Label("Transferring", systemImage: "arrow.trianglehead.2.clockwise.rotate.90.icloud")
+                    case .connected:
+                        Label("Connected", systemImage: "network")
+                    }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .symbolRenderingMode(.multicolor)
         }
         .frame(maxWidth: 400, alignment: .leading)
         .padding(20)
