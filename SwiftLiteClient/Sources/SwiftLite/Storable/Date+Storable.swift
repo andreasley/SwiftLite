@@ -5,11 +5,13 @@ import Foundation
 // The precision is less than that of `Date`, but that's not an issue for common use-casese.
 nonisolated extension Date: Storable
 {
-    public var storageValue: Int64 {
+    public typealias StorageValue = Int64
+    
+    public var storageValue: StorageValue {
         Int64(timeIntervalSince1970 * 1000)
     }
     
-    public init(storageValue: Int64)
+    public init(storageValue: StorageValue)
     {
         self.init(timeIntervalSince1970: Double(storageValue)/1000)
     }

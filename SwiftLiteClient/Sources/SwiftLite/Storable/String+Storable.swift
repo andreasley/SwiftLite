@@ -1,10 +1,12 @@
 nonisolated extension String: Storable
 {
-    public var storageValue: String {
+    public typealias StorageValue = String
+    
+    public var storageValue: StorageValue {
         self
     }
     
-    public init(storageValue: String) throws
+    public init(storageValue: StorageValue) throws
     {
         self = storageValue
     }

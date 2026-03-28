@@ -1,10 +1,12 @@
 nonisolated extension Int: Storable
 {
-    public var storageValue: Int64 {
+    public typealias StorageValue = Int64
+    
+    public var storageValue: StorageValue {
         Int64(self)
     }
     
-    public init(storageValue: Int64) throws
+    public init(storageValue: StorageValue) throws
     {
         guard let value = Self(exactly: storageValue) else {
             throw StorageConversionError.valueOutsideConvertibleRange
@@ -15,11 +17,13 @@ nonisolated extension Int: Storable
 
 nonisolated extension Int8: Storable
 {
-    public var storageValue: Int64 {
+    public typealias StorageValue = Int64
+
+    public var storageValue: StorageValue {
         Int64(self)
     }
     
-    public init(storageValue: Int64) throws
+    public init(storageValue: StorageValue) throws
     {
         guard let value = Self(exactly: storageValue) else {
             throw StorageConversionError.valueOutsideConvertibleRange
@@ -30,11 +34,13 @@ nonisolated extension Int8: Storable
 
 nonisolated extension Int16: Storable
 {
-    public var storageValue: Int64 {
+    public typealias StorageValue = Int64
+
+    public var storageValue: StorageValue {
         Int64(self)
     }
     
-    public init(storageValue: Int64) throws
+    public init(storageValue: StorageValue) throws
     {
         guard let value = Self(exactly: storageValue) else {
             throw StorageConversionError.valueOutsideConvertibleRange
@@ -45,11 +51,13 @@ nonisolated extension Int16: Storable
 
 nonisolated extension Int32: Storable
 {
-    public var storageValue: Int64 {
+    public typealias StorageValue = Int64
+
+    public var storageValue: StorageValue {
         Int64(self)
     }
     
-    public init(storageValue: Int64) throws
+    public init(storageValue: StorageValue) throws
     {
         guard let value = Self(exactly: storageValue) else {
             throw StorageConversionError.valueOutsideConvertibleRange
@@ -60,11 +68,13 @@ nonisolated extension Int32: Storable
 
 nonisolated extension Int64: Storable
 {
-    public var storageValue: Int64 {
+    public typealias StorageValue = Int64
+
+    public var storageValue: StorageValue {
         self
     }
     
-    public init(storageValue: Int64)
+    public init(storageValue: StorageValue)
     {
         self = storageValue
     }
@@ -72,11 +82,13 @@ nonisolated extension Int64: Storable
 
 nonisolated extension UInt: Storable
 {
-    public var storageValue: Int64 {
+    public typealias StorageValue = Int64
+
+    public var storageValue: StorageValue {
         Int64(self)
     }
     
-    public init(storageValue: Int64) throws
+    public init(storageValue: StorageValue) throws
     {
         guard let value = Self(exactly: storageValue) else {
             throw StorageConversionError.valueOutsideConvertibleRange
@@ -87,11 +99,13 @@ nonisolated extension UInt: Storable
 
 nonisolated extension UInt8: Storable
 {
-    public var storageValue: Int64 {
+    public typealias StorageValue = Int64
+
+    public var storageValue: StorageValue {
         Int64(self)
     }
     
-    public init(storageValue: Int64) throws
+    public init(storageValue: StorageValue) throws
     {
         guard let value = Self(exactly: storageValue) else {
             throw StorageConversionError.valueOutsideConvertibleRange
@@ -102,11 +116,13 @@ nonisolated extension UInt8: Storable
 
 nonisolated extension UInt16: Storable
 {
-    public var storageValue: Int64 {
+    public typealias StorageValue = Int64
+
+    public var storageValue: StorageValue {
         Int64(self)
     }
     
-    public init(storageValue: Int64) throws
+    public init(storageValue: StorageValue) throws
     {
         guard let value = Self(exactly: storageValue) else {
             throw StorageConversionError.valueOutsideConvertibleRange
@@ -117,7 +133,9 @@ nonisolated extension UInt16: Storable
 
 nonisolated extension UInt32: Storable
 {
-    public var storageValue: Int64 {
+    public typealias StorageValue = Int64
+
+    public var storageValue: StorageValue {
         Int64(self)
     }
     
@@ -130,15 +148,17 @@ nonisolated extension UInt32: Storable
     }
 }
 
-// Store UInt64 by flipping the top bit (thereby shifting the value into the range of an Int64). This way it's possible to store the value in the (same-sized) `INTEGER` column and keep the ability to INDEX and ORDER.
+// Store UInt64 by flipping the top bit (thereby shifting the value into the range of an Int64). This way, it's possible to store the value in the (same-sized) `INTEGER` column and keep the ability to INDEX and ORDER.
 nonisolated extension UInt64: Storable
 {
-    public var storageValue: Int64 {
+    public typealias StorageValue = Int64
+
+    public var storageValue: StorageValue {
         // Flip the top bit to map from UInt64 to Int64
         Int64(bitPattern: self ^ 0x8000_0000_0000_0000)
     }
     
-    public init(storageValue: Int64)
+    public init(storageValue: StorageValue)
     {
         // Flip the top bit to map from Int64 to UInt64
         self = UInt64(bitPattern: storageValue) ^ 0x8000_0000_0000_0000

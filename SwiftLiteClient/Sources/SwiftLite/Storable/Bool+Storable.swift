@@ -1,10 +1,12 @@
 nonisolated extension Bool: Storable
 {
-    public var storageValue: Int64 {
+    public typealias StorageValue = Int64
+    
+    public var storageValue: StorageValue {
         self ? 1 : 0
     }
     
-    public init(storageValue: Int64) throws
+    public init(storageValue: StorageValue) throws
     {
         if storageValue == 1 {
             self = true

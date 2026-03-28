@@ -2,7 +2,7 @@ import Foundation
 
 extension Array: Storable, SQLValueConvertible where Element: Codable
 {
-    public typealias Value = String
+    public typealias StorageValue = String
 
     public init(storageValue: String) throws
     {
