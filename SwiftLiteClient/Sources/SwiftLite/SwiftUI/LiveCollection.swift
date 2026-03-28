@@ -10,13 +10,13 @@ public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
     @Environment(Database.self) private var database
     @State private var storage = Storage()
 
-    private let predicate: Predicate?
+    private let initialPredicate: Predicate?
     public var wrappedValue: [T] { storage.results }
     public var projectedValue: Storage { storage }
     
     public init(_ type: T.Type = T.self, where predicate: Predicate? = nil)
     {
-        self.predicate = predicate
+        self.initialPredicate = predicate
     }
     
     public func update()
@@ -24,6 +24,9 @@ public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
         guard storage.status == .initial else { return }
         
         storage.status = .loading
+        if let initialPredicate, storage.predicate == nil {
+            storage.predicate = initialPredicate
+        }
 
         Task {
             await storage.load(from: database)
@@ -37,13 +40,21 @@ public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
         public var status: LoadingStatus = .initial
         public var results: [T] = []
 
-        public var predicate: Predicate?
+        public var predicate: Predicate? { didSet { reload() }}
 
         @ObservationIgnored
         public var database: Database?
         
         @ObservationIgnored
         var notificationToken: DeregisteringNotificationToken?
+        
+        private func reload()
+        {
+            guard let database else { return }
+            Task {
+                await load(from: database)
+            }
+        }
 
         public func load(from db: Database) async
         {

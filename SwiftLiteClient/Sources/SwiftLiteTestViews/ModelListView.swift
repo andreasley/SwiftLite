@@ -8,13 +8,16 @@ struct ModelListView<T: Listable>: View
     @Environment(\.defaultEngine) private var defaultEngine
     @Binding var selectedModel: (any ObjectReference)?
     @State private var selection: DatabaseObjectReference<T.Model>?
+    @State private var searchText = ""
     @LiveCollection(T.self) var snapshots
-    
+
     var isCreatable: Bool {
         T.self is (any Creatable<T.Model>.Type)
     }
 
     var body: some View {
+        TextField("", text: $searchText, prompt: Text("Search"))
+            .labelsHidden()
         List(snapshots, selection: $selection) { snapshot in
             NavigationLink(snapshot.name, value: snapshot.getObjectReference())
                 .contextMenu {
@@ -27,6 +30,9 @@ struct ModelListView<T: Listable>: View
         }
         .onChange(of: selection) { oldValue, newValue in
             selectedModel = selection
+        }
+        .onChange(of: searchText) { oldValue, newValue in
+            filterByName(newValue)
         }
         .toolbar {
             ToolbarItem(placement: .navigation) {
@@ -48,5 +54,10 @@ struct ModelListView<T: Listable>: View
             try await newModel.save()
             selection = newModel.getObjectReference()
         }
+    }
+    
+    func filterByName(_ name: String)
+    {
+        $snapshots.predicate = { $0.name == name  }
     }
 }
