@@ -1,7 +1,7 @@
 import SwiftLite
 import Foundation
 
-@Model public nonisolated final class Car
+@Model(withLifecycleFunctions: true) public nonisolated final class Car
 {
     public enum Color: String, Storable, CaseIterable, Codable, Sendable, Identifiable {
         public var id: RawValue { self.rawValue }
@@ -71,4 +71,15 @@ import Foundation
     
     @Stored(defaultValue: 0, fallbackValue: 0)
     public var price: Decimal
+    
+    public func afterInit() {
+        print("after init")
+    }
+    
+    public func beforeSave() {
+        print("before save")
+    }
+    public func afterSave() {
+        print("after save")
+    }
 }

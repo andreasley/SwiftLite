@@ -42,6 +42,21 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         }
     }
     
+    private static func hasLifecycleFunctions(_ node: AttributeSyntax) -> Bool {
+        guard let arguments = node.arguments?.as(LabeledExprListSyntax.self) else {
+            return false
+        }
+        
+        for argument in arguments {
+            if argument.label?.text == "withLifecycleFunctions" {
+                let exprText = argument.expression.trimmedDescription
+                return exprText == "true"
+            }
+        }
+        
+        return false
+    }
+    
     private static func validateDeclaration(
         _ declaration: some DeclGroupSyntax,
         node: AttributeSyntax,
@@ -272,17 +287,20 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         
         let className = classDecl.name.text
         let isPublic = isPublic(classDecl)
+        let withLifecycleFunctions = hasLifecycleFunctions(node)
         
         // Collect property information (same as in MemberMacro)
         let propertyInfo = try collectPropertyInfo(from: classDecl)
         
-        // Generate extension with Model conformance
-        let extensionDecl = try ExtensionDeclSyntax("nonisolated extension \(raw: className): Model") {
+        // Generate extension with Model conformance (and optionally WithModelLifecycleFunctions)
+        let conformanceList = withLifecycleFunctions ? "Model, WithModelLifecycleFunctions" : "Model"
+        let extensionDecl = try ExtensionDeclSyntax("nonisolated extension \(raw: className): \(raw: conformanceList)") {
             try generateModelProtocolMethods(
                 className: className,
                 propertyInfo: propertyInfo,
                 classDecl: classDecl,
-                isPublic: isPublic
+                isPublic: isPublic,
+                withLifecycleFunctions: withLifecycleFunctions
             )
             
             try generateSchemaClass(
@@ -508,6 +526,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         let propertyInfo = try collectPropertyInfo(from: classDecl)
         let isPublic = isPublic(classDecl)
         let publicModifier = isPublic ? "public " : ""
+        let withLifecycleFunctions = hasLifecycleFunctions(node)
         
         var members: [DeclSyntax] = []
         
@@ -544,14 +563,16 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         members.append(generateCreateInitializer(
             className: className,
             propertyInfo: propertyInfo,
-            isPublic: isPublic
+            isPublic: isPublic,
+            withLifecycleFunctions: withLifecycleFunctions
         ))
         
         // Generate second initializer (for loading from database)
         members.append(generateRowInitializer(
             className: className,
             propertyInfo: propertyInfo,
-            isPublic: isPublic
+            isPublic: isPublic,
+            withLifecycleFunctions: withLifecycleFunctions
         ))
         
         members.append(try generateEditableDataClass(propertyInfo: propertyInfo, className: className))
@@ -562,7 +583,8 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
     private static func generateCreateInitializer(
         className: String,
         propertyInfo: PropertyInfo,
-        isPublic: Bool
+        isPublic: Bool,
+        withLifecycleFunctions: Bool
     ) -> DeclSyntax {
         let publicModifier = isPublic ? "public " : ""
         
@@ -671,6 +693,12 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             bodyLines.append("self._metadata.logValueChange(field: \"\(prop.name)\", value: \(prop.name))")
         }
         
+        // Add afterInit() call if lifecycle functions are enabled
+        if withLifecycleFunctions {
+            bodyLines.append("")
+            bodyLines.append("afterInit()")
+        }
+        
         let paramString = parameters.joined(separator: ", ")
         let bodyString = bodyLines.joined(separator: "\n        ")
         
@@ -685,7 +713,8 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
     private static func generateRowInitializer(
         className: String,
         propertyInfo: PropertyInfo,
-        isPublic: Bool
+        isPublic: Bool,
+        withLifecycleFunctions: Bool
     ) -> DeclSyntax {
         let publicModifier = isPublic ? "public " : ""
         
@@ -774,6 +803,12 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             bodyLines.append("self.\(prop.name) = \(prop.name)")
         }
 
+        // Add afterInit() call if lifecycle functions are enabled
+        if withLifecycleFunctions {
+            bodyLines.append("")
+            bodyLines.append("afterInit()")
+        }
+
         let bodyString = bodyLines.joined(separator: "\n        ")
         
         return """
@@ -790,7 +825,8 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         className: String,
         propertyInfo: PropertyInfo,
         classDecl: ClassDeclSyntax,
-        isPublic: Bool
+        isPublic: Bool,
+        withLifecycleFunctions: Bool
     ) throws -> DeclSyntax {
         let publicModifier = isPublic ? "public " : ""
         
@@ -901,10 +937,14 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             beginSavingCalls.append("try _editableData.\(prop.name)._beginSaving(changeset: changeset)")
         }
         
+        let beginSavingBody = withLifecycleFunctions 
+            ? "beforeSave()\n    \(beginSavingCalls.joined(separator: "\n    "))"
+            : beginSavingCalls.joined(separator: "\n    ")
+        
         methods.append("""
         \(publicModifier)func _beginSaving(changeset: Changeset) throws
         {
-            \(beginSavingCalls.joined(separator: "\n    "))
+            \(beginSavingBody)
         }
         """)
         
@@ -937,6 +977,11 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         }
         for prop in propertyInfo.inverseRelatedMany {
             endSavingCalls.append("_editableData.\(prop.name)._endSaving(success: success, transactionId: transactionId)")
+        }
+        
+        // Add afterSave() call if lifecycle functions are enabled
+        if withLifecycleFunctions {
+            endSavingCalls.append("if success { afterSave() }")
         }
         
         methods.append("""
