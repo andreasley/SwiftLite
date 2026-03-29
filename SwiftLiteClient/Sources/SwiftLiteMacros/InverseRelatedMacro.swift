@@ -108,7 +108,7 @@ public struct InverseRelatedMacro: AccessorMacro
                                 IdentifierTypeSyntax(
                                     name: .identifier("RelatedCollection"),
                                     genericArgumentClause: GenericArgumentClauseSyntax {
-                                        GenericArgumentSyntax(argument: TypeSyntax(snapshotType))
+                                        GenericArgumentSyntax(argument: .type(TypeSyntax(snapshotType)))
                                     }
                                 )
                             )

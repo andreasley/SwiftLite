@@ -6,13 +6,13 @@ public nonisolated struct SQLWhereClause: SQLExpression
 
 public nonisolated extension SQLWhereClause
 {
-    public init(joining clauses: [SQLWhereClause]) throws
+    init(joining clauses: [SQLWhereClause]) throws
     {
         self.text = clauses.map { "(\($0.text))" }.joined(separator: " AND ")
         self.values = clauses.flatMap(\.values)
     }
 
-    public init(joining convertibles: [SQLWhereClauseConvertible]) throws
+    init(joining convertibles: [SQLWhereClauseConvertible]) throws
     {
         let clauses = try convertibles.map { try $0.toSQL() }
         try self.init(joining: clauses)
