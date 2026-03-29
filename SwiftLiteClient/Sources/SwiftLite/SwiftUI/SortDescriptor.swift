@@ -1,6 +1,6 @@
 import Foundation
 
-public struct SortDescriptor<QueryProxy>: AnySortDescriptor where QueryProxy: SwiftLite.QueryProxy
+public struct SortDescriptor<Q>: AnySortDescriptor where Q: QueryProxy
 {
     public enum Order {
         case ascending
@@ -14,10 +14,10 @@ public struct SortDescriptor<QueryProxy>: AnySortDescriptor where QueryProxy: Sw
         }
     }
     
-    let keyPath: PartialKeyPath<QueryProxy>
+    let keyPath: PartialKeyPath<Q>
     let order: Order
     
-    public init(_ keyPath: KeyPath<QueryProxy, some Any>, order: Order = .ascending)
+    public init(_ keyPath: KeyPath<Q, some Any>, order: Order = .ascending)
     {
         self.keyPath = keyPath
         self.order = order
