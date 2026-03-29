@@ -31,7 +31,7 @@ public nonisolated extension ObjectReference
 
 public nonisolated extension ObjectReference
 {
-    static func == (lhs: Self, rhs: Self) -> Bool
+    static func == (lhs: Self, rhs: any ObjectReference) -> Bool
     {
         lhs.id == rhs.id && lhs.db == rhs.db
     }

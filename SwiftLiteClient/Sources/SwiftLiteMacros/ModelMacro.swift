@@ -1066,14 +1066,14 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
     ) throws -> DeclSyntax {
         let publicModifier = isPublic ? "public " : ""
         
-        var relatedTypes = [String]()
+        var relatedTypes = Set<String>()
         for prop in propertyInfo.related {
             let baseType = prop.type.replacingOccurrences(of: "?", with: "")
-            relatedTypes.append("\(baseType).Model.Schema.self")
+            relatedTypes.insert("\(baseType).Model.Schema.self")
         }
         for prop in propertyInfo.relatedMany {
-            relatedTypes.append("\(prop.elementType).Model.Schema.self")
-            relatedTypes.append("\(prop.schemaType).self")
+            relatedTypes.insert("\(prop.elementType).Model.Schema.self")
+            relatedTypes.insert("\(prop.schemaType).self")
         }
         
         var columns = ["Columns.id"]
@@ -1099,6 +1099,9 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             columnDefs.append("\(publicModifier)static let \(prop.name) = RequiredSchema.Column(name: \"\(prop.name)\", type: \(baseType).self, referencedTable: \(baseType).Model.Schema.table.name)")
             indexes.append(".init(name: \"idx_\(className)_\(prop.name)\", isUnique: false, columns: [Columns.\(prop.name)])")
         }
+        
+        // Prevent circular reference
+        relatedTypes.remove("\(className).Model.Schema.self")
         
         return """
         \(raw: publicModifier)final class Schema: ModelSchema

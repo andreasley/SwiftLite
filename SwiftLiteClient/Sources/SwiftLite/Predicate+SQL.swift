@@ -1,18 +1,12 @@
 import Foundation
 
-enum SQLPredicateError: Swift.Error {
+public enum SQLPredicateError: Swift.Error {
     case unsupportedExpression(String)
 }
 
-extension Predicate
+extension Predicate: SQLWhereClauseConvertible
 {
-    struct SQLWhereClause: SQLExpression
-    {
-        let text: String
-        let values: [SQLValue]
-    }
-    
-    func toSQL() throws -> SQLWhereClause where repeat (each Input): QueryProxy
+    public func toSQL() throws -> SQLWhereClause
     {
         let expression = self.expression
         var parameters: [SQLValue] = []

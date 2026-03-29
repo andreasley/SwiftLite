@@ -8,14 +8,14 @@ public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
     @Environment(Database.self) private var database
     @State private var storage = Storage()
 
-    private let initialPredicate: Predicate<T.Model.QueryProxy>?
+    private let initialFilter: SQLWhereClauseConvertible?
     private let initialSortBy: [SortDescriptor<T.Model.QueryProxy>]?
     public var wrappedValue: [T] { storage.results }
     public var projectedValue: Storage { storage }
     
-    public init(_ type: T.Type = T.self, where predicate: Predicate<T.Model.QueryProxy>? = nil, sortBy: [SortDescriptor<T.Model.QueryProxy>]? = nil)
+    public init(_ type: T.Type = T.self, filter: SQLWhereClauseConvertible? = nil, sortBy: [SortDescriptor<T.Model.QueryProxy>]? = nil)
     {
-        self.initialPredicate = predicate
+        self.initialFilter = filter
         self.initialSortBy = sortBy
     }
     
@@ -24,8 +24,8 @@ public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
         guard storage.status == .initial else { return }
         
         storage.status = .loading
-        if let initialPredicate, storage.predicate == nil {
-            storage.predicate = initialPredicate
+        if let initialFilter, storage.filter == nil {
+            storage.filter = initialFilter
         }
         if let initialSortBy, storage.sortBy == nil {
             storage.sortBy = initialSortBy
@@ -43,7 +43,7 @@ public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
         public var status: LoadingStatus = .initial
         public var results: [T] = []
 
-        public var predicate: Predicate<T.Model.QueryProxy>? { didSet { reload() }}
+        public var filter: SQLWhereClauseConvertible? { didSet { reload() }}
         public var sortBy: [SortDescriptor<T.Model.QueryProxy>]? { didSet { reload() }}
 
         @ObservationIgnored
@@ -77,10 +77,10 @@ public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
             status = .loading
             
             do {
-                if let predicate, let sortBy {
-                    results = try await db.find(T.self, where: predicate, sortBy: sortBy)
-                } else if let predicate {
-                    results = try await db.find(T.self, where: predicate)
+                if let filter, let sortBy {
+                    results = try await db.find(T.self, where: filter, sortBy: sortBy)
+                } else if let filter {
+                    results = try await db.find(T.self, where: filter)
                 } else if let sortBy {
                     results = try await db.get(T.self, sortBy: sortBy)
                 } else {

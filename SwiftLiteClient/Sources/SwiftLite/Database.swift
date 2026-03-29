@@ -325,12 +325,12 @@ public actor Database: Observable
         }
     }
 
-    public nonisolated(nonsending) func count<T: Fetchable>(_ type: T.Type, where predicate: Predicate<T.Model.QueryProxy>? = nil) async throws -> Int
+    public nonisolated(nonsending) func count<T: Fetchable>(_ type: T.Type, where filter: SQLWhereClauseConvertible? = nil) async throws -> Int
     {
         let columnName = "COUNT(*)"
         var preset = SQLStatementPreset.Select(table: T.Model.Schema.table.name, columns: [columnName])
-        if let predicate {
-            preset = preset.withConditions(try predicate.toSQL())
+        if let filter {
+            preset = preset.withConditions(try filter.toSQL())
         }
         let rows = try await execute(preset.sqlStatement)
         guard let count = try rows.first?.get(columnName, as: Int.self) else {
@@ -339,16 +339,16 @@ public actor Database: Observable
         return count
     }
 
-    public nonisolated(nonsending) func find<T: Fetchable>(_ type: T.Type, where predicate: Predicate<T.Model.QueryProxy>) async throws -> [T]
+    public nonisolated(nonsending) func find<T: Fetchable>(_ type: T.Type, where filter: SQLWhereClauseConvertible) async throws -> [T]
     {
-        let preset = T.Model.Schema.table.defaultSelectStatement.withConditions(try predicate.toSQL())
+        let preset = T.Model.Schema.table.defaultSelectStatement.withConditions(try filter.toSQL())
         return try await objects(type: T.self, sqlStatement: preset.sqlStatement)
     }
     
-    public nonisolated(nonsending) func find<T: Fetchable>(_ type: T.Type, where predicate: Predicate<T.Model.QueryProxy>, sortBy: [SortDescriptor<T.Model.QueryProxy>]? = nil) async throws -> [T]
+    public nonisolated(nonsending) func find<T: Fetchable>(_ type: T.Type, where filter: SQLWhereClauseConvertible, sortBy: [SortDescriptor<T.Model.QueryProxy>]? = nil) async throws -> [T]
     {
         let orderByClause = sortBy?.toSQL()
-        let preset = T.Model.Schema.table.defaultSelectStatement.withConditions(try predicate.toSQL(), orderBy: orderByClause)
+        let preset = T.Model.Schema.table.defaultSelectStatement.withConditions(try filter.toSQL(), orderBy: orderByClause)
         return try await objects(type: T.self, sqlStatement: preset.sqlStatement)
     }
 

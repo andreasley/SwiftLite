@@ -12,18 +12,12 @@ public nonisolated extension SQLExpression
     {
         .init(field: "id", value: .string(id.storageValue))
     }
-}
 
-public nonisolated extension SQLExpression
-{
     static func byParent(_ id: UUID) -> SQLCondition
     {
         .init(field: "parent", value: .string(id.storageValue))
     }
-}
 
-public nonisolated extension SQLExpression
-{
     static func byElement(_ id: UUID) -> SQLCondition
     {
         .init(field: "element", value: .string(id.storageValue))
