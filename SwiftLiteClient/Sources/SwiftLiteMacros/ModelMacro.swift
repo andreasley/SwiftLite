@@ -1239,16 +1239,13 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         let publicModifier = isPublic ? "public " : ""
         
         var properties = ["\(publicModifier)let id: UUID"]
-        var cases = ["case \\.id: \"id\""]
         
         for prop in propertyInfo.stored {
             properties.append("\(publicModifier)let \(prop.name): \(prop.type)")
-            cases.append("case \\.\(prop.name): \"\(prop.name)\"")
         }
         
         for prop in propertyInfo.related {
             properties.append("\(publicModifier)let \(prop.name): \(prop.type)")
-            cases.append("case \\.\(prop.name): \"\(prop.name)\"")
         }
         
         return """
