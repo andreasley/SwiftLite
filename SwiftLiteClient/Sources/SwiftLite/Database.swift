@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import SQLite3
+import Synchronization
 
 // Needs to be `Observable` to be used in SwiftUI's `Environment()`
 public actor Database: Observable
@@ -38,7 +39,11 @@ public actor Database: Observable
 
     public internal(set) var isClosed = false
     
-    public private(set) var localStatus: LocalDatabaseStatus = .ok
+    private let localStatus: Mutex<LocalDatabaseStatus> = .init(.ok)
+    public nonisolated var status: LocalDatabaseStatus {
+        localStatus.withLock { $0 }
+    }
+    
     public nonisolated let statusUpdates = AsyncStreams<Status>()
 
     // Logging for distributed sync
@@ -108,6 +113,7 @@ public actor Database: Observable
         if let syncClient {
             Task {
                 for await syncStatus in syncClient.statusStream {
+                    let localStatus = self.localStatus.withLock { $0 }
                     let updatedStatus = Status(localStatus: localStatus, syncStatus: syncStatus)
                     statusUpdates.yield(updatedStatus)
                 }
@@ -116,7 +122,7 @@ public actor Database: Observable
 
         await syncClient?.setDatabase(self)
     }
-
+    
     func setPragma(name: String, value: String) throws
     {
         try Self.setPragma(name: name, value: value, connectionHandle: self.connectionHandle)
@@ -339,16 +345,10 @@ public actor Database: Observable
         return count
     }
 
-    public nonisolated(nonsending) func find<T: Fetchable>(_ type: T.Type, where filter: SQLWhereClauseConvertible) async throws -> [T]
-    {
-        let preset = T.Model.Schema.table.defaultSelectStatement.withConditions(try filter.toSQL())
-        return try await objects(type: T.self, sqlStatement: preset.sqlStatement)
-    }
-    
-    public nonisolated(nonsending) func find<T: Fetchable>(_ type: T.Type, where filter: SQLWhereClauseConvertible, sortBy: [SortDescriptor<T.Model.QueryProxy>]? = nil) async throws -> [T]
+    public nonisolated(nonsending) func find<T: Fetchable>(_ type: T.Type, where filter: SQLWhereClauseConvertible, sortBy: SQLSortClauseConvertible? = nil) async throws -> [T]
     {
         let orderByClause = sortBy?.toSQL()
-        let preset = T.Model.Schema.table.defaultSelectStatement.withConditions(try filter.toSQL(), orderBy: orderByClause)
+        let preset = T.Model.Schema.table.defaultSelectStatement.withConditions(try filter.toSQL(), orderBy: orderByClause?.text)
         return try await objects(type: T.self, sqlStatement: preset.sqlStatement)
     }
 
@@ -364,11 +364,11 @@ public actor Database: Observable
         return try await objects(type: T.self, sqlStatement: preset.sqlStatement)
     }
     
-    public nonisolated(nonsending) func get<T: Fetchable>(_ type: T.Type, sortBy: [SortDescriptor<T.Model.QueryProxy>]? = nil) async throws -> [T]
+    public nonisolated(nonsending) func get<T: Fetchable>(_ type: T.Type, sortBy: SQLSortClauseConvertible? = nil) async throws -> [T]
     {
         var preset = T.Model.Schema.table.defaultSelectStatement
         if let sortBy {
-            preset = preset.withOrderBy(sortBy.toSQL())
+            preset = preset.withOrderBy(sortBy.toSQL().text)
         }
         return try await objects(type: T.self, sqlStatement: preset.sqlStatement)
     }

@@ -1,6 +1,6 @@
 import Foundation
 
-public struct SortDescriptor<Q>: AnySortDescriptor where Q: QueryProxy
+public struct SortDescriptor<T>: AnySortDescriptor
 {
     public enum Order {
         case ascending
@@ -14,36 +14,32 @@ public struct SortDescriptor<Q>: AnySortDescriptor where Q: QueryProxy
         }
     }
     
-    let keyPath: PartialKeyPath<Q>
+    let keyPath: PartialKeyPath<T>
     let order: Order
     
-    public init(_ keyPath: KeyPath<Q, some Any>, order: Order = .ascending)
+    public init(_ keyPath: KeyPath<T, some Any>, order: Order = .ascending)
     {
         self.keyPath = keyPath
         self.order = order
     }
     
-    func toSQL() -> String
+    public func toSQL() -> SQLSortClause
     {
         let keyPathString = String(describing: keyPath)
         let components = keyPathString.components(separatedBy: ".")
         guard let propertyName = components.last else {
             fatalError("Invalid keyPath for SortDescriptor")
         }
-        return "\(propertyName) \(order.sqlKeyword)"
+        return SQLSortClause(text: "\(propertyName) \(order.sqlKeyword)")
     }
 }
 
-protocol AnySortDescriptor
-{
-    func toSQL() -> String
-}
+public nonisolated protocol AnySortDescriptor: SQLSortClauseConvertible {}
 
-extension Array where Element: AnySortDescriptor
+extension Array: SQLSortClauseConvertible where Element: AnySortDescriptor
 {
-    func toSQL() -> String
+    public func toSQL() -> SQLSortClause
     {
-        guard !isEmpty else { return "" }
-        return map { $0.toSQL() }.joined(separator: ", ")
+        SQLSortClause(joining: self)
     }
 }

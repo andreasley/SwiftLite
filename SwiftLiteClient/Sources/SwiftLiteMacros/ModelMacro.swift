@@ -1095,8 +1095,9 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         
         for prop in propertyInfo.related {
             let baseType = prop.type.replacingOccurrences(of: "?", with: "")
+            let referencedTableName = baseType == className ? "\"\(className)\"" : "\(baseType).Model.Schema.table.name"
             columns.append("Columns.\(prop.name)")
-            columnDefs.append("\(publicModifier)static let \(prop.name) = RequiredSchema.Column(name: \"\(prop.name)\", type: \(baseType).self, referencedTable: \(baseType).Model.Schema.table.name)")
+            columnDefs.append("\(publicModifier)static let \(prop.name) = RequiredSchema.Column(name: \"\(prop.name)\", type: \(baseType).self, referencedTable: \(referencedTableName))")
             indexes.append(".init(name: \"idx_\(className)_\(prop.name)\", isUnique: false, columns: [Columns.\(prop.name)])")
         }
         

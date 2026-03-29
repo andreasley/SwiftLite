@@ -9,11 +9,11 @@ public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
     @State private var storage = Storage()
 
     private let initialFilter: SQLWhereClauseConvertible?
-    private let initialSortBy: [SortDescriptor<T.Model.QueryProxy>]?
+    private let initialSortBy: SQLSortClauseConvertible?
     public var wrappedValue: [T] { storage.results }
     public var projectedValue: Storage { storage }
     
-    public init(_ type: T.Type = T.self, filter: SQLWhereClauseConvertible? = nil, sortBy: [SortDescriptor<T.Model.QueryProxy>]? = nil)
+    public init(_ type: T.Type = T.self, filter: SQLWhereClauseConvertible? = nil, sortBy: SQLSortClauseConvertible? = nil)
     {
         self.initialFilter = filter
         self.initialSortBy = sortBy
@@ -44,7 +44,7 @@ public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
         public var results: [T] = []
 
         public var filter: SQLWhereClauseConvertible? { didSet { reload() }}
-        public var sortBy: [SortDescriptor<T.Model.QueryProxy>]? { didSet { reload() }}
+        public var sortBy: SQLSortClauseConvertible? { didSet { reload() }}
 
         @ObservationIgnored
         public var database: Database?

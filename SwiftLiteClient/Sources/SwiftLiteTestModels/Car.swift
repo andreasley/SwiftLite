@@ -55,6 +55,9 @@ import Foundation
     public var otherColors: [Color]
 
     @Related
+    public var successorTo: Car?
+
+    @Related
     public var engine: Engine.Snapshot
     
     @Related(onDelete: .cascade)
