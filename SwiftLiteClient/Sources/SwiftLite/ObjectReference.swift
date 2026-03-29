@@ -1,6 +1,6 @@
 import Foundation
 
-public protocol ObjectReference<Model>: UnqualifiedObjectReference, DatabaseObjectReferenceConvertible, Sendable where Model: SwiftLite.Model
+public protocol ObjectReference<Model>: UnqualifiedObjectReference, DatabaseObjectReferenceConvertible, Sendable, Equatable where Model: SwiftLite.Model
 {
     associatedtype Model
     
@@ -26,5 +26,13 @@ public nonisolated extension ObjectReference
         let result = try await db.get(Model.self, id: self.id)
         guard let result else { throw ObjectReferenceResolutionError.notFound }
         return result
+    }
+}
+
+public nonisolated extension ObjectReference
+{
+    static func == (lhs: Self, rhs: Self) -> Bool
+    {
+        lhs.id == rhs.id && lhs.db == rhs.db
     }
 }
