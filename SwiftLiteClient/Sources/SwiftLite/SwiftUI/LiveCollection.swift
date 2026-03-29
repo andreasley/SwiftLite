@@ -24,8 +24,8 @@ public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
         guard storage.status == .initial else { return }
         
         storage.status = .loading
-        if let initialPredicate, storage.`where` == nil {
-            storage.`where` = initialPredicate
+        if let initialPredicate, storage.predicate == nil {
+            storage.predicate = initialPredicate
         }
         if let initialSortBy, storage.sortBy == nil {
             storage.sortBy = initialSortBy
@@ -43,7 +43,7 @@ public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
         public var status: LoadingStatus = .initial
         public var results: [T] = []
 
-        public var `where`: Predicate<T.Model.QueryProxy>? { didSet { reload() }}
+        public var predicate: Predicate<T.Model.QueryProxy>? { didSet { reload() }}
         public var sortBy: [SortDescriptor<T.Model.QueryProxy>]? { didSet { reload() }}
 
         @ObservationIgnored
@@ -77,10 +77,10 @@ public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
             status = .loading
             
             do {
-                if let `where`, let sortBy {
-                    results = try await db.find(T.self, where: `where`, sortBy: sortBy)
-                } else if let `where` {
-                    results = try await db.find(T.self, where: `where`)
+                if let predicate, let sortBy {
+                    results = try await db.find(T.self, where: predicate, sortBy: sortBy)
+                } else if let predicate {
+                    results = try await db.find(T.self, where: predicate)
                 } else if let sortBy {
                     results = try await db.get(T.self, sortBy: sortBy)
                 } else {

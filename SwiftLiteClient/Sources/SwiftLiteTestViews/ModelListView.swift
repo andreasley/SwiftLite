@@ -58,6 +58,6 @@ struct ModelListView<T: Listable>: View
     
     func filterByName(_ name: String)
     {
-        $snapshots.where = #Predicate { $0.name.contains(name) }
+        $snapshots.predicate = #Predicate { $0.name.contains(name) }
     }
 }
