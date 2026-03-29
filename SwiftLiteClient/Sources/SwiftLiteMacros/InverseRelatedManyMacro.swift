@@ -94,6 +94,11 @@ public struct InverseRelatedManyMacro: AccessorMacro
             let actualTypeName = typeAnnotation.type.trimmedDescription
             if actualTypeName != expectedTypeName {
                 // Type annotation exists but is wrong - provide Fix-It to replace it
+                let snapshotType = MemberTypeSyntax(
+                    baseType: IdentifierTypeSyntax(name: .identifier(rootType)),
+                    period: .periodToken(),
+                    name: .identifier("Snapshot")
+                )
                 let fixIt = FixIt(
                     message: MacroExpansionFixItMessage("Change to '\(expectedTypeName)'"),
                     changes: [
@@ -103,7 +108,7 @@ public struct InverseRelatedManyMacro: AccessorMacro
                                 IdentifierTypeSyntax(
                                     name: .identifier("RelatedCollection"),
                                     genericArgumentClause: GenericArgumentClauseSyntax {
-                                        GenericArgumentSyntax(argument: .type(TypeSyntax(IdentifierTypeSyntax(name: .identifier(rootType)))))
+                                        GenericArgumentSyntax(argument: TypeSyntax(snapshotType))
                                     }
                                 )
                             )
