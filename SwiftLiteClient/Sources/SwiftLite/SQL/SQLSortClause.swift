@@ -7,7 +7,7 @@ public nonisolated extension SQLSortClause
 {
     init(joining clauses: [SQLSortClause])
     {
-        self.text = clauses.map { "(\($0.text))" }.joined(separator: ", ")
+        self.text = clauses.map { $0.text }.joined(separator: ", ")
     }
 
     init(joining convertibles: [SQLSortClauseConvertible])
