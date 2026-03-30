@@ -13,6 +13,12 @@ public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
     public var wrappedValue: [T] { storage.results }
     public var projectedValue: Storage { storage }
     
+    public init(_ type: T.Type = T.self, filter: SQLWhereClauseConvertible? = nil, sortBy: [SortDescriptor<T.Model.QueryProxy>]? = nil)
+    {
+        self.initialFilter = filter
+        self.initialSortBy = sortBy?.toSQL()
+    }
+
     public init(_ type: T.Type = T.self, filter: SQLWhereClauseConvertible? = nil, sortBy: SQLSortClauseConvertible? = nil)
     {
         self.initialFilter = filter
