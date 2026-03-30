@@ -43,7 +43,7 @@ public nonisolated struct SyncConnectorError
 
 public extension SyncConnector
 {
-    public var isReady: Bool {
+    var isReady: Bool {
         switch status {
         case .connected:
             return true
