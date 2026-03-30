@@ -58,9 +58,24 @@ public nonisolated final class ModelMetadata: DatabaseEntityMetadata, WithTracke
         changedValues.log(field: field, value: value)
     }
     
-    func hasNoPendingChange(for field: String) -> Bool
+    public func hasPendingChange(for fields: String...) -> Bool
     {
-        !changedValues.hasChange(for: field)
+        for field in fields {
+            if changedValues.hasChange(for: field) {
+                return true
+            }
+        }
+        return false
+    }
+
+    public func hasNoPendingChange(for fields: String...) -> Bool
+    {
+        for field in fields {
+            if changedValues.hasChange(for: field) {
+                return false
+            }
+        }
+        return true
     }
     
     private func collectForSaving(transactionId: UUID) throws -> ChangedObject?
