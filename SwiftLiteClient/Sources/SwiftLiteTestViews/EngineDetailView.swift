@@ -11,6 +11,13 @@ struct EngineDetailView: View
         Form {
             TextField("Name", text: $engine.name)
             
+            Picker("Cylinders", selection: $engine.cylinders) {
+                ForEach(Engine.CylinderCount.allCases) { count in
+                    Text(String(count.rawValue))
+                        .tag(count)
+                }
+            }
+
             Section("Cars with this engine") {
                 List(engine.cars) { car in
                     NavigationLink(destination: CarDetailView.loading(car: car)) {
