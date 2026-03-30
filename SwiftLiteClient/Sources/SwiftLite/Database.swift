@@ -52,7 +52,8 @@ public actor Database: Observable
     internal var pendingSchemaChanges: [SyncClient.SchemaChange] = []
     
     public let isFirstOpening: Bool
-
+    public nonisolated let hasSync: Bool
+    
     public init(storage: StorageType, sync: SyncType = .disabled, cacheSizeLimit: CacheSize? = nil) async throws
     {
         var flags = [SQLITE_OPEN_READWRITE, SQLITE_OPEN_CREATE, SQLITE_OPEN_FULLMUTEX]
@@ -78,9 +79,10 @@ public actor Database: Observable
         
         switch sync {
         case .disabled:
-            break
+            hasSync = false
         case .enabled(let syncConnector):
             self.syncClient = try await SyncClient(connector: syncConnector, databaseStorage: storage)
+            hasSync = true
         }
         
         let databaseFilePath = databaseFileUrl?.filePath

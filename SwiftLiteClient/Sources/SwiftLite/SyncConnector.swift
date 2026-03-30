@@ -26,6 +26,13 @@ public nonisolated enum SyncConnectorStatus: Equatable, Sendable {
     case connected
     case transferring
     case error
+    
+    public var isConnected: Bool {
+        return switch self {
+        case .connected, .transferring: true
+        default: false
+        }
+    }
 }
 
 public nonisolated struct SyncConnectorError
@@ -36,7 +43,7 @@ public nonisolated struct SyncConnectorError
 
 public extension SyncConnector
 {
-    var isReady: Bool {
+    public var isReady: Bool {
         switch status {
         case .connected:
             return true

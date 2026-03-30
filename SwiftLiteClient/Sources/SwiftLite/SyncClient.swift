@@ -47,6 +47,10 @@ public actor SyncClient
     
     public nonisolated struct Status: Sendable
     {
+        var isFullySynchronized: Bool {
+            pendingLocalChanges == 0 && pendingRemoteChanges == 0
+        }
+        
         public let connectorStatus: SyncConnectorStatus
         public let currentSyncProgress: Progress?
         public let pendingLocalChanges: Int64

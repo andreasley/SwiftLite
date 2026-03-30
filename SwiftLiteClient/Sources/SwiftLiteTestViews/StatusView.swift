@@ -56,5 +56,10 @@ public struct StatusView: View
         }
         .frame(maxWidth: 400, alignment: .leading)
         .padding(20)
+        .task {
+            for await newStatus in await db.statusUpdates.stream() {
+                status = newStatus
+            }
+        }
     }
 }
