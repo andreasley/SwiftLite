@@ -33,3 +33,10 @@ public nonisolated struct RelatedCollection<Element>: RandomAccessCollection whe
         onRemove?(element)
     }
 }
+
+extension RelatedCollection: Equatable
+{
+    public static func == (lhs: RelatedCollection<Element>, rhs: RelatedCollection<Element>) -> Bool {
+        lhs.items == rhs.items
+    }
+}
