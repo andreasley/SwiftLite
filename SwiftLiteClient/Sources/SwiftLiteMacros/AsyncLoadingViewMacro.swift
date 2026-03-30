@@ -349,7 +349,14 @@ public struct AsyncLoadingViewMacro: MemberMacro, ExtensionMacro
             """
         )
         
-        return [extensionDecl]
+        // Create extension for AsyncLoadingView conformance
+        let conformanceExtension = try ExtensionDeclSyntax(
+            """
+            extension \(raw: viewName): AsyncLoadingView {}
+            """
+        )
+        
+        return [extensionDecl, conformanceExtension]
     }
     
     // MARK: - MemberMacro Implementation

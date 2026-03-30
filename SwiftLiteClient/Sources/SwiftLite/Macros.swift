@@ -55,6 +55,7 @@ public macro InverseRelatedMany<T, U>(_ keyPath: KeyPath<T, U>) = #externalMacro
 /// - An `ItemsContainer` class that manages loading, saving, and lifecycle of database objects
 /// - A `loading()` static method for creating the view with database object references
 /// - A `PreloadView` struct that handles the async loading and displays status
+/// - Conformance to the `AsyncLoadingView` protocol
 ///
 /// ## Usage
 ///
@@ -101,11 +102,12 @@ public macro InverseRelatedMany<T, U>(_ keyPath: KeyPath<T, U>) = #externalMacro
 /// - `ItemsContainer`: An `@Observable` class (added to the struct) conforming to `LoadableItemsContainer`
 /// - `loading()`: A static factory method (in extension) accepting `DatabaseObjectReferenceConvertible` parameters
 /// - `PreloadView`: A view (in extension) that handles loading states and lifecycle
+/// - Conformance to `AsyncLoadingView` protocol
 ///
 /// - Parameters:
 ///   - statusView: The type of view to display loading/saving/error states. Defaults to `DefaultStatusView.self`
 ///
-@attached(extension, names: arbitrary)
+@attached(extension, conformances: AsyncLoadingView, names: arbitrary)
 @attached(member, names: arbitrary)
 public macro AsyncLoadingView(statusView: Any.Type = DefaultStatusView.self) = #externalMacro(
     module: "SwiftLiteMacros",
