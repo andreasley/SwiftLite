@@ -351,7 +351,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         var relatedManyProperties: [(name: String, elementType: String, schemaType: String, onDelete: String?)] = []
         var inverseRelatedProperties: [(name: String, type: String, referencingField: String)] = []
         var inverseRelatedManyProperties: [(name: String, type: String, keyPath: String)] = []
-        var computedProperties: [(name: String, body: String)] = []
+        var computedProperties: [(name: String, type: String, body: String)] = []
         
         for member in classDecl.memberBlock.members {
             guard let varDecl = member.decl.as(VariableDeclSyntax.self),
@@ -381,7 +381,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
                     }
                     
                     if hasSnapshotCompatible {
-                        computedProperties.append((name: propertyName, body: body))
+                        computedProperties.append((name: propertyName, type: typeAnnotation, body: body))
                     }
                 }
                 continue
@@ -513,7 +513,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         let relatedMany: [(name: String, elementType: String, schemaType: String, onDelete: String?)]
         let inverseRelated: [(name: String, type: String, referencingField: String)]
         let inverseRelatedMany: [(name: String, type: String, keyPath: String)]
-        let computed: [(name: String, body: String)]
+        let computed: [(name: String, type: String, body: String)]
     }
     
     // MARK: MemberMacro
@@ -1323,7 +1323,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         var computedProps = [String]()
         for prop in propertyInfo.computed {
             computedProps.append("""
-            \(publicModifier)var \(prop.name): String {
+            \(publicModifier)var \(prop.name): \(prop.type) {
                 \(prop.body)
             }
             """)
