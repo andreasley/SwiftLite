@@ -295,6 +295,13 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         // Generate extension with Model conformance (and optionally WithModelLifecycleFunctions)
         let conformanceList = withLifecycleFunctions ? "Model, WithModelLifecycleFunctions" : "Model"
         let extensionDecl = try ExtensionDeclSyntax("nonisolated extension \(raw: className): \(raw: conformanceList)") {
+            
+            // This is rquired to prevent circular references when compiling Schemas
+            """
+            static let _tableName = "\(raw: className)"
+            
+            """
+
             try generateModelProtocolMethods(
                 className: className,
                 propertyInfo: propertyInfo,
@@ -1095,7 +1102,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         
         for prop in propertyInfo.related {
             let baseType = prop.type.replacingOccurrences(of: "?", with: "")
-            let referencedTableName = baseType == className ? "\"\(className)\"" : "\(baseType).Model.Schema.table.name"
+            let referencedTableName = baseType == className ? "\"\(className)\"" : "\(baseType).Model._tableName"
             columns.append("Columns.\(prop.name)")
             columnDefs.append("\(publicModifier)static let \(prop.name) = RequiredSchema.Column(name: \"\(prop.name)\", type: \(baseType).self, referencedTable: \(referencedTableName))")
             indexes.append(".init(name: \"idx_\(className)_\(prop.name)\", isUnique: false, columns: [Columns.\(prop.name)])")
