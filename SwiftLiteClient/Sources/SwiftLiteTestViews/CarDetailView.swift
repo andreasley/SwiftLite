@@ -38,21 +38,8 @@ struct CarDetailView: View
                 }
             }
 
-            Section {
-                List(car.passengers) { passenger in
-                    HStack {
-                        PassengerView(passenger: passenger)
-                        Spacer()
-                        Button("Delete") {
-                            car.passengers.remove(passenger)
-                        }
-                    }
-                }
-            } footer: {
-                Button("Add passenger") {
-                    car.passengers.append(Passenger(db: db, name: Date.now.description))
-                }
-            }
+            PassengersSection(passengers: car.passengers)
+            
             Section {
                 List(car.cargo) { cargo in
                     HStack {
@@ -87,6 +74,31 @@ struct CarDetailView: View
         
         var body: some View {
             TextField("Name", text: $cargo.name)
+        }
+    }
+    
+    struct PassengersSection: View
+    {
+        @Environment(Database.self) private var db
+
+        let passengers: RelatedCollection<Passenger>
+        
+        var body: some View {
+            Section {
+                List(passengers) { passenger in
+                    HStack {
+                        PassengerView(passenger: passenger)
+                        Spacer()
+                        Button("Delete") {
+                            passengers.remove(passenger)
+                        }
+                    }
+                }
+            } footer: {
+                Button("Add passenger") {
+                    passengers.append(Passenger(db: db, name: Date.now.description))
+                }
+            }
         }
     }
 
