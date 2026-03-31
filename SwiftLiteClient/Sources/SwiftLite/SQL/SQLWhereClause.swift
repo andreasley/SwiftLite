@@ -2,6 +2,12 @@ public nonisolated struct SQLWhereClause: SQLExpression
 {
     public let text: String
     public let values: [SQLValue]
+    
+    public init(text: String, values: [SQLValue])
+    {
+        self.text = text
+        self.values = values
+    }
 }
 
 public nonisolated extension SQLWhereClause
