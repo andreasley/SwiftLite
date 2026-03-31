@@ -354,6 +354,45 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         var computedProperties: [(name: String, type: String, body: String)] = []
         
         for member in classDecl.memberBlock.members {
+            // Check if it's a function with @SnapshotCompatible
+            if let funcDecl = member.decl.as(FunctionDeclSyntax.self) {
+                let hasSnapshotCompatible = funcDecl.attributes.contains { attribute in
+                    guard case let .attribute(attr) = attribute,
+                          let attrName = attr.attributeName.as(IdentifierTypeSyntax.self)?.name.text else {
+                        return false
+                    }
+                    return attrName == "SnapshotCompatible"
+                }
+                
+                if hasSnapshotCompatible {
+                    let functionName = funcDecl.name.text
+                    let returnType = funcDecl.signature.returnClause?.type.trimmedDescription ?? "Void"
+                    
+                    // Get the function signature (parameters)
+                    let parameters = funcDecl.signature.parameterClause.parameters
+                    let paramList = parameters.map { param -> String in
+                        let firstName = param.firstName.text
+                        let secondName = param.secondName?.text
+                        let paramType = param.type.trimmedDescription
+                        
+                        if let secondName = secondName {
+                            return "\(firstName) \(secondName): \(paramType)"
+                        } else {
+                            return "\(firstName): \(paramType)"
+                        }
+                    }.joined(separator: ", ")
+                    
+                    // Get function body
+                    let body = funcDecl.body?.statements.trimmedDescription ?? ""
+                    
+                    // Store as a computed property with function syntax
+                    // We'll use the full function declaration as the "body"
+                    let fullFunctionText = "func \(functionName)(\(paramList)) -> \(returnType) {\(body)}"
+                    computedProperties.append((name: functionName, type: returnType, body: fullFunctionText))
+                }
+                continue
+            }
+            
             guard let varDecl = member.decl.as(VariableDeclSyntax.self),
                   let binding = varDecl.bindings.first,
                   let identifier = binding.pattern.as(IdentifierPatternSyntax.self) else {
@@ -1322,11 +1361,18 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         
         var computedProps = [String]()
         for prop in propertyInfo.computed {
-            computedProps.append("""
-            \(publicModifier)var \(prop.name): \(prop.type) {
-                \(prop.body)
+            // Check if this is a function (body starts with "func")
+            if prop.body.hasPrefix("func ") {
+                // It's a function - use the full function declaration
+                computedProps.append("\(publicModifier)\(prop.body)")
+            } else {
+                // It's a computed property - wrap in var declaration
+                computedProps.append("""
+                \(publicModifier)var \(prop.name): \(prop.type) {
+                    \(prop.body)
+                }
+                """)
             }
-            """)
         }
         
         var storedProps = [
