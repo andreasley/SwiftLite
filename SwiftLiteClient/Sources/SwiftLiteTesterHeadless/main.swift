@@ -25,12 +25,6 @@ if let firstEngine = try await db.get(Engine.Snapshot.self).first {
 let car = Car(db: db, color: .red, name: "test", engine: defaultEngine)
 try await car.save()
 
-for _ in 0..<100 {
-    let car = Car(db: db, color: .blue, name: "test", engine: defaultEngine)
-    try await car.save()
-}
-
-
 try await withThrowingTaskGroup(of: Void.self) { group in
     for _ in 0..<10 {
         group.addTask {
@@ -52,5 +46,15 @@ print(carCount)
 let cars = try await db.get(Car.self)
 print(cars.count)
 
-let carWithName = try await db.find(Car.self) { $0.name == "test" }
+let carWithName = try await db.find(Car.self, where: #Predicate<Car> { $0.name == "test" })
 print("Car with name `test`", carWithName)
+
+let id1 = cars[0].id
+let id2 = cars[1].id
+let id3 = cars[2].id
+
+let ids: [UUID] = [id1, id2, id3]
+let sql =  try (#Predicate<Car> { ids.contains($0.id) }).toSQL()
+print(sql)
+let carsWithIdsIn = try await db.find(Car.self, where: #Predicate<Car> { ids.contains($0.id) })
+print("Car with ID in collection", carsWithIdsIn)

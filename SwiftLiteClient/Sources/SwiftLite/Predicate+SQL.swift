@@ -36,6 +36,57 @@ extension Predicate: SQLWhereClauseConvertible
                 }
             }
             
+            // Handle Sequence.contains() for IN clause - Check this BEFORE String.contains()
+            if typeName.contains("SequenceContains") {
+                var propertyName: String?
+                var collectionValues: [SQLValue] = []
+                
+                for child in mirror.children {
+                    // Look for the sequence/collection
+                    if child.label == "sequence" || child.label == "collection" {
+                        let valueMirror = Mirror(reflecting: child.value)
+                        
+                        // Try to extract the actual collection from Value<T>
+                        for valueChild in valueMirror.children {
+                            if valueChild.label == "value" {
+                                // The value should be a collection of SQLValueConvertible items
+                                
+                                // Try to iterate over the collection
+                                if let collection = valueChild.value as? any Sequence {
+                                    for element in collection {
+                                        if let sqlConvertible = element as? SQLValueConvertible {
+                                            collectionValues.append(sqlConvertible.convertToSQLValue())
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Look for the element being tested (the property)
+                    if child.label == "element" || child.label == "variable" {
+                        let childMirror = Mirror(reflecting: child.value)
+                        for kpChild in childMirror.children {
+                            if kpChild.label == "keyPath" {
+                                if let kp = kpChild.value as? AnyKeyPath {
+                                    let keyPathString = String(describing: kp)
+                                    let components = keyPathString.components(separatedBy: ".")
+                                    if let last = components.last {
+                                        propertyName = last
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                if let propertyName = propertyName, !collectionValues.isEmpty {
+                    let placeholders = collectionValues.map { _ in "?" }.joined(separator: ", ")
+                    parameters.append(contentsOf: collectionValues)
+                    return "\(propertyName) IN (\(placeholders))"
+                }
+            }
+            
             // Handle String.contains() - special case for LIKE
             if typeName.contains("Contains") || typeName.contains("StringContainsSubstring") {
                 var propertyName: String?
