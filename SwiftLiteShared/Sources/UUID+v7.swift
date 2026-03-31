@@ -44,3 +44,9 @@ public extension UUID
         return UUID(uuid: bytes)
     }
 }
+
+public extension UUID
+{
+    static let max = UUID(uuidString: "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF")!
+    static let zero = UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
+}

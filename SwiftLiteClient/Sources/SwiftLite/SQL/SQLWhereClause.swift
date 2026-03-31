@@ -6,6 +6,11 @@ public nonisolated struct SQLWhereClause: SQLExpression
 
 public nonisolated extension SQLWhereClause
 {
+    static let returnNoResults = SQLWhereClause(text: "0", values: [])
+}
+
+public nonisolated extension SQLWhereClause
+{
     init(joining clauses: [SQLWhereClause]) throws
     {
         self.text = clauses.map { "(\($0.text))" }.joined(separator: " AND ")
