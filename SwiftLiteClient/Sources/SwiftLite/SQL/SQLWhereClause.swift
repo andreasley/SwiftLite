@@ -8,6 +8,18 @@ public nonisolated struct SQLWhereClause: SQLExpression
         self.text = text
         self.values = values
     }
+    
+    public init(field: String, equals value: SQLValueConvertible)
+    {
+        self.text = "\(field) = ?"
+        self.values = [value.convertToSQLValue()]
+    }
+    
+    public init(field: String, in values: [SQLValueConvertible])
+    {
+        self.text = "\(field) IN (\(values.map { _ in "?" }))"
+        self.values = values.map { $0.convertToSQLValue() }
+    }
 }
 
 public nonisolated extension SQLWhereClause
