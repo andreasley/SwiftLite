@@ -337,8 +337,7 @@ public struct AsyncLoadingViewMacro: MemberMacro, ExtensionMacro
         // Create extension without ItemsContainer
         let extensionDecl = try ExtensionDeclSyntax(
             """
-            @MainActor
-            extension \(raw: viewName)
+            extension \(raw: viewName): AsyncLoadingView
             {
                 \(typealiasDecl)
                 
@@ -349,14 +348,7 @@ public struct AsyncLoadingViewMacro: MemberMacro, ExtensionMacro
             """
         )
         
-        // Create extension for AsyncLoadingView conformance
-        let conformanceExtension = try ExtensionDeclSyntax(
-            """
-            extension \(raw: viewName): AsyncLoadingView {}
-            """
-        )
-        
-        return [extensionDecl, conformanceExtension]
+        return [extensionDecl]
     }
     
     // MARK: - MemberMacro Implementation
