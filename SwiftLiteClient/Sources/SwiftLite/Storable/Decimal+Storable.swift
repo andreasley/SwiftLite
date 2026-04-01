@@ -22,4 +22,21 @@ nonisolated extension Decimal: Storable
         self = Decimal(storageValue) / divisor
     }
 }
+
+
+//nonisolated extension Decimal: Storable
+//{
+//    public typealias StorageValue = String
+//
+//    public var storageValue: StorageValue {
+//        self.description
+//    }
+//    
+//    public init(storageValue: StorageValue)
+//    {
+//        self = (try? Decimal(storageValue, format: .number)) ?? .nan
+//    }
+//}
+
+
 #endif
