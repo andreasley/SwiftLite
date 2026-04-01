@@ -292,11 +292,14 @@ public actor SyncClient
             if let newHighestRemoteIndex = await self.connector.getHighestRemoteIndex() {
                 self.setHighestRemoteIndex(newHighestRemoteIndex)
             }
-            isSyncing = false
-        }
-
-        Task {
-            await sync()
+            
+            if let pendingRemoteCount, pendingRemoteCount > 0 {
+                Task {
+                    await sync()
+                }
+            } else {
+                isSyncing = false
+            }
         }
     }
     
