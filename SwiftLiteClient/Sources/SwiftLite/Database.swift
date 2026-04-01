@@ -380,8 +380,8 @@ public actor Database: Observable
     public nonisolated(nonsending) func get<T: Fetchable>(_ type: T.Type, sortBy: SQLSortClauseConvertible? = nil) async throws -> [T]
     {
         var preset = T.Model.Schema.table.defaultSelectStatement
-        if let sortBy {
-            preset = preset.withOrderBy(sortBy.toSQL().text)
+        if let sortClause = sortBy?.toSQL() {
+            preset = preset.withOrderBy(sortClause.text)
         }
         return try await objects(type: T.self, sqlStatement: preset.sqlStatement)
     }

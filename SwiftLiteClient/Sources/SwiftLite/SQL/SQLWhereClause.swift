@@ -29,13 +29,15 @@ public nonisolated extension SQLWhereClause
 
 public nonisolated extension SQLWhereClause
 {
-    init(joining clauses: [SQLWhereClause]) throws
+    init?(joining clauses: [SQLWhereClause]) throws
     {
+        guard !clauses.isEmpty else { return nil }
+        if clauses.count == 1 { self = clauses.first!; return }
         self.text = clauses.map { "(\($0.text))" }.joined(separator: " AND ")
         self.values = clauses.flatMap(\.values)
     }
 
-    init(joining convertibles: [SQLWhereClauseConvertible]) throws
+    init?(joining convertibles: [SQLWhereClauseConvertible]) throws
     {
         let clauses = try convertibles.map { try $0.toSQL() }
         try self.init(joining: clauses)

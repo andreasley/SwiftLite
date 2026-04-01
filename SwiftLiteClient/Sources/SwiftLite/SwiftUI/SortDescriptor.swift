@@ -23,7 +23,7 @@ public struct SortDescriptor<T>: AnySortDescriptor
         self.order = order
     }
     
-    public func toSQL() -> SQLSortClause
+    public func toSQL() -> SQLSortClause?
     {
         let keyPathString = String(describing: keyPath)
         let components = keyPathString.components(separatedBy: ".")
@@ -38,7 +38,7 @@ public nonisolated protocol AnySortDescriptor: SQLSortClauseConvertible {}
 
 extension Array: SQLSortClauseConvertible where Element: AnySortDescriptor
 {
-    public func toSQL() -> SQLSortClause
+    public func toSQL() -> SQLSortClause?
     {
         SQLSortClause(joining: self)
     }
