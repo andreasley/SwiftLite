@@ -306,7 +306,7 @@ public actor SyncClient
             // TODO: publish progress information somewhere
             
             print("Fetching new entries, starting from index \(highestSyncedLocalIndex)")
-            let newEntries = await connector.getEntries(from: highestSyncedLocalIndex, limit: 100)
+            let newEntries = await connector.getEntries(from: highestSyncedLocalIndex, limit: 10_000)
 
             print("Received \(newEntries.count) entries to apply")
 
@@ -349,7 +349,7 @@ public actor SyncClient
         guard isSyncing else { return }
 
         do {
-            let entries = try await getEntriesToSend(limit: 100)
+            let entries = try await getEntriesToSend(limit: 10_000)
             print("Found \(entries.count) entries to send to sync")
             
             guard entries.count > 0 else { return }
