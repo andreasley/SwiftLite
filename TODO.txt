@@ -42,6 +42,15 @@
 Backlog
 ================================================
 
+- SyncClient doesn't offer to reset the database when the server comes back online with a different database ID (only after a restart of the client is the prompt shown)
+
+- Allow annotating functions with @BeforeSaving or @AfterSaving to have them called (as alternative to withLifecycleEvents)
+
+- Find better solution for `filter` parameter to `LiveCollection` (typesafe Predicate as alternative?)
+	- Same for the db.find and db.count
+
+- Show an error when ModelMacro is trying to add @EditableValue to a property that already has a get/set/didSet
+
 - Find a more robust solution for SortDescriptor's conversion of property name to a String
 
 - Extend Predicate
