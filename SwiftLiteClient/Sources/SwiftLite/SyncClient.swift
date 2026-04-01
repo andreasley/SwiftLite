@@ -177,11 +177,13 @@ public actor SyncClient
         self.status = Status(connectorStatus: self.connectorStatus)
         self.highestSyncedLocalIndex = try persistedConfiguration.getHighestSynchronizedIndex()
         self.pendingLocalCount = try getPendingLocalCount()
-        self.highestRemoteIndex = await connector.getHighestRemoteIndex()
-        
+
         try await connector.connect(databaseId: databaseId)
         updateStatus()
 
+        // wait with this until the connector os connected
+        self.highestRemoteIndex = await connector.getHighestRemoteIndex()
+        
         print("📝 Database syncClient initialized; storage:", databaseFileUrl?.path ?? "in memory")
         print("Starting log from index \(self.highestSyncedLocalIndex)")
         print("Number of unsynchronized log entries: \(self.pendingLocalCount)")
