@@ -110,6 +110,8 @@ public actor SyncClient
 
     private(set) weak var database: Database!
     
+    private let gate = TransactionGate()
+    
     public init(connector: SyncConnector, databaseStorage: Database.StorageType) async throws
     {
         var flags = [SQLITE_OPEN_READWRITE, SQLITE_OPEN_CREATE, SQLITE_OPEN_FULLMUTEX]
@@ -242,45 +244,45 @@ public actor SyncClient
     
     public func sync(force: Bool = false) async
     {
-        guard !isSyncing else { return }
-        isSyncing = true
-        defer { isSyncing = false }
+        await gate.run {
+            isSyncing = true
+            // repeatedly sync small batches to not block the insertion of new log entries
+            
+            let totalCount = self.pendingLocalCount + (self.pendingRemoteCount ?? 0)
+            let progress = Progress(totalUnitCount: totalCount)
+            self.currentSyncProgress = progress
+            defer { self.currentSyncProgress = nil }
+            
+            guard totalCount > 0 || force else { return }
+            
+            while (self.pendingRemoteCount ?? 0) > 0 {
+                guard await connector.isReady else {
+                    retrySyncLater()
+                    return
+                }
+                guard !isClosed else { return }
+                await fetchAndUpdate()
+                let remainingCount = self.pendingLocalCount + (self.pendingRemoteCount ?? 0)
+                progress.completedUnitCount = Int64(totalCount - remainingCount)
+            }
+            
+            while pendingLocalCount > 0 {
+                guard await connector.isReady else {
+                    retrySyncLater()
+                    return
+                }
+                guard !isClosed else { return }
+                await sendUnsynchronized()
+                let remainingCount = self.pendingLocalCount + (self.pendingRemoteCount ?? 0)
+                progress.completedUnitCount = Int64(totalCount - remainingCount)
+            }
+            
+            if let newHighestRemoteIndex = await self.connector.getHighestRemoteIndex() {
+                self.setHighestRemoteIndex(newHighestRemoteIndex)
+            }
+            isSyncing = false
+        }
 
-        // repeatedly sync small batches to not block the insertion of new log entries
-        
-        let totalCount = self.pendingLocalCount + (self.pendingRemoteCount ?? 0)
-        let progress = Progress(totalUnitCount: totalCount)
-        self.currentSyncProgress = progress
-        defer { self.currentSyncProgress = nil }
-        
-        guard totalCount > 0 || force else { return }
-        
-        while (self.pendingRemoteCount ?? 0) > 0 {
-            guard await connector.isReady else {
-                retrySyncLater()
-                return
-            }
-            guard !isClosed else { return }
-            await fetchAndUpdate()
-            let remainingCount = self.pendingLocalCount + (self.pendingRemoteCount ?? 0)
-            progress.completedUnitCount = Int64(totalCount - remainingCount)
-        }
-        
-        while pendingLocalCount > 0 {
-            guard await connector.isReady else {
-                retrySyncLater()
-                return
-            }
-            guard !isClosed else { return }
-            await sendUnsynchronized()
-            let remainingCount = self.pendingLocalCount + (self.pendingRemoteCount ?? 0)
-            progress.completedUnitCount = Int64(totalCount - remainingCount)
-        }
-        
-        if let newHighestRemoteIndex = await self.connector.getHighestRemoteIndex() {
-            self.setHighestRemoteIndex(newHighestRemoteIndex)
-        }
-        
         Task {
             await sync()
         }
