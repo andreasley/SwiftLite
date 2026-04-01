@@ -6,15 +6,26 @@ import Synchronization
 // Needs to be `Observable` to be used in SwiftUI's `Environment()`
 public actor Database: Observable
 {
-    nonisolated public struct Status: Sendable
+    nonisolated public struct Status: Sendable, Equatable
     {
         public let localStatus: LocalDatabaseStatus
         public let syncStatus: SyncClient.Status
     }
     
-    public enum LocalDatabaseStatus: Sendable {
+    public enum LocalDatabaseStatus: Sendable, Equatable {
         case ok
         case fatalError(Swift.Error)
+        
+        public static func == (lhs: LocalDatabaseStatus, rhs: LocalDatabaseStatus) -> Bool {
+            switch (lhs, rhs) {
+            case (.ok, .ok):
+                return true
+            case (.fatalError(let lhsError), .fatalError(let rhsError)):
+                return lhsError.localizedDescription == rhsError.localizedDescription
+            default:
+                return false
+            }
+        }
     }
 
     public enum StorageType: Sendable, Hashable {

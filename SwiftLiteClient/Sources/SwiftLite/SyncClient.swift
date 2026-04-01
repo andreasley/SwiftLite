@@ -45,7 +45,7 @@ public actor SyncClient
         }
     }
     
-    public nonisolated struct Status: Sendable
+    public nonisolated struct Status: Sendable, Equatable
     {
         var isFullySynchronized: Bool {
             pendingLocalChanges == 0 && pendingRemoteChanges == 0
@@ -73,6 +73,18 @@ public actor SyncClient
             self.pendingRemoteChanges = pendingRemoteChanges
             self.highestSyncedLocalIndex = highestSyncedLocalIndex
             self.fatalError = fatalError
+        }
+        
+        public static func == (lhs: Status, rhs: Status) -> Bool {
+            // Compare all equatable properties
+            // Note: Progress and Error cannot be compared directly, so we compare what we can
+            lhs.connectorStatus == rhs.connectorStatus &&
+            lhs.pendingLocalChanges == rhs.pendingLocalChanges &&
+            lhs.pendingRemoteChanges == rhs.pendingRemoteChanges &&
+            lhs.highestSyncedLocalIndex == rhs.highestSyncedLocalIndex &&
+            lhs.currentSyncProgress?.totalUnitCount == rhs.currentSyncProgress?.totalUnitCount &&
+            lhs.currentSyncProgress?.completedUnitCount == rhs.currentSyncProgress?.completedUnitCount &&
+            lhs.fatalError?.localizedDescription == rhs.fatalError?.localizedDescription
         }
     }
     
