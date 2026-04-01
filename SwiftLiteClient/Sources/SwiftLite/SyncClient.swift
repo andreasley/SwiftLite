@@ -232,6 +232,10 @@ public actor SyncClient
                 await sync()
             }
         }
+
+        Task {
+            await self.sync()
+        }
     }
     
     public func sync(force: Bool = false) async
