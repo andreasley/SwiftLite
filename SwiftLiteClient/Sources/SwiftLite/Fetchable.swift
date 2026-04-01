@@ -10,7 +10,7 @@ public nonisolated protocol Fetchable: Hashable, Identifiable, InitializableFrom
     var _metadata: Metadata { get }
 }
 
-public nonisolated extension Fetchable
+public nonisolated extension ModelSnapshot
 {
     static func == (lhs: Self, rhs: Self) -> Bool
     {
@@ -22,6 +22,19 @@ public nonisolated extension Fetchable
     {
         hasher.combine(id)
         hasher.combine(_metadata.lastRead)
+    }
+}
+
+public nonisolated extension Model
+{
+    static func == (lhs: Self, rhs: Self) -> Bool
+    {
+        lhs.id == rhs.id
+    }
+    
+    func hash(into hasher: inout Hasher)
+    {
+        hasher.combine(id)
     }
 }
 
