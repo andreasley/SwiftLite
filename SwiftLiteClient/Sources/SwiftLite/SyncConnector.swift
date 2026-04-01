@@ -3,7 +3,7 @@ import Foundation
 public nonisolated protocol SyncConnector: Actor, Sendable
 {
     typealias IndexIncreaseHandler = (_ highestIndex: Int64) async -> Void
-    typealias DidComeOnlineHandler = () -> Void
+    typealias DidConnectCallback = () -> Void
 
     var status: SyncConnectorStatus { get }
     var errors: [SyncConnectorError] { get }
@@ -17,7 +17,7 @@ public nonisolated protocol SyncConnector: Actor, Sendable
     func sendEntries(entries: [LogEntry]) async -> [UUID: Int64]
     func getEntries(from index: Int64, limit: Int64) async -> [LogEntry]
     func onHighestRemoteIndexIncrease(_ callback: @escaping IndexIncreaseHandler)
-    func onDidComeBackOnline(_ callback: @escaping DidComeOnlineHandler)
+    func onDidConnectCallback(_ callback: @escaping DidConnectCallback)
 }
 
 public nonisolated enum SyncConnectorStatus: Equatable, Sendable {

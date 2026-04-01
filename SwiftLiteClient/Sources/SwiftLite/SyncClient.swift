@@ -242,7 +242,7 @@ public actor SyncClient
             await self.sync()
         }
 
-        await connector.onDidComeBackOnline { [weak self] in
+        await connector.onDidConnectCallback { [weak self] in
             guard let self else { return }
             Task {
                 await sync()

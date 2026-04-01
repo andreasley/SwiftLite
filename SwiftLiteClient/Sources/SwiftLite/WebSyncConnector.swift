@@ -6,14 +6,11 @@ import Network
 public actor WebSyncConnector: SyncConnector
 {
     private var indexIncreaseCallback: IndexIncreaseHandler?
-    private var didComeOnlineCallback: DidComeOnlineHandler?
+    private var didConnectCallback: DidConnectCallback?
 
     public private(set) var status: SyncConnectorStatus = .connecting {
         didSet {
             statusContinuation?.yield(status)
-            if (oldValue == .offline || oldValue == .connecting) && status == .connected {
-                didComeOnlineCallback?()
-            }
         }
     }
 
@@ -98,9 +95,9 @@ public actor WebSyncConnector: SyncConnector
         indexIncreaseCallback = callback
     }
 
-    public func onDidComeBackOnline(_ callback: @escaping DidComeOnlineHandler)
+    public func onDidConnectCallback(_ callback: @escaping DidConnectCallback)
     {
-        didComeOnlineCallback = callback
+        didConnectCallback = callback
     }
 
     public func connect(databaseId: UUID) async throws
@@ -119,6 +116,8 @@ public actor WebSyncConnector: SyncConnector
         
         webSocketTask = session.webSocketTask(with: syncUrl)
         webSocketTask?.resume()
+        
+        didConnectCallback?()
 
 
         do {

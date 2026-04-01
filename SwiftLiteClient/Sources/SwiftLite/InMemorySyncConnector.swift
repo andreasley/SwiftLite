@@ -83,5 +83,5 @@ public actor InMemorySyncConnector: SyncConnector
         indexIncreaseCallbacks.append(callback)
     }
     
-    public func onDidComeBackOnline(_ callback: @escaping DidComeOnlineHandler) {}
+    public func onDidConnectCallback(_ callback: @escaping DidConnectCallback) {}
 }
