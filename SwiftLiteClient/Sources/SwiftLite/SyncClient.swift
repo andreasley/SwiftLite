@@ -334,7 +334,7 @@ public actor SyncClient
                 return
             }
 
-            try await logBatch(newEntries, source: .remote)
+            try logBatch(newEntries, source: .remote)
 
             try await markOutdatedFieldUpdatesAsApplied()
 

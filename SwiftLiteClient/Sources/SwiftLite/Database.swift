@@ -180,7 +180,7 @@ public actor Database: Observable
         }
         sqlite3_close(pDest)
 
-        let didStart = tempPath.startAccessingSecurityScopedResource()
+        _ = tempPath.startAccessingSecurityScopedResource()
         defer { tempPath.stopAccessingSecurityScopedResource() }
 
         try FileManager.default.moveItem(
