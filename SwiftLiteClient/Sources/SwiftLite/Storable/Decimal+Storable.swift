@@ -7,7 +7,7 @@ nonisolated extension Decimal: Storable
 {
     public typealias StorageValue = Int64
 
-    static var decimalPlaces: Int { 4 }
+    static var decimalPlaces: Int { 3 }
     
     public var storageValue: StorageValue {
         // TODO: Throw if the value is outside of the supported range?

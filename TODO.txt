@@ -42,6 +42,8 @@
 Backlog
 ================================================
 
+- Make Storable conformance configurable, so for example a different save strategy for decimals can be set
+
 - SyncClient doesn't offer to reset the database when the server comes back online with a different database ID (only after a restart of the client is the prompt shown)
 
 - Allow annotating functions with @BeforeSaving or @AfterSaving to have them called (as alternative to withLifecycleEvents)
