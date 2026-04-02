@@ -151,6 +151,43 @@ public actor Database: Observable
             throw Error.queryFailed(sqlStatement: .init(text: statementText), status: SQLiteStatus(result), errorMessage: errmsg)
         }
     }
+    
+    public func backup(to url: URL) async throws
+    {
+        let tempPath = FileManager.default.temporaryDirectory
+            .appendingPathComponent("export.db")
+
+        print("SQLite version: \(String(cString: sqlite3_libversion()))")
+
+        // TODO: More error handling
+        var pDest: OpaquePointer?
+        let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE
+        sqlite3_open_v2(tempPath.path(percentEncoded: false), &pDest, flags, nil)
+        let backup = sqlite3_backup_init(pDest, "main", self.connectionHandle, "main")
+
+        if backup == nil {
+            print("backup_init failed: \(String(cString: sqlite3_errmsg(pDest)))")
+        } else {
+            let stepResult = sqlite3_backup_step(backup, -1)
+            let remaining = sqlite3_backup_remaining(backup)
+            let pagecount = sqlite3_backup_pagecount(backup)
+            let finishResult = sqlite3_backup_finish(backup)
+            
+            print("step result: \(stepResult)")      // expect SQLITE_DONE (101)
+            print("remaining: \(remaining)")
+            print("pagecount: \(pagecount)")
+            print("finish result: \(finishResult)")  // expect SQLITE_OK (0)
+        }
+        sqlite3_close(pDest)
+
+        let didStart = tempPath.startAccessingSecurityScopedResource()
+        defer { tempPath.stopAccessingSecurityScopedResource() }
+
+        try FileManager.default.moveItem(
+            atPath: tempPath.path(percentEncoded: false),
+            toPath: url.path(percentEncoded: false)
+        )
+    }
 
     public func register<each T: Model>(models: repeat (each T).Type) async throws
     {
