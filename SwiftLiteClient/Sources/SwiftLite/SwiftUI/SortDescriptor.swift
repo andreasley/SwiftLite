@@ -36,7 +36,7 @@ public struct SortDescriptor<T>: AnySortDescriptor
 
 public nonisolated protocol AnySortDescriptor: SQLSortClauseConvertible {}
 
-extension Array: SQLSortClauseConvertible where Element: AnySortDescriptor
+extension Array: SQLSortClauseConvertible where Element == any AnySortDescriptor
 {
     public func toSQL() -> SQLSortClause?
     {
