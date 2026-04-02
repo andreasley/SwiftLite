@@ -334,9 +334,7 @@ public actor SyncClient
                 return
             }
 
-            for entry in newEntries {
-                try log(entry, source: .remote)
-            }
+            try await logBatch(newEntries, source: .remote)
 
             try await markOutdatedFieldUpdatesAsApplied()
 
@@ -535,12 +533,12 @@ public actor SyncClient
     }
     
     /// Log multiple operations in a batch (more efficient for large changesets)
-    public func logBatch(_ entries: [LogEntry]) throws {
+    public func logBatch(_ entries: [LogEntry], source: LogEntrySource) throws {
         try execute("BEGIN")
         
         do {
             for entry in entries {
-                try log(entry, source: .local)
+                try log(entry, source: source)
             }
             try execute("COMMIT")
         } catch {
@@ -743,7 +741,7 @@ public actor SyncClient
         }
         
         // Log all entries in a single batch
-        try logBatch(entries)
+        try logBatch(entries, source: .local)
         
         self.pendingLocalCount = try getPendingLocalCount()
 
