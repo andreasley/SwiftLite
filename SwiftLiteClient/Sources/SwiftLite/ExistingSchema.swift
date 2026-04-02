@@ -54,6 +54,7 @@ public nonisolated enum ExistingSchema
         public let positionInPrimaryKey: Int32?
         public let isNullable: Bool
         public let defaultValue: String?
+        public let collation: String?
         
         public init(db: Database, row: Database.Row) throws
         {
@@ -68,10 +69,50 @@ public nonisolated enum ExistingSchema
             
             self.columnId = try row.get("cid")
             self.name = try row.get("name")
-            self.storageClass = try row.get("type")
+            
+            let typeString: String = try row.get("type")
+            
+            // Parse collation from type string (e.g., "TEXT COLLATE NOCASE")
+            let typeComponents = typeString.split(separator: " ", maxSplits: 2).map(String.init)
+            let storageClassString = typeComponents.first ?? ""
+            
+            self.storageClass = StorageClass(rawValue: storageClassString) ?? .undefined
+            self.collation = nil // not provided by PRAGMA table_info
+            
             self.isNullable = try row.get("notnull")
             self.defaultValue = try row.get("dflt_value")
             self.positionInPrimaryKey = try row.get("pk")
+        }
+
+        private init(
+            columnId: Int32,
+            name: String,
+            storageClass: StorageClass,
+            positionInPrimaryKey: Int32?,
+            isNullable: Bool,
+            defaultValue: String?,
+            collation: String?
+        ) {
+            self.columnId = columnId
+            self.name = name
+            self.storageClass = storageClass
+            self.positionInPrimaryKey = positionInPrimaryKey
+            self.isNullable = isNullable
+            self.defaultValue = defaultValue
+            self.collation = collation
+        }
+
+        func withCollation(_ collation: String?) -> Column
+        {
+            Column(
+                columnId: self.columnId,
+                name: self.name,
+                storageClass: self.storageClass,
+                positionInPrimaryKey: self.positionInPrimaryKey,
+                isNullable: self.isNullable,
+                defaultValue: self.defaultValue,
+                collation: collation
+            )
         }
     }
     

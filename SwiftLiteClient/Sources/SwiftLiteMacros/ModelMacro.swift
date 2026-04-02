@@ -1123,12 +1123,17 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         }
         
         var columns = ["Columns.id"]
-        var columnDefs = ["\(publicModifier)static let id = RequiredSchema.Column(name: \"id\", type: UUID.self)"]
+        var columnDefs = ["\(publicModifier)static let id = RequiredSchema.Column(name: \"id\", type: UUID.self, collation: \"NOCASE\")"]
         var indexes = [String]()
         
         for prop in propertyInfo.stored {
             columns.append("Columns.\(prop.name)")
-            columnDefs.append("\(publicModifier)static let \(prop.name) = RequiredSchema.Column(name: \"\(prop.name)\", type: \(prop.type).self)")
+            
+            // Check if the property type is UUID to add COLLATE NOCASE
+            let normalizedType = prop.type.replacingOccurrences(of: "?", with: "").trimmingCharacters(in: .whitespaces)
+            let collationParam = normalizedType == "UUID" ? ", collation: \"NOCASE\"" : ""
+            
+            columnDefs.append("\(publicModifier)static let \(prop.name) = RequiredSchema.Column(name: \"\(prop.name)\", type: \(prop.type).self\(collationParam))")
             
             // Add index if isIndexed is true or isUnique is true
             if prop.isIndexed {
@@ -1143,7 +1148,8 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             let baseType = prop.type.replacingOccurrences(of: "?", with: "")
             let referencedTableName = baseType == className ? "\"\(className)\"" : "\(baseType).Model._tableName"
             columns.append("Columns.\(prop.name)")
-            columnDefs.append("\(publicModifier)static let \(prop.name) = RequiredSchema.Column(name: \"\(prop.name)\", type: \(baseType).self, referencedTable: \(referencedTableName))")
+            // Foreign key columns referencing id (which is UUID) should also have COLLATE NOCASE
+            columnDefs.append("\(publicModifier)static let \(prop.name) = RequiredSchema.Column(name: \"\(prop.name)\", type: \(baseType).self, referencedTable: \(referencedTableName), collation: \"NOCASE\")")
             indexes.append(".init(name: \"idx_\(className)_\(prop.name)\", isUnique: false, columns: [Columns.\(prop.name)])")
         }
         

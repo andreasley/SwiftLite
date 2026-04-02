@@ -9,7 +9,7 @@ struct ModelListView<T: Listable>: View
     @Binding var selectedModel: (any ObjectReference)?
     @State private var selection: DatabaseObjectReference<T.Model>?
     @State private var searchText = ""
-    @LiveCollection(T.self, sortBy: [.init(\.name, order: .ascending)]) var snapshots
+    @LiveCollection(T.self, sortBy: [SortDescriptor(\T.name, order: .ascending)]) var snapshots
 
     var isCreatable: Bool {
         T.self is (any Creatable<T.Model>.Type)

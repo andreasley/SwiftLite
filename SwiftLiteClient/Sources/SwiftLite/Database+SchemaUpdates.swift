@@ -26,6 +26,15 @@ extension Database
                     print("⚠️ Column '\(requiredColumn.name)' type changed from \(existingColumn.storageClass.rawValue) to \(requiredColumn.storageClass.rawValue)")
                     columnTypeChanged = true
                 }
+                
+                // Check if collation matches
+                let requiredCollation = requiredColumn.collation?.uppercased()
+                let existingCollation = existingColumn.collation?.uppercased()
+                
+                if requiredCollation != existingCollation {
+                    print("⚠️ Column '\(requiredColumn.name)' collation changed from \(existingCollation ?? "none") to \(requiredCollation ?? "none")")
+                    columnTypeChanged = true
+                }
             } else {
                 // Column doesn't exist, needs to be added
                 columnsToAdd.append(requiredColumn)
@@ -77,17 +86,28 @@ extension Database
             // Add new columns
             for column in columnsToAdd {
                 print("➕ Adding column '\(column.name)' to table '\(table.name)'")
-                let alterStatement = "ALTER TABLE \"\(table.name)\" ADD COLUMN \"\(column.name)\" \(column.storageClass.rawValue.uppercased())"
+                
+                var columnDef = "\"\(column.name)\" \(column.storageClass.rawValue.uppercased())"
+                if let collation = column.collation {
+                    columnDef += " COLLATE \(collation.uppercased())"
+                }
+                
+                let alterStatement = "ALTER TABLE \"\(table.name)\" ADD COLUMN \(columnDef)"
                 try run(alterStatement)
                 
                 // Collect column addition for batch logging
                 if currentTransactionId != nil {
+                    var metadata: [String: any Sendable] = ["storageClass": column.storageClass.rawValue]
+                    if let collation = column.collation {
+                        metadata["collation"] = collation
+                    }
+                    
                     pendingSchemaChanges.append(
                         SyncClient.SchemaChange(
                             operationType: .columnAdded,
                             tableName: table.name,
                             columnName: column.name,
-                            metadata: ["storageClass": column.storageClass.rawValue]
+                            metadata: metadata
                         )
                     )
                 }
@@ -153,6 +173,11 @@ extension Database
             for column in table.columns {
                 var metadata: [String: any Sendable] = ["storageClass": column.storageClass.rawValue]
                 
+                // Include collation if specified
+                if let collation = column.collation {
+                    metadata["collation"] = collation
+                }
+                
                 // Include referenced table if this column has a foreign key
                 if let referencedTable = column.referencedTable {
                     metadata["referencedTable"] = referencedTable
@@ -201,7 +226,47 @@ extension Database
     
     func getColumns(tableName: String) throws -> [ExistingSchema.Column]
     {
-        try pragma("table_info(\(tableName))", expecting: ExistingSchema.Column.self)
+        // First get basic column info
+        var columns = try pragma("table_info(\(tableName))", expecting: ExistingSchema.Column.self)
+        
+        // Get the CREATE TABLE statement to extract collation info
+        let sql = SQLStatement(
+            text: "SELECT sql FROM sqlite_schema WHERE type='table' AND name=?;",
+            values: [.string(tableName)]
+        )
+        
+        let rows = try execute(sql)
+        
+        // Parse collation from CREATE TABLE statement if available
+        if let firstRow = rows.first,
+           let createTableSQL: String = try? firstRow.get("sql") {
+            columns = columns.map { column in
+                column.withCollation(extractCollation(for: column.name, from: createTableSQL))
+            }
+        }
+        
+        return columns
+    }
+    
+    /// Extract collation for a specific column from a CREATE TABLE statement
+    private func extractCollation(for columnName: String, from createTableSQL: String) -> String?
+    {
+        // Look for pattern like: "columnName" TEXT COLLATE NOCASE
+        // or: columnName TEXT COLLATE NOCASE
+        let patterns = [
+            "\"\(columnName)\"\\s+\\w+\\s+COLLATE\\s+(\\w+)",  // Quoted column name
+            "\\b\(columnName)\\b\\s+\\w+\\s+COLLATE\\s+(\\w+)"  // Unquoted column name
+        ]
+        
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
+               let match = regex.firstMatch(in: createTableSQL, range: NSRange(createTableSQL.startIndex..., in: createTableSQL)),
+               let collationRange = Range(match.range(at: 1), in: createTableSQL) {
+                return String(createTableSQL[collationRange])
+            }
+        }
+        
+        return nil
     }
     
     func getIndexes(tableName: String) throws -> [ExistingSchema.Index]
@@ -236,15 +301,19 @@ extension Database
         
         for column in table.columns
         {
+            var columnDefinition = "\"\(column.name)\" \(column.storageClass.rawValue.uppercased())"
+            
+            // Add collation if specified
+            if let collation = column.collation {
+                columnDefinition += " COLLATE \(collation.uppercased())"
+            }
             
             // Check if this column has a foreign key reference
             if let referencedTable = column.referencedTable {
-                let columnDefinition = "\"\(column.name)\" \(column.storageClass.rawValue.uppercased()) REFERENCES \(referencedTable) (id)"
-                columns.append(columnDefinition)
-            } else {
-                let columnDefinition = "\"\(column.name)\" \(column.storageClass.rawValue.uppercased())"
-                columns.append(columnDefinition)
+                columnDefinition += " REFERENCES \(referencedTable) (id)"
             }
+            
+            columns.append(columnDefinition)
         }
         
         let columnDefinitions = columns.joined(separator: ",\n    ")

@@ -33,12 +33,12 @@ public nonisolated enum RelationshipModelSchemaDefaults
     
     public nonisolated struct Columns
     {
-        static let id = RequiredSchema.Column(name: "id", type: UUID.self)
+        static let id = RequiredSchema.Column(name: "id", type: UUID.self, collation: "NOCASE")
         static func parent(referencedTable: String) -> RequiredSchema.Column {
-            RequiredSchema.Column(name: "parent", type: UUID.self, referencedTable: referencedTable)
+            RequiredSchema.Column(name: "parent", type: UUID.self, referencedTable: referencedTable, collation: "NOCASE")
         }
         static func element(referencedTable: String) -> RequiredSchema.Column {
-            RequiredSchema.Column(name: "element", type: UUID.self, referencedTable: referencedTable)
+            RequiredSchema.Column(name: "element", type: UUID.self, referencedTable: referencedTable, collation: "NOCASE")
         }
     }
 }

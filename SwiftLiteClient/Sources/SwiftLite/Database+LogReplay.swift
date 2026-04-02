@@ -87,7 +87,7 @@ extension Database
                     print("📋 Replaying: Table created - \(tableName)")
                     let createTableStatement = """
                     CREATE TABLE IF NOT EXISTS "\(tableName)" (
-                        "id" TEXT,
+                        "id" TEXT COLLATE NOCASE,
                         PRIMARY KEY(id)
                     ) STRICT, WITHOUT ROWID;
                     """
@@ -100,21 +100,32 @@ extension Database
                         continue
                     }
                     
-                    // Extract storage class from metadata
+                    // Extract storage class and collation from metadata
                     var storageClass = "TEXT" // default
+                    var collation: String? = nil
+                    
                     if let metadataJSON = entry.metadata,
                        let metadataData = metadataJSON.data(using: .utf8),
-                       let metadata = try? JSONSerialization.jsonObject(with: metadataData) as? [String: Any],
-                       let storageClassValue = metadata["storageClass"] as? String {
-                        storageClass = storageClassValue.uppercased()
+                       let metadata = try? JSONSerialization.jsonObject(with: metadataData) as? [String: Any] {
+                        if let storageClassValue = metadata["storageClass"] as? String {
+                            storageClass = storageClassValue.uppercased()
+                        }
+                        if let collationValue = metadata["collation"] as? String {
+                            collation = collationValue
+                        }
                     }
                     
-                    print("📋 Replaying: Column added - \(tableName).\(columnName) (\(storageClass))")
+                    var columnDef = "\"\(columnName)\" \(storageClass)"
+                    if let collation = collation {
+                        columnDef += " COLLATE \(collation.uppercased())"
+                    }
+                    
+                    print("📋 Replaying: Column added - \(tableName).\(columnName) (\(storageClass)\(collation != nil ? " COLLATE \(collation!)" : ""))")
                     
                     // Check if column already exists
                     let existingColumns = try getColumns(tableName: tableName)
                     if !existingColumns.contains(where: { $0.name == columnName }) {
-                        let alterStatement = "ALTER TABLE \"\(tableName)\" ADD COLUMN \"\(columnName)\" \(storageClass)"
+                        let alterStatement = "ALTER TABLE \"\(tableName)\" ADD COLUMN \(columnDef)"
                         try run(alterStatement)
                     } else {
                         print("ℹ️ Column \(tableName).\(columnName) already exists, skipping")

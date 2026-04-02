@@ -23,19 +23,22 @@ public nonisolated enum RequiredSchema
         public let name: String
         public let storageClass: StorageClass
         public let referencedTable: String?
+        public let collation: String?
 
-        public init(name: String, type: any SQLValueConvertible.Type, referencedTable: String? = nil)
+        public init(name: String, type: any SQLValueConvertible.Type, referencedTable: String? = nil, collation: String? = nil)
         {
             self.name = name
             self.storageClass = StorageClass(for: type)
             self.referencedTable = referencedTable
+            self.collation = collation
         }
 
-        public init(name: String, storageClass: StorageClass, referencedTable: String? = nil)
+        public init(name: String, storageClass: StorageClass, referencedTable: String? = nil, collation: String? = nil)
         {
             self.name = name
             self.storageClass = storageClass
             self.referencedTable = referencedTable
+            self.collation = collation
         }
     }
     
