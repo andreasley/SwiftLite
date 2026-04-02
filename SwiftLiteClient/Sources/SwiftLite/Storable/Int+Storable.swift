@@ -1,7 +1,8 @@
 nonisolated extension Int: Storable
 {
     public typealias StorageValue = Int64
-    
+    public static var fallbackValue: Self? { 0 }
+
     public var storageValue: StorageValue {
         Int64(self)
     }
@@ -18,6 +19,7 @@ nonisolated extension Int: Storable
 nonisolated extension Int8: Storable
 {
     public typealias StorageValue = Int64
+    public static var fallbackValue: Self? { 0 }
 
     public var storageValue: StorageValue {
         Int64(self)
@@ -35,6 +37,7 @@ nonisolated extension Int8: Storable
 nonisolated extension Int16: Storable
 {
     public typealias StorageValue = Int64
+    public static var fallbackValue: Self? { 0 }
 
     public var storageValue: StorageValue {
         Int64(self)
@@ -52,6 +55,7 @@ nonisolated extension Int16: Storable
 nonisolated extension Int32: Storable
 {
     public typealias StorageValue = Int64
+    public static var fallbackValue: Self? { 0 }
 
     public var storageValue: StorageValue {
         Int64(self)
@@ -69,6 +73,7 @@ nonisolated extension Int32: Storable
 nonisolated extension Int64: Storable
 {
     public typealias StorageValue = Int64
+    public static var fallbackValue: Self? { 0 }
 
     public var storageValue: StorageValue {
         self
@@ -83,6 +88,7 @@ nonisolated extension Int64: Storable
 nonisolated extension UInt: Storable
 {
     public typealias StorageValue = Int64
+    public static var fallbackValue: Self? { 0 }
 
     public var storageValue: StorageValue {
         Int64(self)
@@ -100,6 +106,7 @@ nonisolated extension UInt: Storable
 nonisolated extension UInt8: Storable
 {
     public typealias StorageValue = Int64
+    public static var fallbackValue: Self? { 0 }
 
     public var storageValue: StorageValue {
         Int64(self)
@@ -117,6 +124,7 @@ nonisolated extension UInt8: Storable
 nonisolated extension UInt16: Storable
 {
     public typealias StorageValue = Int64
+    public static var fallbackValue: Self? { 0 }
 
     public var storageValue: StorageValue {
         Int64(self)
@@ -134,6 +142,7 @@ nonisolated extension UInt16: Storable
 nonisolated extension UInt32: Storable
 {
     public typealias StorageValue = Int64
+    public static var fallbackValue: Self? { 0 }
 
     public var storageValue: StorageValue {
         Int64(self)
@@ -152,6 +161,7 @@ nonisolated extension UInt32: Storable
 nonisolated extension UInt64: Storable
 {
     public typealias StorageValue = Int64
+    public static var fallbackValue: Self? { 0 }
 
     public var storageValue: StorageValue {
         // Flip the top bit to map from UInt64 to Int64
