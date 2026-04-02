@@ -12,3 +12,11 @@ extension DirectRelationReference: Equatable
         lhs.id == rhs.id
     }
 }
+
+extension DirectRelationReference
+{
+    public func resolve<Result>(as type: Result.Type, in db: Database) async throws -> Result? where Result: Fetchable, Result.Model == T.Model
+    {
+        try await db.get(type, id: id)
+    }
+}

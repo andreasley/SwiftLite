@@ -37,3 +37,12 @@ public class DeregisteringNotificationToken: AnyDeregisteringNotificationToken
 }
 
 protocol AnyDeregisteringNotificationToken: AnyObject {}
+
+@MainActor
+extension Fetchable
+{
+    public func observe(with callback: @escaping MainActorNotificationProxy.OnChangeCallback) -> DeregisteringNotificationToken
+    {
+        DeregisteringNotificationToken(db: self._metadata.db, table: Self.Model.Schema.table.name, objectId: self.id, callback: callback)
+    }
+}

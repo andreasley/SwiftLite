@@ -27,6 +27,13 @@ public nonisolated extension ObjectReference
         guard let result else { throw ObjectReferenceResolutionError.notFound }
         return result
     }
+    
+    nonisolated(nonsending) func resolve<T>(as type: T.Type = T.self) async throws -> T where T: Fetchable, T.Model == Model
+    {
+        let result = try await db.get(T.self, id: self.id)
+        guard let result else { throw ObjectReferenceResolutionError.notFound }
+        return result
+    }
 }
 
 public nonisolated extension ObjectReference
