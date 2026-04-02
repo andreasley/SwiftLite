@@ -51,7 +51,20 @@ public nonisolated extension Database
                 throw error
             }
         }
-        
+
+        public func nonOptionalValue<T>(_ value: T?, fallback: T?, error: Swift.Error = StorageConversionError.unexpectedNull) throws -> T where T: Storable
+        {
+            if let value {
+                return value
+            } else if let fallback {
+                return fallback
+            } else if let globalFallback = T.fallbackValue {
+                return globalFallback
+            } else {
+                throw error
+            }
+        }
+
         public func get<T>(_ name: String, as type: T.Type = T.self, fallback: T? = nil) throws -> T where T: Storable
         {
             let value: T? = try get(name)

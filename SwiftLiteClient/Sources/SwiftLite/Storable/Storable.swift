@@ -10,6 +10,7 @@ public enum StorageConversionError: Swift.Error {
 public nonisolated protocol Storable<StorageValue>: SQLValueConvertible
 {
     associatedtype StorageValue
+    static var fallbackValue: Self? { get }
 
     init(storageValue: StorageValue) throws
     init(sqlValue: SQLValue) throws
@@ -18,6 +19,8 @@ public nonisolated protocol Storable<StorageValue>: SQLValueConvertible
 
 public nonisolated extension Storable
 {
+    static var fallbackValue: Self? { nil }
+
     init(db: Database, sqlValue: SQLValue) async throws
     {
         try self.init(sqlValue: sqlValue)

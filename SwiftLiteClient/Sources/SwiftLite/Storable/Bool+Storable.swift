@@ -1,7 +1,9 @@
 nonisolated extension Bool: Storable
 {
     public typealias StorageValue = Int64
-    
+
+    public static var fallbackValue: Self? { false }
+
     public var storageValue: StorageValue {
         self ? 1 : 0
     }
