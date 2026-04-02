@@ -14,7 +14,13 @@ public nonisolated enum SQLStatementPreset
             
             var values: [SQLValue]?
             
-            var text = "SELECT \(columns?.joined(separator: ", ") ?? "*") FROM \(table)"
+            let columnsText = if let columns {
+                columns.map({"\"\($0)\""}).joined(separator: ", ")
+            } else {
+                "*"
+            }
+            
+            var text = "SELECT \(columnsText) FROM \(table)"
             if let conditions, conditions.count > 0 {
                 let conditionsText = conditions.map(\.text).joined(separator: " AND ")
                 values = conditions.map(\.value)
@@ -37,8 +43,15 @@ public nonisolated enum SQLStatementPreset
             self.table = table
             self.columns = columns
             
+            let columnsText = if let columns {
+                columns.map({"\"\($0)\""}).joined(separator: ", ")
+            } else {
+                "*"
+            }
+
             let values = expression.values
-            var text = "SELECT \(columns?.joined(separator: ", ") ?? "*") FROM \(table) WHERE \(expression.text)"
+            
+            var text = "SELECT \(columnsText) FROM \(table) WHERE \(expression.text)"
             
             if let orderBy, !orderBy.isEmpty {
                 text += " ORDER BY \(orderBy)"
@@ -103,7 +116,7 @@ public nonisolated enum SQLStatementPreset
             var values = [SQLValue]()
             values.append(contentsOf: updatedFields.map(\.value))
             
-            let fieldsText = updatedFields.map(\.key).joined(separator: ",")
+            let fieldsText = updatedFields.map(\.key).map({"\"\($0)\""}).joined(separator: ",")
             let valuesText = Array(repeating: "?", count: updatedFields.count).joined(separator: ",")
 
             let constraintFailureModeText = constraintFailureMode == .skip ? "OR IGNORE" : ""
@@ -127,7 +140,7 @@ public nonisolated enum SQLStatementPreset
             values.append(contentsOf: updatedFields.map(\.value))
             values.append(condition.value)
             
-            let setterText = updatedFields.map { "\($0.key) = ?" }.joined(separator: ", ")
+            let setterText = updatedFields.map { "\"\($0.key)\" = ?" }.joined(separator: ", ")
             
             let text = "UPDATE \(table) SET \(setterText) WHERE \(condition.text)"
             
