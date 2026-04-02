@@ -367,13 +367,23 @@ public actor Database: Observable
             let associatedData = try ReadAssociatedData.getCurrent()
 
             for row in rows {
-                let id: UUID = try row.get("id")
+                guard let id: UUID = try? row.get("id") else {
+                    print("🔴 Failed to initialize \(T.self): ID could not be found", row)
+                    continue
+                }
+                        
                 if let existingObject = associatedData.getCached(T.self, id: id) {
                     objects.append(existingObject)
-                } else {
+                    continue
+                }
+                
+                do {
                     let object = try await T(db: self, row: row)
                     objects.append(object)
                     associatedData.addCached(T.self, id: id, object: object)
+                } catch {
+                    // TODO: Make `Database` configurable if this should be an error (and not return any items) instead of skipping the ones that can't be initialized
+                    print("🔴 Failed to initialize \(T.self) with ID \(id): \(error.localizedDescription)", row)
                 }
             }
 
