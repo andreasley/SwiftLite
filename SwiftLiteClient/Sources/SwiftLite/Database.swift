@@ -108,7 +108,7 @@ public actor Database: Observable
         do {
             if let cacheSizeLimit {
                 let limit = switch cacheSizeLimit {
-                case .megabytes(let value): -value * 1024
+                case .megabytes(let value): -value * 256
                 case .pages(let value): value
                 }
                 try Self.setPragma(name: "cache_size", value: String(limit), connectionHandle: pointer)
