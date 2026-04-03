@@ -7,7 +7,7 @@ public nonisolated enum SQLStatementPreset
         
         public let sqlStatement: SQLStatement
         
-        init(table: String, columns: [String]? = nil, conditions: [SQLCondition]? = nil, orderBy: String? = nil, limit: Int? = nil)
+        init(table: String, columns: [String]? = nil, conditions: (any SQLExpression)? = nil, orderBy: String? = nil, limit: Int? = nil)
         {
             self.table = table
             self.columns = columns
@@ -21,10 +21,9 @@ public nonisolated enum SQLStatementPreset
             }
             
             var text = "SELECT \(columnsText) FROM \(table)"
-            if let conditions, conditions.count > 0 {
-                let conditionsText = conditions.map(\.text).joined(separator: " AND ")
-                values = conditions.map(\.value)
-                text += " WHERE \(conditionsText)"
+            if let conditions {
+                values = conditions.values
+                text += " WHERE \(conditions.text)"
             }
             
             if let orderBy, !orderBy.isEmpty {
@@ -69,7 +68,7 @@ public nonisolated enum SQLStatementPreset
             .init(table: table, columns: columns, conditions: expression, orderBy: orderBy, limit: limit)
         }
 
-        func withCondition(_ condition: SQLCondition, orderBy: String? = nil, limit: Int? = nil) -> Self
+        func withCondition(_ condition: any SQLExpression, orderBy: String? = nil, limit: Int? = nil) -> Self
         {
             .init(table: table, columns: columns, conditions: condition, orderBy: orderBy, limit: limit)
         }
@@ -86,13 +85,12 @@ public nonisolated enum SQLStatementPreset
         
         public let sqlStatement: SQLStatement
         
-        init(table: String, conditions: [SQLCondition])
+        init(table: String, conditions: any SQLExpression)
         {
             self.table = table
             
-            let conditionsText = conditions.map(\.text).joined(separator: " AND ")
-            let values = conditions.map(\.value)
-            let text = "DELETE FROM \(table) WHERE \(conditionsText)"
+            let values = conditions.values
+            let text = "DELETE FROM \(table) WHERE \(conditions.text)"
 
             self.sqlStatement = SQLStatement(text: text, values: values)
         }
@@ -132,13 +130,13 @@ public nonisolated enum SQLStatementPreset
         
         public let sqlStatement: SQLStatement
         
-        init(table: String, updatedFields: [String: SQLValue], condition: SQLCondition)
+        init(table: String, updatedFields: [String: SQLValue], condition: any SQLExpression)
         {
             self.table = table
             
             var values = [SQLValue]()
             values.append(contentsOf: updatedFields.map(\.value))
-            values.append(condition.value)
+            values.append(contentsOf: condition.values)
             
             let setterText = updatedFields.map { "\"\($0.key)\" = ?" }.joined(separator: ", ")
             

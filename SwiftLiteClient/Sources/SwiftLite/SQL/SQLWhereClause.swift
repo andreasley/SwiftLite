@@ -17,7 +17,7 @@ public nonisolated struct SQLWhereClause: SQLExpression
     
     public init(field: String, in values: [SQLValueConvertible])
     {
-        self.text = "\(field) IN (\(values.map { _ in "?" }))"
+        self.text = "\(field) IN (\(values.map { _ in "?" }.joined(separator: ", ")))"
         self.values = values.map { $0.convertToSQLValue() }
     }
 }

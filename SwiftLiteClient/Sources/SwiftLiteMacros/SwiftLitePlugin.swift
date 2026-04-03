@@ -11,6 +11,7 @@ struct SwiftLitePlugin: CompilerPlugin {
         FileMacro.self,
         TransientMacro.self,
         SnapshotCompatibleMacro.self,
+        SnapshotPrefetchedMacro.self,
         EditableValueMacro.self,
         InverseRelatedMacro.self,
         InverseRelatedManyMacro.self,

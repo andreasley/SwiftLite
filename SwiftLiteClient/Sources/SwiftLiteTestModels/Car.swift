@@ -66,6 +66,7 @@ import Foundation
     @RelatedMany(Passenger.self, onDelete: .cascade)
     public var passengers: RelatedCollection<Passenger>
 
+    @SnapshotPrefetched
     @RelatedMany(Cargo.self, onDelete: .cascade)
     public var cargo: RelatedCollection<Cargo>
 

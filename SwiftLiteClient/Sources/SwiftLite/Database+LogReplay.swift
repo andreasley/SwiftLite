@@ -232,7 +232,7 @@ extension Database
                     print("📋 Replaying: Row deleted - \(tableName)[\(objectId)]")
                     let deleteStatement = SQLStatementPreset.Delete(
                         table: tableName,
-                        conditions: [SQLCondition(field: "id", value: .string(objectId.uuidString))]
+                        conditions: .byId(objectId)
                     )
                     try execute(deleteStatement.sqlStatement)
                     
@@ -289,7 +289,7 @@ extension Database
                         let updateStatement = SQLStatementPreset.Update(
                             table: tableName,
                             updatedFields: fields,
-                            condition: SQLCondition(field: "id", value: .string(objectId.uuidString))
+                            condition: .byId(objectId)
                         )
                         try execute(updateStatement.sqlStatement)
                         

@@ -32,6 +32,9 @@ public macro File() = #externalMacro(module: "SwiftLiteMacros", type: "FileMacro
 @attached(peer)
 public macro SnapshotCompatible() = #externalMacro(module: "SwiftLiteMacros", type: "SnapshotCompatibleMacro")
 
+@attached(peer)
+public macro SnapshotPrefetched() = #externalMacro(module: "SwiftLiteMacros", type: "SnapshotPrefetchedMacro")
+
 
 @attached(accessor, names: named(get), named(set))
 public macro EditableValue() = #externalMacro(module: "SwiftLiteMacros", type: "EditableValueMacro")

@@ -6,20 +6,25 @@ public nonisolated protocol SQLExpression: Hashable, Equatable, Sendable
     var values: [SQLValue] { get }
 }
 
-public nonisolated extension SQLExpression
+public nonisolated extension SQLExpression where Self == SQLWhereClause
 {
-    static func byId(_ id: UUID) -> SQLCondition
+    static func byId(_ id: UUID) -> SQLWhereClause
     {
-        .init(field: "id", value: .string(id.storageValue))
+        SQLWhereClause(field: "id", equals: id)
     }
 
-    static func byParent(_ id: UUID) -> SQLCondition
+    static func byId(in ids: [UUID]) -> SQLWhereClause
     {
-        .init(field: "parent", value: .string(id.storageValue))
+        SQLWhereClause(field: "id", in: ids)
     }
 
-    static func byElement(_ id: UUID) -> SQLCondition
+    static func byParent(_ id: UUID) -> SQLWhereClause
     {
-        .init(field: "element", value: .string(id.storageValue))
+        SQLWhereClause(field: "parent", equals: id)
+    }
+
+    static func byElement(_ id: UUID) -> SQLWhereClause
+    {
+        SQLWhereClause(field: "element", equals: id)
     }
 }

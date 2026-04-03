@@ -36,7 +36,7 @@ public nonisolated class Inverse<ReferencingModel: ModelSnapshot, ReferencedMode
 
     public static nonisolated func fetchItems(db: Database, referencingField: String, objectId: UUID) async throws -> [ReferencingModel]
     {
-        try await db.find(ReferencingModel.self, condition: .init(field: referencingField, value: .string(objectId.storageValue)))
+        try await db.find(ReferencingModel.self, condition: SQLWhereClause(field: referencingField, equals: objectId))
     }
 
     public var _hasPendingChanges: Bool {

@@ -127,5 +127,24 @@ public nonisolated extension Database
         {
             try await InverseManyToMany(keyPath: keyPath, db: db, elementId: elementId)
         }
+        
+        // MARK: Related collection (many to many) in Snapshot
+        
+        public func get<Schema: RelationshipModelSchema>(schema: Schema.Type = Schema.self, parentId: UUID) async throws -> [Schema.Element.Snapshot]
+        {
+            let junctionTableName = ManyToMany<Schema>.JunctionModel.Schema.table.name
+            let preset = SQLStatementPreset.Select(table: junctionTableName, columns: ["element"], conditions: .byParent(parentId))
+            let result = try await db.execute(preset.sqlStatement)
+            
+            var ids = [UUID]()
+            for row in result {
+                let id: UUID = try row.get("element")
+                ids.append(id)
+            }
+            
+            guard ids.count > 0 else { return [] }
+            
+            return try await db.find(Schema.Element.Snapshot.self, condition: .byId(in: ids))
+        }
     }
 }

@@ -412,7 +412,7 @@ public actor Database: Observable
         return try await objects(type: T.self, sqlStatement: preset.sqlStatement)
     }
 
-    public nonisolated(nonsending) func find<T: Fetchable>(_ type: T.Type, condition: SQLCondition) async throws -> [T]
+    public nonisolated(nonsending) func find<T: Fetchable>(_ type: T.Type, condition: any SQLExpression) async throws -> [T]
     {
         let preset = T.Model.Schema.table.defaultSelectStatement.withConditions(condition)
         return try await objects(type: T.self, sqlStatement: preset.sqlStatement)
@@ -514,7 +514,7 @@ public actor Database: Observable
                 try self.setPragma(name: "defer_foreign_keys", value: "ON") // to wait with enforcement until `COMMIT`
 
                 for object in changeset.changes {
-                    let byObjectId = SQLCondition(field: "id", value: object.objectId.convertToSQLValue())
+                    let byObjectId = SQLWhereClause.byId(object.objectId)
                     
                     switch object.status {
                     case .created:
@@ -522,7 +522,7 @@ public actor Database: Observable
                         let preset = SQLStatementPreset.Insert(table: object.table, updatedFields: updatedFields)
                         try self.execute(preset.sqlStatement)
                     case .deleted:
-                        let preset = SQLStatementPreset.Delete(table: object.table, conditions: [byObjectId])
+                        let preset = SQLStatementPreset.Delete(table: object.table, conditions: byObjectId)
                         try self.execute(preset.sqlStatement)
                     case .updated:
                         guard let updatedFields = object.updatedFields else { continue }
