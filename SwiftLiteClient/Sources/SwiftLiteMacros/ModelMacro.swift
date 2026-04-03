@@ -1131,7 +1131,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             
             // Check if the property type is UUID to add COLLATE NOCASE
             let normalizedType = prop.type.replacingOccurrences(of: "?", with: "").trimmingCharacters(in: .whitespaces)
-            let collationParam = normalizedType == "UUID" ? ", collation: \"NOCASE\"" : ""
+            let collationParam = (normalizedType == "UUID" || normalizedType == "String") ? ", collation: \"NOCASE\"" : ""
             
             columnDefs.append("\(publicModifier)static let \(prop.name) = RequiredSchema.Column(name: \"\(prop.name)\", type: \(prop.type).self\(collationParam))")
             
