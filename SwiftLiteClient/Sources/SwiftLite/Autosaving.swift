@@ -29,6 +29,7 @@ public extension AutosavingModel
         guard !_metadata.isAutosaving else { return }
         _metadata.isAutosaving = true
         
+        // TODO: Using unsafe here can actually load to a crash. Find a better solution.
         nonisolated(unsafe) weak let unsafeSelf = self
 
         withObservationTracking {
