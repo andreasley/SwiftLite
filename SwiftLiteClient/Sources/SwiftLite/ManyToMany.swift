@@ -57,9 +57,11 @@ public nonisolated class ManyToMany<Schema: RelationshipModelSchema>: Saveable
         }
     }
 
-    public func _beginSaving(changeset: Changeset) throws
+    public nonisolated(nonsending) func _beginSaving(changeset: Changeset) async throws
     {
-        try junctions.forEach { try $0._beginSaving(changeset: changeset) }
+        for junction in junctions {
+            try await junction._beginSaving(changeset: changeset)
+        }
     }
     
     public func _endSaving(success: Bool, transactionId: UUID)
@@ -144,7 +146,7 @@ public nonisolated extension ManyToMany
         public let parent: UUID
         public let element: Element
 
-        public init(db: Database, row: Database.Row) async throws
+        public nonisolated(nonsending) init(db: Database, row: Database.Row) async throws
         {
             let id: UUID = try row.get("id")
             let parent: UUID = try row.get("parent")
@@ -173,7 +175,7 @@ public nonisolated extension ManyToMany
             self._metadata.logValueChange(field: "element", value: element)
         }
 
-        public func _update(with: ChangedObject) async throws
+        public nonisolated(nonsending) func _update(with: ChangedObject) async throws
         {
             throw ModelSavingError.updatingNotSupported
         }
@@ -187,7 +189,7 @@ public nonisolated extension ManyToMany
             }
         }
         
-        public func save() async throws
+        public nonisolated(nonsending) func save() async throws
         {
             throw ModelSavingError.directSavingNotSupported
         }
@@ -203,10 +205,10 @@ public nonisolated extension ManyToMany
             _metadata._hasPendingChanges || element._hasPendingChanges
         }
 
-        public func _beginSaving(changeset: Changeset) throws
+        public nonisolated(nonsending) func _beginSaving(changeset: Changeset) async throws
         {
-            try _metadata._beginSaving(changeset: changeset)
-            try element._beginSaving(changeset: changeset)
+            try await _metadata._beginSaving(changeset: changeset)
+            try await element._beginSaving(changeset: changeset)
         }
         
         public func _endSaving(success: Bool, transactionId: UUID)

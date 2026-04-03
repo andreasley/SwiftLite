@@ -29,7 +29,7 @@ public nonisolated extension Model
             _ = isolation // ensure this runs in the same isolation as `.withValue` was called in
             var success = false
             let changeset = Changeset()
-            try self._beginSaving(changeset: changeset)
+            try await self._beginSaving(changeset: changeset)
             defer { self._endSaving(success: success, transactionId: associatedData.transactionId) }
             if changeset.needsSaving {
                 let frozenChangeset = FrozenChangeset(changes: changeset.changes)

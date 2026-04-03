@@ -56,9 +56,11 @@ public nonisolated class InverseManyToMany<Schema: RelationshipModelSchema>: Sav
         }
     }
 
-    public func _beginSaving(changeset: Changeset) throws
+    public nonisolated(nonsending) func _beginSaving(changeset: Changeset) async throws
     {
-        try junctions.forEach { try $0._beginSaving(changeset: changeset) }
+        for junction in junctions {
+            try await junction._beginSaving(changeset: changeset)
+        }
     }
     
     public func _endSaving(success: Bool, transactionId: UUID)
@@ -172,7 +174,7 @@ public nonisolated extension InverseManyToMany
             self._metadata.logValueChange(field: "element", value: element)
         }
 
-        public func _update(with: ChangedObject) async throws
+        public nonisolated(nonsending) func _update(with: ChangedObject) async throws
         {
             throw ModelSavingError.updatingNotSupported
         }
@@ -187,7 +189,7 @@ public nonisolated extension InverseManyToMany
 //            }
         }
         
-        public func save() async throws
+        public nonisolated(nonsending) func save() async throws
         {
             throw ModelSavingError.directSavingNotSupported
         }
@@ -203,10 +205,10 @@ public nonisolated extension InverseManyToMany
             _metadata._hasPendingChanges || parent._hasPendingChanges
         }
 
-        public func _beginSaving(changeset: Changeset) throws
+        public nonisolated(nonsending) func _beginSaving(changeset: Changeset) async throws
         {
-            try _metadata._beginSaving(changeset: changeset)
-            try parent._beginSaving(changeset: changeset)
+            try await _metadata._beginSaving(changeset: changeset)
+            try await parent._beginSaving(changeset: changeset)
         }
         
         public func _endSaving(success: Bool, transactionId: UUID)

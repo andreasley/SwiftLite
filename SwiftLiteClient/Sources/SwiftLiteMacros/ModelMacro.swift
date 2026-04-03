@@ -955,40 +955,40 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         """)
         
         // _beginSaving
-        var beginSavingCalls = ["try _metadata._beginSaving(changeset: changeset)"]
+        var beginSavingCalls = ["try await _metadata._beginSaving(changeset: changeset)"]
         for prop in propertyInfo.related {
             if prop.isLet {
                 // Non-editable properties are direct properties
                 if prop.isOptional {
-                    beginSavingCalls.append("try \(prop.name)?._beginSaving(changeset: changeset)")
+                    beginSavingCalls.append("try await \(prop.name)?._beginSaving(changeset: changeset)")
                 } else {
-                    beginSavingCalls.append("try \(prop.name)._beginSaving(changeset: changeset)")
+                    beginSavingCalls.append("try await \(prop.name)._beginSaving(changeset: changeset)")
                 }
             } else {
                 // Editable properties are in _editableData
                 if prop.isOptional {
-                    beginSavingCalls.append("try _editableData.\(prop.name)?._beginSaving(changeset: changeset)")
+                    beginSavingCalls.append("try await _editableData.\(prop.name)?._beginSaving(changeset: changeset)")
                 } else {
-                    beginSavingCalls.append("try _editableData.\(prop.name)._beginSaving(changeset: changeset)")
+                    beginSavingCalls.append("try await _editableData.\(prop.name)._beginSaving(changeset: changeset)")
                 }
             }
         }
         for prop in propertyInfo.relatedMany {
-            beginSavingCalls.append("try _editableData.\(prop.name)._beginSaving(changeset: changeset)")
+            beginSavingCalls.append("try await _editableData.\(prop.name)._beginSaving(changeset: changeset)")
         }
         for prop in propertyInfo.inverseRelated {
-            beginSavingCalls.append("try _editableData.\(prop.name)._beginSaving(changeset: changeset)")
+            beginSavingCalls.append("try await _editableData.\(prop.name)._beginSaving(changeset: changeset)")
         }
         for prop in propertyInfo.inverseRelatedMany {
-            beginSavingCalls.append("try _editableData.\(prop.name)._beginSaving(changeset: changeset)")
+            beginSavingCalls.append("try await _editableData.\(prop.name)._beginSaving(changeset: changeset)")
         }
         
         let beginSavingBody = withLifecycleFunctions 
-            ? "beforeSave()\n    \(beginSavingCalls.joined(separator: "\n    "))"
+            ? "try await beforeSave()\n    \(beginSavingCalls.joined(separator: "\n    "))"
             : beginSavingCalls.joined(separator: "\n    ")
         
         methods.append("""
-        \(publicModifier)func _beginSaving(changeset: Changeset) throws
+        \(publicModifier)nonisolated(nonsending) func _beginSaving(changeset: Changeset) async throws
         {
             \(beginSavingBody)
         }

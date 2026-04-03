@@ -43,7 +43,7 @@ public nonisolated class Inverse<ReferencingModel: ModelSnapshot, ReferencedMode
         collection.items.contains { $0._hasPendingChanges }
     }
     
-    public func _beginSaving(changeset: Changeset) throws
+    public nonisolated(nonsending) func _beginSaving(changeset: Changeset) async throws
     {
     }
     

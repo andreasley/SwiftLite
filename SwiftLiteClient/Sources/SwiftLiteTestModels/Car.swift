@@ -79,8 +79,8 @@ import Foundation
         print("after init")
     }
     
-    public func beforeSave() {
-        print("before save")
+    public nonisolated(nonsending) func beforeSave() async throws {
+        print("before save; could even do async verification and throw to cancel saving")
     }
     public func afterSave() {
         print("after save")

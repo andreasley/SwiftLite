@@ -7,7 +7,7 @@ public nonisolated protocol AnyInverseManyToMany<S> where S: ModelSnapshot
     var collection: RelatedCollection<S> { get }
     var _hasPendingChanges: Bool { get }
 
-    func _beginSaving(changeset: Changeset) throws
+    nonisolated(nonsending) func _beginSaving(changeset: Changeset) async throws
     func _endSaving(success: Bool, transactionId: UUID)
 
     @MainActor func _beginAutoupdating()
