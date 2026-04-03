@@ -45,4 +45,9 @@ extension Fetchable
     {
         DeregisteringNotificationToken(db: self._metadata.db, table: Self.Model.Schema.table.name, objectId: self.id, callback: callback)
     }
+
+    public static func observe(in db: Database, with callback: @escaping MainActorNotificationProxy.OnChangeCallback) -> DeregisteringNotificationToken
+    {
+        DeregisteringNotificationToken(db: db, table: Self.Model.Schema.table.name, callback: callback)
+    }
 }
