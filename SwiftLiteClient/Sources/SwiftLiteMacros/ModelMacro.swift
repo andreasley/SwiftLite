@@ -1035,7 +1035,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         {
             let wasNew = _metadata.objectStatus == .new
             \(endSavingCalls.joined(separator: "\n    "))
-            if wasNew {
+            if wasNew, _metadata.objectStatus != .new {
                 _beginAutoupdatingIfOnMainActor()
             }
         }
