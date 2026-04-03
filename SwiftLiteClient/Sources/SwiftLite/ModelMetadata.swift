@@ -110,10 +110,12 @@ public nonisolated final class ModelMetadata: DatabaseEntityMetadata, WithTracke
     {
         guard currentWriteAssociatedData?.transactionId == transactionId else { return } // can this even happen?
         currentWriteAssociatedData = nil
-        lastSavingTransactionId = transactionId
         changedValues.didProcessChangeset(success: success, transactionId: transactionId)
-        self.objectStatus = .stored
-        self.lastWrite  = .now
+        if success {
+            self.lastSavingTransactionId = transactionId
+            self.objectStatus = .stored
+            self.lastWrite  = .now
+        }
     }
     
     public func _update(with changes: ChangedObject)
