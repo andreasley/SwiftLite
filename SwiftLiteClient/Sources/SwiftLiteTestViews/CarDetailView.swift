@@ -6,7 +6,7 @@ import SwiftLiteTestModels
 struct CarDetailView: View
 {
     @Environment(Database.self) private var db
-    @EditableObject(autosaving: true) var car: Car
+    @EditableObject(autosaving: true, delayBeforeSaving: .seconds(1)) var car: Car
     @LiveCollection(Engine.Snapshot.self) var engines
     
     var body: some View {

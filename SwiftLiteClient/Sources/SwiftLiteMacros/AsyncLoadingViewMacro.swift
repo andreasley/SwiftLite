@@ -10,6 +10,10 @@ import SwiftDiagnostics
 /// - A `loading()` static method for creating the view with references
 /// - A `PreloadView` that handles the loading lifecycle
 ///
+/// The macro extracts and forwards the following parameters from `@EditableObject` attributes:
+/// - `autosaving`: Whether to enable autosaving (default: true)
+/// - `delayBeforeSaving`: The delay before autosaving (default: .seconds(3))
+///
 /// Usage:
 /// ```swift
 /// // With default status view (DefaultStatusView)
@@ -17,6 +21,7 @@ import SwiftDiagnostics
 /// struct MyView: View {
 ///     @EditableObject(autosaving: true) var car: Car
 ///     @EditableObject(autosaving: false) var engine: Engine
+///     @EditableObject(autosaving: true, delayBeforeSaving: .seconds(5)) var wheel: Wheel
 ///     // ...
 /// }
 ///
@@ -25,6 +30,7 @@ import SwiftDiagnostics
 /// struct MyView: View {
 ///     @EditableObject(autosaving: true) var car: Car
 ///     @EditableObject(autosaving: false) var engine: Engine
+///     @EditableObject(autosaving: true, delayBeforeSaving: .seconds(5)) var wheel: Wheel
 ///     // ...
 /// }
 /// ```
@@ -63,6 +69,7 @@ public struct AsyncLoadingViewMacro: MemberMacro, ExtensionMacro
         let name: String
         let typeName: String
         let autosaving: Bool
+        let delayBeforeSaving: String?
         
         var referenceName: String {
             "__reference_\(name)"
@@ -84,14 +91,17 @@ public struct AsyncLoadingViewMacro: MemberMacro, ExtensionMacro
                 return attrSyntax.attributeName.as(IdentifierTypeSyntax.self)?.name.text == "EditableObject"
             }) else { continue }
             
-            // Extract autosaving parameter
+            // Extract autosaving and delayBeforeSaving parameters
             var autosaving = true // default
+            var delayBeforeSaving: String? = nil
             if case .attribute(let attrSyntax) = editableObjectAttr,
                let arguments = attrSyntax.arguments?.as(LabeledExprListSyntax.self) {
                 for argument in arguments {
                     if argument.label?.text == "autosaving",
                        let boolExpr = argument.expression.as(BooleanLiteralExprSyntax.self) {
                         autosaving = boolExpr.literal.text == "true"
+                    } else if argument.label?.text == "delayBeforeSaving" {
+                        delayBeforeSaving = argument.expression.trimmedDescription
                     }
                 }
             }
@@ -107,7 +117,8 @@ public struct AsyncLoadingViewMacro: MemberMacro, ExtensionMacro
             properties.append(EditableObjectProperty(
                 name: propertyName,
                 typeName: typeName,
-                autosaving: autosaving
+                autosaving: autosaving,
+                delayBeforeSaving: delayBeforeSaving
             ))
         }
         
@@ -263,7 +274,11 @@ public struct AsyncLoadingViewMacro: MemberMacro, ExtensionMacro
         }.joined(separator: ", ")
         
         let viewInitProperties = properties.map { prop in
-            "\(prop.name): .init(wrappedValue: \(prop.name), autosaving: \(prop.autosaving))"
+            var params = "wrappedValue: \(prop.name), autosaving: \(prop.autosaving)"
+            if let delay = prop.delayBeforeSaving {
+                params += ", delayBeforeSaving: \(delay)"
+            }
+            return "\(prop.name): .init(\(params))"
         }.joined(separator: ", ")
         
         let code = """

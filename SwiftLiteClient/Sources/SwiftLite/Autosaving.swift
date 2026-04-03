@@ -23,9 +23,12 @@ public protocol AutosavingModel: AnyObject, Autosaving
 public extension AutosavingModel
 {
     // TODO: Should there be a way to stop autosaving?
-    
-    func _beginAutosaving()
+
+    // To be called on the topmost object of an object hierarchy when autosaving is to be enabled for the while graph.
+    // This works by tracking changes throughout the whole graph and autosaves after the specified amount of time.
+    func _beginAutosaving(delayBeforeSaving: Duration)
     {
+        print("_beginAutosaving")
         guard !_metadata.isAutosaving else { return }
         _metadata.isAutosaving = true
         
@@ -38,20 +41,20 @@ public extension AutosavingModel
             Task { @MainActor in
                 guard let unsafeSelf else { return }
                 unsafeSelf._metadata.isAutosaving = false
-                unsafeSelf._beginAutosaving()
+                unsafeSelf._beginAutosaving(delayBeforeSaving: delayBeforeSaving)
                 if unsafeSelf._hasPendingChanges {
-                    unsafeSelf._scheduleAutosave()
+                    unsafeSelf._scheduleAutosave(delayBeforeSaving: delayBeforeSaving)
                 }
             }
         }
     }
     
-    func _scheduleAutosave()
+    func _scheduleAutosave(delayBeforeSaving: Duration)
     {
         self._metadata.autosaveTask?.cancel()
         self._metadata.autosaveTask = Task { [weak self] in
             defer { self?._metadata.autosaveTask = nil }
-            try? await Task.sleep(for: .seconds(3))
+            try? await Task.sleep(for: delayBeforeSaving)
             guard !Task.isCancelled else { return }
             try? await self?.save()
         }
