@@ -382,12 +382,29 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
                         }
                     }.joined(separator: ", ")
                     
+                    // Get function modifiers (nonisolated, nonsending, etc.)
+                    // Filter out @SnapshotCompatible and any other attributes
+                    let modifiers = funcDecl.modifiers.map { modifier in
+                        modifier.trimmedDescription
+                    }.joined(separator: " ")
+                    let modifierString = modifiers.isEmpty ? "" : modifiers + " "
+                    
+                    // Get effect specifiers (async, throws, etc.)
+                    var effectSpecifiers = [String]()
+                    if let asyncKeyword = funcDecl.signature.effectSpecifiers?.asyncSpecifier {
+                        effectSpecifiers.append(asyncKeyword.trimmedDescription)
+                    }
+                    if let throwsKeyword = funcDecl.signature.effectSpecifiers?.throwsSpecifier {
+                        effectSpecifiers.append(throwsKeyword.trimmedDescription)
+                    }
+                    let effectString = effectSpecifiers.isEmpty ? "" : " " + effectSpecifiers.joined(separator: " ")
+                    
                     // Get function body
                     let body = funcDecl.body?.statements.trimmedDescription ?? ""
                     
                     // Store as a computed property with function syntax
                     // We'll use the full function declaration as the "body"
-                    let fullFunctionText = "func \(functionName)(\(paramList)) -> \(returnType) {\(body)}"
+                    let fullFunctionText = "\(modifierString)func \(functionName)(\(paramList))\(effectString) -> \(returnType) {\(body)}"
                     computedProperties.append((name: functionName, type: returnType, body: fullFunctionText))
                 }
                 continue
@@ -1372,8 +1389,8 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         
         var computedProps = [String]()
         for prop in propertyInfo.computed {
-            // Check if this is a function (body starts with "func")
-            if prop.body.hasPrefix("func ") {
+            // Check if this is a function (body contains "func ")
+            if prop.body.contains("func ") {
                 // It's a function - use the full function declaration
                 computedProps.append("\(publicModifier)\(prop.body)")
             } else {

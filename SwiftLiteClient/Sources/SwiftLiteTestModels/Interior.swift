@@ -4,7 +4,7 @@ import Foundation
 @Model public final class Interior
 {
     @SnapshotCompatible
-    func foo() -> Int
+    nonisolated(nonsending) func foo() async throws -> Int
     {
         Int.random(in: 0..<100)
     }
