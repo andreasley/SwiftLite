@@ -8,7 +8,8 @@ struct CarDetailView: View
     @Environment(Database.self) private var db
     @EditableObject(autosaving: true, delayBeforeSaving: .seconds(1)) var car: Car
     @LiveCollection(Engine.Snapshot.self) var engines
-    
+    @LiveCollection(Cargo.Snapshot.self) var cargos
+
     var body: some View {
         Form {
             TextField("Name", text: $car.name)
@@ -41,9 +42,9 @@ struct CarDetailView: View
             PassengersSection(passengers: car.passengers)
             
             Section {
-                List(car.cargo) { cargo in
+                List(car.cargo, id: \.self) { cargo in
                     HStack {
-                        CargoView(cargo: cargo)
+                        Text(cargo.name)
                         Spacer()
                         Button("Delete") {
                             car.cargo.remove(cargo)
@@ -51,8 +52,14 @@ struct CarDetailView: View
                     }
                 }
             } footer: {
-                Button("Add cargo") {
-                    car.cargo.append(Cargo(db: db, name: "Stuff"))
+                Menu {
+                    ForEach(cargos) { cargo in
+                        Button(cargo.name) {
+                            car.cargo.append(cargo)
+                        }
+                    }
+                } label: {
+                    Text("Add cargo")
                 }
             }
         }
@@ -68,15 +75,6 @@ struct CarDetailView: View
         }
     }
 
-    struct CargoView: View
-    {
-        @State var cargo: Cargo
-        
-        var body: some View {
-            TextField("Name", text: $cargo.name)
-        }
-    }
-    
     struct PassengersSection: View
     {
         @Environment(Database.self) private var db

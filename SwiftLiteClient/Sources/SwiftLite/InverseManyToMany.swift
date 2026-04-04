@@ -8,7 +8,7 @@ public nonisolated class InverseManyToMany<Schema: RelationshipModelSchema>: Sav
     let elementId: UUID
 
     private var notificationToken: AnyDeregisteringNotificationToken?
-    public private(set) var collection: RelatedCollection<Schema.Parent.Snapshot>
+    public private(set) var collection: RelatedCollection<Schema.Parent.Model.Snapshot>
     private var junctions: [JunctionModel]
 
     public var _hasPendingChanges: Bool {
@@ -19,7 +19,7 @@ public nonisolated class InverseManyToMany<Schema: RelationshipModelSchema>: Sav
     {
         self.db = db
         self.elementId = elementId
-        self.collection = RelatedCollection<Schema.Parent.Snapshot>()
+        self.collection = RelatedCollection<Schema.Parent.Model.Snapshot>()
         self.junctions = []
 
         setUpCollectionChangeHandlers()
@@ -142,13 +142,13 @@ public nonisolated extension InverseManyToMany
         public var _metadata: ModelMetadata
         
         public let id: UUID
-        public let parent: Parent.Snapshot
+        public let parent: Parent.Model.Snapshot
         public let element: UUID
 
         public init(db: Database, row: Database.Row) async throws
         {
             let id: UUID = try row.get("id")
-            let parent: Parent.Snapshot = try await row.get("parent")
+            let parent: Parent.Model.Snapshot = try await row.get("parent")
             let element: UUID = try row.get("element")
             
             self._metadata = ModelMetadata(db: db, table: Schema.table.name, id: id, isNew: false)
@@ -158,7 +158,7 @@ public nonisolated extension InverseManyToMany
             self.element = element
         }
         
-        public init(db: Database, parent: Parent.Snapshot, element: UUID)
+        public init(db: Database, parent: Parent.Model.Snapshot, element: UUID)
         {
             let id = UUID.v7()
             

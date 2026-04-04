@@ -184,8 +184,8 @@ public nonisolated extension ManyToMany
         {
             _metadata._cascadeDeletion()
             
-            if Schema.deletionPolicy == .cascade {
-                element._cascadeDeletion()
+            if Schema.deletionPolicy == .cascade, let model = element as? Model {
+                model._cascadeDeletion()
             }
         }
         
@@ -198,7 +198,9 @@ public nonisolated extension ManyToMany
         public func _beginAutoupdating()
         {
             // calling _beginAutoupdating on _metadata is not required, because the junctions can't change and the respective collection will remove them when deleted
-            element._beginAutoupdating()
+            if let autoupdatable = element as? AutoupdatingModel {
+                autoupdatable._beginAutoupdating()
+            }
         }
 
         public var _hasPendingChanges: Bool {

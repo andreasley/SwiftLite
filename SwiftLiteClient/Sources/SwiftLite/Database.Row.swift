@@ -130,7 +130,7 @@ public nonisolated extension Database
         
         // MARK: Related collection (many to many) in Snapshot
         
-        public func get<Schema: RelationshipModelSchema>(schema: Schema.Type = Schema.self, parentId: UUID) async throws -> [Schema.Element.Snapshot]
+        public func get<T, Schema: RelationshipModelSchema>(schema: Schema.Type = Schema.self, parentId: UUID) async throws -> [T] where T: Fetchable, T.Model == Schema.Element.Model
         {
             let junctionTableName = ManyToMany<Schema>.JunctionModel.Schema.table.name
             let preset = SQLStatementPreset.Select(table: junctionTableName, columns: ["element"], conditions: .byParent(parentId))
@@ -144,7 +144,7 @@ public nonisolated extension Database
             
             guard ids.count > 0 else { return [] }
             
-            return try await db.find(Schema.Element.Snapshot.self, condition: .byId(in: ids))
+            return try await db.find(T.self, condition: .byId(in: ids))
         }
     }
 }

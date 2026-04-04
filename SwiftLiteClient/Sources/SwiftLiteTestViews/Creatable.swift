@@ -25,3 +25,12 @@ extension Engine.Snapshot: Creatable
         Engine(db: database)
     }
 }
+
+@MainActor
+extension Cargo.Snapshot: Creatable
+{
+    static func create(database: Database, defaultEngine: Engine.Snapshot) -> Cargo
+    {
+        Cargo(db: database)
+    }
+}

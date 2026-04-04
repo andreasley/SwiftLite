@@ -72,33 +72,7 @@ public struct RelatedManyMacro: AccessorMacro
         
         // Check if type annotation exists and matches expected
         if let typeAnnotation = binding.typeAnnotation {
-            let actualTypeName = typeAnnotation.type.trimmedDescription
-            if actualTypeName != expectedTypeName {
-                // Type annotation exists but is wrong - provide Fix-It to replace it
-                let fixIt = FixIt(
-                    message: MacroExpansionFixItMessage("Change to '\(expectedTypeName)'"),
-                    changes: [
-                        .replace(
-                            oldNode: Syntax(typeAnnotation.type),
-                            newNode: Syntax(
-                                IdentifierTypeSyntax(
-                                    name: .identifier("RelatedCollection"),
-                                    genericArgumentClause: GenericArgumentClauseSyntax {
-                                        GenericArgumentSyntax(argument: .type(TypeSyntax(IdentifierTypeSyntax(name: .identifier(relatedTypeName)))))
-                                    }
-                                )
-                            )
-                        )
-                    ]
-                )
-                
-                let diagnostic = Diagnostic(
-                    node: typeAnnotation.type,
-                    message: DiagnosticMessage.wrongTypeAnnotation,
-                    fixIt: fixIt
-                )
-                context.diagnose(diagnostic)
-            }
+            // OK
         } else {
             // Type annotation is missing - provide Fix-It to add it
             let newTypeAnnotation = TypeAnnotationSyntax(

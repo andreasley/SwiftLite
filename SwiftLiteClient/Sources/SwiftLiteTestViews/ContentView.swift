@@ -9,7 +9,8 @@ public struct ContentView: View
         case car
         case engine
         case passenger
-        
+        case cargo
+
         var id: Int { rawValue }
         
         var name: String {
@@ -17,6 +18,7 @@ public struct ContentView: View
             case .car: return "Car"
             case .engine: return "Engine"
             case .passenger: return "Passenger"
+            case .cargo: return "Cargo"
             }
         }
     }
@@ -44,6 +46,8 @@ public struct ContentView: View
                     ModelListView<Engine.Snapshot>(selectedModel: $selectedModel)
                 case .passenger:
                     ModelListView<Passenger.Snapshot>(selectedModel: $selectedModel)
+                case .cargo:
+                    ModelListView<Cargo.Snapshot>(selectedModel: $selectedModel)
                 }
             }
         } detail: {
@@ -56,6 +60,8 @@ public struct ContentView: View
                         EngineDetailView.loading(engine: selectedEngine)
                     case let selectedPassenger as DatabaseObjectReference<Passenger>:
                         PassengerDetailView.loading(passenger: selectedPassenger)
+                    case let selectedCargo as DatabaseObjectReference<Cargo>:
+                        CargoDetailView.loading(cargo: selectedCargo)
                     default:
                         ContentUnavailableView("Not implemented", systemImage: "questionmark.square.dashed")
                     }

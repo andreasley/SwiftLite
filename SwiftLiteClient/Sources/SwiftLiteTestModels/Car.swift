@@ -68,8 +68,8 @@ import Foundation
     public var passengers: RelatedCollection<Passenger>
 
     @SnapshotPrefetched
-    @RelatedMany(Cargo.self, onDelete: .cascade)
-    public var cargo: RelatedCollection<Cargo>
+    @RelatedMany(Cargo.self)
+    public var cargo: RelatedCollection<Cargo.Snapshot>
 
     @Stored(defaultValue: names.randomElement() ?? "Unknown")
     public var name: String

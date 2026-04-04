@@ -2,8 +2,8 @@ import Foundation
 
 public nonisolated protocol RelationshipModelSchema<Parent, Element>: ModelSchema
 {
-    associatedtype Parent: SwiftLite.Model
-    associatedtype Element: SwiftLite.Model
+    associatedtype Parent: SwiftLite.Fetchable
+    associatedtype Element: SwiftLite.Fetchable
     
     typealias Columns = RelationshipModelSchemaDefaults.Columns
 
@@ -13,7 +13,7 @@ public nonisolated protocol RelationshipModelSchema<Parent, Element>: ModelSchem
 public extension RelationshipModelSchema
 {
     static var related: [any ModelSchema.Type] {
-        [Parent.Schema.self, Element.Schema.self]
+        [Parent.Model.Schema.self, Element.Model.Schema.self]
     }
 }
 

@@ -348,7 +348,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
     private static func collectPropertyInfo(from classDecl: ClassDeclSyntax) throws -> PropertyInfo {
         var storedProperties: [(name: String, type: String, isOptional: Bool, hasDefault: Bool, defaultValue: String?, fallbackValue: String?, isIndexed: Bool, isUnique: Bool, isLet: Bool)] = []
         var relatedProperties: [(name: String, type: String, isOptional: Bool, hasDefault: Bool, defaultValue: String?, fallbackValue: String?, isUnique: Bool, onDelete: String?, isLet: Bool, isSnapshotPrefetched: Bool)] = []
-        var relatedManyProperties: [(name: String, elementType: String, schemaType: String, onDelete: String?, isSnapshotPrefetched: Bool)] = []
+        var relatedManyProperties: [(name: String, elementType: String, collectionElementType: String, schemaType: String, onDelete: String?, isSnapshotPrefetched: Bool)] = []
         var inverseRelatedProperties: [(name: String, type: String, referencingField: String)] = []
         var inverseRelatedManyProperties: [(name: String, type: String, keyPath: String)] = []
         var computedProperties: [(name: String, type: String, body: String)] = []
@@ -531,7 +531,9 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
                 relatedProperties.append((name: propertyName, type: typeAnnotation, isOptional: isOptional, hasDefault: defaultValue != nil, defaultValue: defaultValue, fallbackValue: fallbackValue, isUnique: isUnique, onDelete: onDelete, isLet: isLet, isSnapshotPrefetched: isSnapshotPrefetched))
             } else if isRelatedMany, let element = elementType {
                 let schemaName = "\(propertyName.prefix(1).uppercased())\(propertyName.dropFirst())RelationSchema"
-                relatedManyProperties.append((name: propertyName, elementType: element, schemaType: schemaName, onDelete: onDelete, isSnapshotPrefetched: isSnapshotPrefetched))
+                // Extract the collection element type from the type annotation (e.g., "Cargo.Snapshot" from "RelatedCollection<Cargo.Snapshot>")
+                let collectionElementType = extractRelatedType(from: typeAnnotation)
+                relatedManyProperties.append((name: propertyName, elementType: element, collectionElementType: collectionElementType, schemaType: schemaName, onDelete: onDelete, isSnapshotPrefetched: isSnapshotPrefetched))
             } else if isInverseRelated, let field = referencingField {
                 inverseRelatedProperties.append((name: propertyName, type: typeAnnotation, referencingField: field))
             } else if isInverseRelatedMany, let kp = keyPath {
@@ -552,7 +554,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
     private struct PropertyInfo {
         let stored: [(name: String, type: String, isOptional: Bool, hasDefault: Bool, defaultValue: String?, fallbackValue: String?, isIndexed: Bool, isUnique: Bool, isLet: Bool)]
         let related: [(name: String, type: String, isOptional: Bool, hasDefault: Bool, defaultValue: String?, fallbackValue: String?, isUnique: Bool, onDelete: String?, isLet: Bool, isSnapshotPrefetched: Bool)]
-        let relatedMany: [(name: String, elementType: String, schemaType: String, onDelete: String?, isSnapshotPrefetched: Bool)]
+        let relatedMany: [(name: String, elementType: String, collectionElementType: String, schemaType: String, onDelete: String?, isSnapshotPrefetched: Bool)]
         let inverseRelated: [(name: String, type: String, referencingField: String)]
         let inverseRelatedMany: [(name: String, type: String, keyPath: String)]
         let computed: [(name: String, type: String, body: String)]
@@ -1182,7 +1184,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
     
     private static func generateRelationshipModelSchema(
         className: String,
-        property: (name: String, elementType: String, schemaType: String, onDelete: String?, isSnapshotPrefetched: Bool)
+        property: (name: String, elementType: String, collectionElementType: String, schemaType: String, onDelete: String?, isSnapshotPrefetched: Bool)
     ) throws -> DeclSyntax {
         let deletionPolicy = property.onDelete ?? ".ignore"
         let tableName = "\(className)_\(property.name)__\(property.elementType)"
@@ -1191,12 +1193,12 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         nonisolated final class \(raw: property.schemaType): RelationshipModelSchema
         {
             typealias Parent = \(raw: className)
-            typealias Element = \(raw: property.elementType)
+            typealias Element = \(raw: property.collectionElementType)
             typealias Model = ManyToMany<\(raw: property.schemaType)>.JunctionModel
 
             static let deletionPolicy: DeletionPolicy = \(raw: deletionPolicy)
             
-            static let table = RelationshipModelSchemaDefaults.getTable(name: "\(raw: tableName)", parentTable: Parent.Schema.table.name, elementTable: Element.Schema.table.name)
+            static let table = RelationshipModelSchemaDefaults.getTable(name: "\(raw: tableName)", parentTable: Parent.Model.Schema.table.name, elementTable: Element.Model.Schema.table.name)
         }
         """
     }
