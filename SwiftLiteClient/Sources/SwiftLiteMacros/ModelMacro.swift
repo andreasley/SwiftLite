@@ -347,7 +347,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
     
     private static func collectPropertyInfo(from classDecl: ClassDeclSyntax) throws -> PropertyInfo {
         var storedProperties: [(name: String, type: String, isOptional: Bool, hasDefault: Bool, defaultValue: String?, fallbackValue: String?, isIndexed: Bool, isUnique: Bool, isLet: Bool)] = []
-        var relatedProperties: [(name: String, type: String, isOptional: Bool, hasDefault: Bool, defaultValue: String?, fallbackValue: String?, isUnique: Bool, onDelete: String?, isLet: Bool)] = []
+        var relatedProperties: [(name: String, type: String, isOptional: Bool, hasDefault: Bool, defaultValue: String?, fallbackValue: String?, isUnique: Bool, onDelete: String?, isLet: Bool, isSnapshotPrefetched: Bool)] = []
         var relatedManyProperties: [(name: String, elementType: String, schemaType: String, onDelete: String?, isSnapshotPrefetched: Bool)] = []
         var inverseRelatedProperties: [(name: String, type: String, referencingField: String)] = []
         var inverseRelatedManyProperties: [(name: String, type: String, keyPath: String)] = []
@@ -528,7 +528,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             if isStored {
                 storedProperties.append((name: propertyName, type: typeAnnotation, isOptional: isOptional, hasDefault: defaultValue != nil, defaultValue: defaultValue, fallbackValue: fallbackValue, isIndexed: isIndexed, isUnique: isUnique, isLet: isLet))
             } else if isRelated {
-                relatedProperties.append((name: propertyName, type: typeAnnotation, isOptional: isOptional, hasDefault: defaultValue != nil, defaultValue: defaultValue, fallbackValue: fallbackValue, isUnique: isUnique, onDelete: onDelete, isLet: isLet))
+                relatedProperties.append((name: propertyName, type: typeAnnotation, isOptional: isOptional, hasDefault: defaultValue != nil, defaultValue: defaultValue, fallbackValue: fallbackValue, isUnique: isUnique, onDelete: onDelete, isLet: isLet, isSnapshotPrefetched: isSnapshotPrefetched))
             } else if isRelatedMany, let element = elementType {
                 let schemaName = "\(propertyName.prefix(1).uppercased())\(propertyName.dropFirst())RelationSchema"
                 relatedManyProperties.append((name: propertyName, elementType: element, schemaType: schemaName, onDelete: onDelete, isSnapshotPrefetched: isSnapshotPrefetched))
@@ -551,7 +551,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
     
     private struct PropertyInfo {
         let stored: [(name: String, type: String, isOptional: Bool, hasDefault: Bool, defaultValue: String?, fallbackValue: String?, isIndexed: Bool, isUnique: Bool, isLet: Bool)]
-        let related: [(name: String, type: String, isOptional: Bool, hasDefault: Bool, defaultValue: String?, fallbackValue: String?, isUnique: Bool, onDelete: String?, isLet: Bool)]
+        let related: [(name: String, type: String, isOptional: Bool, hasDefault: Bool, defaultValue: String?, fallbackValue: String?, isUnique: Bool, onDelete: String?, isLet: Bool, isSnapshotPrefetched: Bool)]
         let relatedMany: [(name: String, elementType: String, schemaType: String, onDelete: String?, isSnapshotPrefetched: Bool)]
         let inverseRelated: [(name: String, type: String, referencingField: String)]
         let inverseRelatedMany: [(name: String, type: String, keyPath: String)]
@@ -1403,7 +1403,17 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         
         for prop in propertyInfo.related {
             let baseType = prop.type.replacingOccurrences(of: "?", with: "").replacingOccurrences(of: ".Snapshot", with: "")
-            if prop.isOptional {
+            
+            // Handle @SnapshotPrefetched @Related properties
+            if prop.isSnapshotPrefetched {
+                if prop.isOptional {
+                    storedProps.append("\(publicModifier)let \(prop.name): \(baseType).Snapshot?")
+                    rowExtractions.append("self.\(prop.name) = try await row.get(\"\(prop.name)\")")
+                } else {
+                    storedProps.append("\(publicModifier)let \(prop.name): \(baseType).Snapshot")
+                    rowExtractions.append("self.\(prop.name) = try await row.get(\"\(prop.name)\")")
+                }
+            } else if prop.isOptional {
                 storedProps.append("")
                 storedProps.append("\(publicModifier)let _\(prop.name): DirectRelationReference<\(baseType)>?")
                 storedProps.append("\(publicModifier)var \(prop.name): \(baseType).Snapshot? {")

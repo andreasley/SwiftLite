@@ -58,6 +58,7 @@ import Foundation
     public var successorTo: Car?
 
     @Related
+    @SnapshotPrefetched
     public var engine: Engine.Snapshot
     
     @Related(onDelete: .cascade)
