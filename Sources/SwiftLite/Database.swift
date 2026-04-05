@@ -393,13 +393,13 @@ public actor Database: Observable
 
     public nonisolated(nonsending) func count<T: Fetchable>(_ type: T.Type, where filter: SQLWhereClauseConvertible? = nil) async throws -> Int
     {
-        let columnName = "COUNT(*)"
-        var preset = SQLStatementPreset.Select(table: T.Model.Schema.table.name, columns: [columnName])
+        let countColumn = "COUNT(*)"
+        var preset = SQLStatementPreset.Select(table: T.Model.Schema.table.name, columnExpression: countColumn)
         if let filter {
             preset = preset.withConditions(try filter.toSQL())
         }
         let rows = try await execute(preset.sqlStatement)
-        guard let count = try rows.first?.get(columnName, as: Int.self) else {
+        guard let count = try rows.first?.get(countColumn, as: Int.self) else {
             throw Error.failedToFindResultValue
         }
         return count

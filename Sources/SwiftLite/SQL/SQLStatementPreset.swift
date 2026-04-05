@@ -3,24 +3,49 @@ public nonisolated enum SQLStatementPreset
     public struct Select: SQLStatementProvider
     {
         let table: String
-        let columns: [String]?
+        let columnExpression: String
         
         public let sqlStatement: SQLStatement
         
-        init(table: String, columns: [String]? = nil, conditions: (any SQLExpression)? = nil, orderBy: String? = nil, limit: Int? = nil)
+        init(table: String, columnExpression: String, conditions: (any SQLExpression)? = nil, orderBy: String? = nil, limit: Int? = nil)
         {
             self.table = table
-            self.columns = columns
+            self.columnExpression = columnExpression
             
             var values: [SQLValue]?
             
-            let columnsText = if let columns {
+            var text = "SELECT \(columnExpression) FROM \(table)"
+            if let conditions {
+                values = conditions.values
+                text += " WHERE \(conditions.text)"
+            }
+            
+            if let orderBy, !orderBy.isEmpty {
+                text += " ORDER BY \(orderBy)"
+            }
+
+            if let limit {
+                text += " LIMIT \(limit)"
+            }
+
+            self.sqlStatement = SQLStatement(text: text, values: values)
+        }
+
+        init(table: String, columns: [String]? = nil, conditions: (any SQLExpression)? = nil, orderBy: String? = nil, limit: Int? = nil)
+        {
+            self.table = table
+            
+            var values: [SQLValue]?
+            
+            let columnExpression = if let columns {
                 columns.map({"\"\($0)\""}).joined(separator: ", ")
             } else {
                 "*"
             }
             
-            var text = "SELECT \(columnsText) FROM \(table)"
+            self.columnExpression = columnExpression
+            
+            var text = "SELECT \(columnExpression) FROM \(table)"
             if let conditions {
                 values = conditions.values
                 text += " WHERE \(conditions.text)"
@@ -40,17 +65,18 @@ public nonisolated enum SQLStatementPreset
         init(table: String, columns: [String]? = nil, conditions expression: any SQLExpression, orderBy: String? = nil, limit: Int? = nil)
         {
             self.table = table
-            self.columns = columns
             
-            let columnsText = if let columns {
+            let columnExpression = if let columns {
                 columns.map({"\"\($0)\""}).joined(separator: ", ")
             } else {
                 "*"
             }
+            
+            self.columnExpression = columnExpression
 
             let values = expression.values
             
-            var text = "SELECT \(columnsText) FROM \(table) WHERE \(expression.text)"
+            var text = "SELECT \(columnExpression) FROM \(table) WHERE \(expression.text)"
             
             if let orderBy, !orderBy.isEmpty {
                 text += " ORDER BY \(orderBy)"
@@ -65,17 +91,17 @@ public nonisolated enum SQLStatementPreset
         
         func withConditions(_ expression: any SQLExpression, orderBy: String? = nil, limit: Int? = nil) -> Self
         {
-            .init(table: table, columns: columns, conditions: expression, orderBy: orderBy, limit: limit)
+            .init(table: table, columnExpression: columnExpression, conditions: expression, orderBy: orderBy, limit: limit)
         }
 
         func withCondition(_ condition: any SQLExpression, orderBy: String? = nil, limit: Int? = nil) -> Self
         {
-            .init(table: table, columns: columns, conditions: condition, orderBy: orderBy, limit: limit)
+            .init(table: table, columnExpression: columnExpression, conditions: condition, orderBy: orderBy, limit: limit)
         }
         
         func withOrderBy(_ orderBy: String) -> Self
         {
-            .init(table: table, columns: columns, conditions: nil, orderBy: orderBy, limit: nil)
+            .init(table: table, columnExpression: columnExpression, conditions: nil, orderBy: orderBy, limit: nil)
         }
     }
 
