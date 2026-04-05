@@ -394,7 +394,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
                     if let asyncKeyword = funcDecl.signature.effectSpecifiers?.asyncSpecifier {
                         effectSpecifiers.append(asyncKeyword.trimmedDescription)
                     }
-                    if let throwsKeyword = funcDecl.signature.effectSpecifiers?.throwsSpecifier {
+                    if let throwsKeyword = funcDecl.signature.effectSpecifiers?.throwsClause?.throwsSpecifier {
                         effectSpecifiers.append(throwsKeyword.trimmedDescription)
                     }
                     let effectString = effectSpecifiers.isEmpty ? "" : " " + effectSpecifiers.joined(separator: " ")

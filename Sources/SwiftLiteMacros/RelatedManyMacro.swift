@@ -71,7 +71,7 @@ public struct RelatedManyMacro: AccessorMacro
         let expectedTypeName = "RelatedCollection<\(relatedTypeName)>"
         
         // Check if type annotation exists and matches expected
-        if let typeAnnotation = binding.typeAnnotation {
+        if let _ = binding.typeAnnotation {
             // OK
         } else {
             // Type annotation is missing - provide Fix-It to add it
