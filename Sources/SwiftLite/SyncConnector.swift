@@ -1,6 +1,6 @@
 import Foundation
 
-public nonisolated protocol SyncConnector: Actor, Sendable
+public protocol SyncConnector: Actor, Sendable
 {
     typealias IndexIncreaseHandler = (_ highestIndex: Int64) async -> Void
     typealias DidConnectCallback = () -> Void
@@ -8,8 +8,8 @@ public nonisolated protocol SyncConnector: Actor, Sendable
     var status: SyncConnectorStatus { get }
     var errors: [SyncConnectorError] { get }
     
-    nonisolated var statusStream: AsyncStream<SyncConnectorStatus> { get }
-    nonisolated var databaseName: String { get }
+    var statusStream: AsyncStream<SyncConnectorStatus> { get }
+    var databaseName: String { get }
 
     func getDatabaseId() async throws -> UUID?
     func connect(databaseId: UUID) async throws
