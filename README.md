@@ -1,19 +1,18 @@
 # SwiftLite
 
-SwiftLite is an ORM that provides an easy-to-use Swift API to create and access a SQLite database.
+SwiftLite is a **prototype** of an ORM that provides an easy-to-use Swift API to create and access a SQLite database.
 It leverages Swift Macros to transform the model code to a partial database schema on compile-time.
 
 ### Implemented Features
 
-- Automatic creation of tables
-- Easy to persist custom objects and datatypes 
+- Automatic creation of tables and automatic schema migration (only additive changes are allowed)
+- Easy to persist custom objects and datatypes
+- Some parts of querying by predicate
+- Field-level sync
 
 ### Pending features 
 
-- Automatic migration
-- Custom queries
 - Full Text Search
-- Custom migrations (with support for renaming tables and columns etc.)
 
 ## How to use it
 
@@ -36,7 +35,7 @@ It leverages Swift Macros to transform the model code to a partial database sche
 
 ### Non-goals
 
-- Support every function of SQLite
+- SwiftLite won't ever support every function of SQLite.
 
 ### Strategies
 
@@ -49,7 +48,7 @@ It leverages Swift Macros to transform the model code to a partial database sche
 ## Limitations
 
 - SwiftLite expects SQLite files to have a specific schema (UUID primary keys for example). Files created by other SQLite-based libraries are most likely not compatible.
-- Stored `Decimal` values are clamped to 922'337'203'685'477 and four decimal places.
-- Stored `Date` values are limited to millisecond precision.
+- `Decimal` values are stored as Int64 with 3 decimal places
+- `Date` values are stored witg millisecond precision.
 - Manually entered values in the SQLite file may be clamped if they don't match the schema (e.g. a value of `Int64.max` in an `INTEGER` column that is mapped to a property of type `Int32`).
 

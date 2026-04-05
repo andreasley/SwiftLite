@@ -1,0 +1,24 @@
+{
+  "originHash" : "56aabb059f510a56736ce0d4f2bfb4c892a937d032df0cf0aa4c805061274937",
+  "pins" : [
+    {
+      "identity" : "swift-syntax",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swiftlang/swift-syntax.git",
+      "state" : {
+        "revision" : "4799286537280063c85a32f09884cfbca301b1a1",
+        "version" : "602.0.0"
+      }
+    },
+    {
+      "identity" : "swiftlitecommon",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/andreasley/SwiftLiteCommon",
+      "state" : {
+        "branch" : "main",
+        "revision" : "8f895668150cc851124c32add3f565131b1a5e79"
+      }
+    }
+  ],
+  "version" : 3
+}
