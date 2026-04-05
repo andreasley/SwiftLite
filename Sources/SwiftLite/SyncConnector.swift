@@ -39,6 +39,12 @@ public nonisolated struct SyncConnectorError
 {
     let date: Date
     let error: Error
+    
+    public init(date: Date, error: Error)
+    {
+        self.date = date
+        self.error = error
+    }
 }
 
 public extension SyncConnector
