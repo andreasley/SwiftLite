@@ -54,6 +54,7 @@ import Foundation
     @Stored(defaultValue: [], fallbackValue: [])
     public var otherColors: [Color]
 
+    @SnapshotOmitted
     @Related
     public var successorTo: Car?
 

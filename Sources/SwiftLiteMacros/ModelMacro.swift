@@ -346,22 +346,29 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
     }
     
     private static func collectPropertyInfo(from classDecl: ClassDeclSyntax) throws -> PropertyInfo {
-        var storedProperties: [(name: String, type: String, isOptional: Bool, hasDefault: Bool, defaultValue: String?, fallbackValue: String?, isIndexed: Bool, isUnique: Bool, isLet: Bool)] = []
-        var relatedProperties: [(name: String, type: String, isOptional: Bool, hasDefault: Bool, defaultValue: String?, fallbackValue: String?, isUnique: Bool, onDelete: String?, isLet: Bool, isSnapshotPrefetched: Bool)] = []
-        var relatedManyProperties: [(name: String, elementType: String, collectionElementType: String, schemaType: String, onDelete: String?, isSnapshotPrefetched: Bool)] = []
+        var storedProperties: [(name: String, type: String, isOptional: Bool, hasDefault: Bool, defaultValue: String?, fallbackValue: String?, isIndexed: Bool, isUnique: Bool, isLet: Bool, isSnapshotOmitted: Bool)] = []
+        var relatedProperties: [(name: String, type: String, isOptional: Bool, hasDefault: Bool, defaultValue: String?, fallbackValue: String?, isUnique: Bool, onDelete: String?, isLet: Bool, isSnapshotPrefetched: Bool, isSnapshotOmitted: Bool)] = []
+        var relatedManyProperties: [(name: String, elementType: String, collectionElementType: String, schemaType: String, onDelete: String?, isSnapshotPrefetched: Bool, isSnapshotOmitted: Bool)] = []
         var inverseRelatedProperties: [(name: String, type: String, referencingField: String)] = []
         var inverseRelatedManyProperties: [(name: String, type: String, keyPath: String)] = []
-        var computedProperties: [(name: String, type: String, body: String)] = []
+        var computedProperties: [(name: String, type: String, body: String, isSnapshotOmitted: Bool)] = []
         
         for member in classDecl.memberBlock.members {
             // Check if it's a function with @SnapshotCompatible
             if let funcDecl = member.decl.as(FunctionDeclSyntax.self) {
-                let hasSnapshotCompatible = funcDecl.attributes.contains { attribute in
+                var hasSnapshotCompatible = false
+                var hasSnapshotOmitted = false
+                
+                for attribute in funcDecl.attributes {
                     guard case let .attribute(attr) = attribute,
                           let attrName = attr.attributeName.as(IdentifierTypeSyntax.self)?.name.text else {
-                        return false
+                        continue
                     }
-                    return attrName == "SnapshotCompatible"
+                    if attrName == "SnapshotCompatible" {
+                        hasSnapshotCompatible = true
+                    } else if attrName == "SnapshotOmitted" {
+                        hasSnapshotOmitted = true
+                    }
                 }
                 
                 if hasSnapshotCompatible {
@@ -405,7 +412,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
                     // Store as a computed property with function syntax
                     // We'll use the full function declaration as the "body"
                     let fullFunctionText = "\(modifierString)func \(functionName)(\(paramList))\(effectString) -> \(returnType) {\(body)}"
-                    computedProperties.append((name: functionName, type: returnType, body: fullFunctionText))
+                    computedProperties.append((name: functionName, type: returnType, body: fullFunctionText, isSnapshotOmitted: hasSnapshotOmitted))
                 }
                 continue
             }
@@ -427,17 +434,24 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
                 if let codeBlock = accessor.accessors.as(CodeBlockItemListSyntax.self) {
                     let body = codeBlock.trimmedDescription
                     
-                    // Check if it has @SnapshotCompatible attribute
-                    let hasSnapshotCompatible = varDecl.attributes.contains { attribute in
+                    var hasSnapshotCompatible = false
+                    var hasSnapshotOmitted = false
+                    
+                    // Check for both @SnapshotCompatible and @SnapshotOmitted attributes
+                    for attribute in varDecl.attributes {
                         guard case let .attribute(attr) = attribute,
                               let attrName = attr.attributeName.as(IdentifierTypeSyntax.self)?.name.text else {
-                            return false
+                            continue
                         }
-                        return attrName == "SnapshotCompatible"
+                        if attrName == "SnapshotCompatible" {
+                            hasSnapshotCompatible = true
+                        } else if attrName == "SnapshotOmitted" {
+                            hasSnapshotOmitted = true
+                        }
                     }
                     
                     if hasSnapshotCompatible {
-                        computedProperties.append((name: propertyName, type: typeAnnotation, body: body))
+                        computedProperties.append((name: propertyName, type: typeAnnotation, body: body, isSnapshotOmitted: hasSnapshotOmitted))
                     }
                 }
                 continue
@@ -450,6 +464,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             var isInverseRelated = false
             var isInverseRelatedMany = false
             var isSnapshotPrefetched = false
+            var isSnapshotOmitted = false
             var defaultValue: String? = nil
             var fallbackValue: String? = nil
             var isIndexed = false
@@ -467,6 +482,8 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
                 
                 if attrName == "SnapshotPrefetched" {
                     isSnapshotPrefetched = true
+                } else if attrName == "SnapshotOmitted" {
+                    isSnapshotOmitted = true
                 } else if attrName == "Stored" {
                     isStored = true
                     if let arguments = attr.arguments?.as(LabeledExprListSyntax.self) {
@@ -543,14 +560,14 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             let isOptional = typeAnnotation.hasSuffix("?")
 
             if isStored {
-                storedProperties.append((name: propertyName, type: typeAnnotation, isOptional: isOptional, hasDefault: defaultValue != nil, defaultValue: defaultValue, fallbackValue: fallbackValue, isIndexed: isIndexed, isUnique: isUnique, isLet: isLet))
+                storedProperties.append((name: propertyName, type: typeAnnotation, isOptional: isOptional, hasDefault: defaultValue != nil, defaultValue: defaultValue, fallbackValue: fallbackValue, isIndexed: isIndexed, isUnique: isUnique, isLet: isLet, isSnapshotOmitted: isSnapshotOmitted))
             } else if isRelated {
-                relatedProperties.append((name: propertyName, type: typeAnnotation, isOptional: isOptional, hasDefault: defaultValue != nil, defaultValue: defaultValue, fallbackValue: fallbackValue, isUnique: isUnique, onDelete: onDelete, isLet: isLet, isSnapshotPrefetched: isSnapshotPrefetched))
+                relatedProperties.append((name: propertyName, type: typeAnnotation, isOptional: isOptional, hasDefault: defaultValue != nil, defaultValue: defaultValue, fallbackValue: fallbackValue, isUnique: isUnique, onDelete: onDelete, isLet: isLet, isSnapshotPrefetched: isSnapshotPrefetched, isSnapshotOmitted: isSnapshotOmitted))
             } else if isRelatedMany, let element = elementType {
                 let schemaName = "\(propertyName.prefix(1).uppercased())\(propertyName.dropFirst())RelationSchema"
                 // Extract the collection element type from the type annotation (e.g., "Cargo.Snapshot" from "RelatedCollection<Cargo.Snapshot>")
                 let collectionElementType = extractRelatedType(from: typeAnnotation)
-                relatedManyProperties.append((name: propertyName, elementType: element, collectionElementType: collectionElementType, schemaType: schemaName, onDelete: onDelete, isSnapshotPrefetched: isSnapshotPrefetched))
+                relatedManyProperties.append((name: propertyName, elementType: element, collectionElementType: collectionElementType, schemaType: schemaName, onDelete: onDelete, isSnapshotPrefetched: isSnapshotPrefetched, isSnapshotOmitted: isSnapshotOmitted))
             } else if isInverseRelated, let field = referencingField {
                 inverseRelatedProperties.append((name: propertyName, type: typeAnnotation, referencingField: field))
             } else if isInverseRelatedMany, let kp = keyPath {
@@ -569,12 +586,12 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
     }
     
     private struct PropertyInfo {
-        let stored: [(name: String, type: String, isOptional: Bool, hasDefault: Bool, defaultValue: String?, fallbackValue: String?, isIndexed: Bool, isUnique: Bool, isLet: Bool)]
-        let related: [(name: String, type: String, isOptional: Bool, hasDefault: Bool, defaultValue: String?, fallbackValue: String?, isUnique: Bool, onDelete: String?, isLet: Bool, isSnapshotPrefetched: Bool)]
-        let relatedMany: [(name: String, elementType: String, collectionElementType: String, schemaType: String, onDelete: String?, isSnapshotPrefetched: Bool)]
+        let stored: [(name: String, type: String, isOptional: Bool, hasDefault: Bool, defaultValue: String?, fallbackValue: String?, isIndexed: Bool, isUnique: Bool, isLet: Bool, isSnapshotOmitted: Bool)]
+        let related: [(name: String, type: String, isOptional: Bool, hasDefault: Bool, defaultValue: String?, fallbackValue: String?, isUnique: Bool, onDelete: String?, isLet: Bool, isSnapshotPrefetched: Bool, isSnapshotOmitted: Bool)]
+        let relatedMany: [(name: String, elementType: String, collectionElementType: String, schemaType: String, onDelete: String?, isSnapshotPrefetched: Bool, isSnapshotOmitted: Bool)]
         let inverseRelated: [(name: String, type: String, referencingField: String)]
         let inverseRelatedMany: [(name: String, type: String, keyPath: String)]
-        let computed: [(name: String, type: String, body: String)]
+        let computed: [(name: String, type: String, body: String, isSnapshotOmitted: Bool)]
     }
     
     // MARK: MemberMacro
@@ -1201,7 +1218,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
     
     private static func generateRelationshipModelSchema(
         className: String,
-        property: (name: String, elementType: String, collectionElementType: String, schemaType: String, onDelete: String?, isSnapshotPrefetched: Bool)
+        property: (name: String, elementType: String, collectionElementType: String, schemaType: String, onDelete: String?, isSnapshotPrefetched: Bool, isSnapshotOmitted: Bool)
     ) throws -> DeclSyntax {
         let deletionPolicy = property.onDelete ?? ".ignore"
         let tableName = "\(className)_\(property.name)__\(property.elementType)"
@@ -1388,7 +1405,8 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         let publicModifier = isPublic ? "public " : ""
         
         var computedProps = [String]()
-        for prop in propertyInfo.computed {
+        // Filter out properties marked with @SnapshotOmitted
+        for prop in propertyInfo.computed where !prop.isSnapshotOmitted {
             // Check if this is a function (body contains "func ")
             if prop.body.contains("func ") {
                 // It's a function - use the full function declaration
@@ -1411,7 +1429,8 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         
         var rowExtractions = ["let id: UUID = try row.get(\"id\")", "", "self._metadata = SnapshotMetadata<Self>(id: id, db: db)", "", "self.id = id"]
         
-        for prop in propertyInfo.stored {
+        // Filter out properties marked with @SnapshotOmitted
+        for prop in propertyInfo.stored where !prop.isSnapshotOmitted {
             storedProps.append("\(publicModifier)let \(prop.name): \(prop.type)")
             if prop.fallbackValue != nil {
                 rowExtractions.append("self.\(prop.name) = try row.get(\"\(prop.name)\", fallback: FallbackValues.\(prop.name))")
@@ -1420,7 +1439,8 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             }
         }
         
-        for prop in propertyInfo.related {
+        // Filter out properties marked with @SnapshotOmitted
+        for prop in propertyInfo.related where !prop.isSnapshotOmitted {
             let baseType = prop.type.replacingOccurrences(of: "?", with: "").replacingOccurrences(of: ".Snapshot", with: "")
             
             // Handle @SnapshotPrefetched @Related properties
@@ -1454,8 +1474,8 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
             }
         }
         
-        // Handle @RelatedMany properties with @SnapshotPrefetched
-        for prop in propertyInfo.relatedMany where prop.isSnapshotPrefetched {
+        // Handle @RelatedMany properties with @SnapshotPrefetched, filter out @SnapshotOmitted
+        for prop in propertyInfo.relatedMany where prop.isSnapshotPrefetched && !prop.isSnapshotOmitted {
             storedProps.append("\(publicModifier)let \(prop.name): [\(prop.elementType).Snapshot]")
             rowExtractions.append("self.\(prop.name) = try await row.get(schema: \(prop.schemaType).self, parentId: id)")
         }
