@@ -35,15 +35,24 @@ public nonisolated enum SyncConnectorStatus: Equatable, Sendable {
     }
 }
 
-public nonisolated struct SyncConnectorError
+public nonisolated struct SyncConnectorError: Hashable, Identifiable, Sendable
 {
-    let date: Date
-    let error: Error
+    public let id = UUID()
+    public let date: Date
+    public let error: Error
     
     public init(date: Date, error: Error)
     {
         self.date = date
         self.error = error
+    }
+    
+    public static func == (lhs: SyncConnectorError, rhs: SyncConnectorError) -> Bool {
+        lhs.date == rhs.date
+    }
+    
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(date)
     }
 }
 
