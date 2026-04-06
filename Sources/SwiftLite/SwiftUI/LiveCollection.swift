@@ -10,13 +10,15 @@ public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
 
     private let initialFilter: SQLWhereClauseConvertible?
     private let initialSortBy: SQLSortClauseConvertible?
+    private let initialLimit: Int?
     public var wrappedValue: [T] { storage.results }
     public var projectedValue: Storage { storage }
     
-    public init(_ type: T.Type = T.self, filter: SQLWhereClauseConvertible? = nil, sortBy: SQLSortClauseConvertible? = nil)
+    public init(_ type: T.Type = T.self, filter: SQLWhereClauseConvertible? = nil, sortBy: SQLSortClauseConvertible? = nil, initialLimit: Int? = nil)
     {
         self.initialFilter = filter
         self.initialSortBy = sortBy
+        self.initialLimit = initialLimit
     }
     
     public func update()
@@ -29,6 +31,9 @@ public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
         }
         if let initialSortBy, storage.sortBy == nil {
             storage.sortBy = initialSortBy
+        }
+        if let initialLimit, storage.limit == nil {
+            storage.limit = initialLimit
         }
 
         Task {
@@ -45,6 +50,7 @@ public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
 
         public var filter: SQLWhereClauseConvertible? { didSet { reload() }}
         public var sortBy: SQLSortClauseConvertible? { didSet { reload() }}
+        public var limit: Int? { didSet { reload() }}
 
         @ObservationIgnored
         public var database: Database?
@@ -77,14 +83,10 @@ public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
             status = .loading
             
             do {
-                if let filter, let sortBy {
-                    results = try await db.find(T.self, where: filter, sortBy: sortBy)
-                } else if let filter {
-                    results = try await db.find(T.self, where: filter)
-                } else if let sortBy {
-                    results = try await db.get(T.self, sortBy: sortBy)
+                if let filter {
+                    results = try await db.find(T.self, where: filter, sortBy: sortBy, limit: limit)
                 } else {
-                    results = try await db.get(T.self)
+                    results = try await db.get(T.self, sortBy: sortBy, limit: limit)
                 }
 
                 status = .loaded

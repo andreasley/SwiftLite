@@ -99,9 +99,9 @@ public nonisolated enum SQLStatementPreset
             .init(table: table, columnExpression: columnExpression, conditions: condition, orderBy: orderBy, limit: limit)
         }
         
-        func withOrderBy(_ orderBy: String) -> Self
+        func withOrderBy(_ orderBy: String, limit: Int? = nil) -> Self
         {
-            .init(table: table, columnExpression: columnExpression, conditions: nil, orderBy: orderBy, limit: nil)
+            .init(table: table, columnExpression: columnExpression, conditions: nil, orderBy: orderBy, limit: limit)
         }
     }
 

@@ -407,16 +407,17 @@ public actor Database: Observable
         return count
     }
 
-    public nonisolated(nonsending) func find<T: Fetchable>(_ type: T.Type, where filter: SQLWhereClauseConvertible, sortBy: SQLSortClauseConvertible? = nil) async throws -> [T]
+    public nonisolated(nonsending) func find<T: Fetchable>(_ type: T.Type, where filter: SQLWhereClauseConvertible, sortBy: SQLSortClauseConvertible? = nil, limit: Int? = nil) async throws -> [T]
     {
         let orderByClause = sortBy?.toSQL()
-        let preset = T.Model.Schema.table.defaultSelectStatement.withConditions(try filter.toSQL(), orderBy: orderByClause?.text)
+        let preset = T.Model.Schema.table.defaultSelectStatement.withConditions(try filter.toSQL(), orderBy: orderByClause?.text, limit: limit)
         return try await objects(type: T.self, sqlStatement: preset.sqlStatement)
     }
 
-    public nonisolated(nonsending) func find<T: Fetchable>(_ type: T.Type, condition: any SQLExpression) async throws -> [T]
+    public nonisolated(nonsending) func find<T: Fetchable>(_ type: T.Type, condition: any SQLExpression, sortBy: SQLSortClauseConvertible? = nil, limit: Int? = nil) async throws -> [T]
     {
-        let preset = T.Model.Schema.table.defaultSelectStatement.withConditions(condition)
+        let orderByClause = sortBy?.toSQL()?.text
+        let preset = T.Model.Schema.table.defaultSelectStatement.withConditions(condition, orderBy: orderByClause, limit: limit)
         return try await objects(type: T.self, sqlStatement: preset.sqlStatement)
     }
 
@@ -426,11 +427,11 @@ public actor Database: Observable
         return try await objects(type: T.self, sqlStatement: preset.sqlStatement)
     }
     
-    public nonisolated(nonsending) func get<T: Fetchable>(_ type: T.Type, sortBy: SQLSortClauseConvertible? = nil) async throws -> [T]
+    public nonisolated(nonsending) func get<T: Fetchable>(_ type: T.Type, sortBy: SQLSortClauseConvertible? = nil, limit: Int? = nil) async throws -> [T]
     {
         var preset = T.Model.Schema.table.defaultSelectStatement
         if let sortClause = sortBy?.toSQL() {
-            preset = preset.withOrderBy(sortClause.text)
+            preset = preset.withOrderBy(sortClause.text, limit: limit)
         }
         return try await objects(type: T.self, sqlStatement: preset.sqlStatement)
     }
