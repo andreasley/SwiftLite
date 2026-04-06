@@ -136,7 +136,7 @@ public actor Database: Observable
         await syncClient?.setDatabase(self)
     }
     
-    func setPragma(name: String, value: String) throws
+    public func setPragma(name: String, value: String) throws
     {
         try Self.setPragma(name: name, value: value, connectionHandle: self.connectionHandle)
     }
