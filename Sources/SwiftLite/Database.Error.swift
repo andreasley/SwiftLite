@@ -14,6 +14,7 @@ public extension Database
         case failedToFindReadTransaction
         case failedToMigrateSchema
         case unexpectedStatementValuesForRun
+        case failedToCreateWhereClause
 
         public var errorDescription: String? {
             return switch self {
@@ -39,6 +40,8 @@ public extension Database
                 "Failed to migrate schema"
             case .unexpectedStatementValuesForRun:
                 "The SQL statement passed to run unexpectedly contained values"
+            case .failedToCreateWhereClause:
+                "Failed to create where clause"
             }
         }
     }

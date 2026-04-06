@@ -37,22 +37,10 @@ public nonisolated extension SQLWhereClause
         self.values = clauses.flatMap(\.values)
     }
 
-    init?(joining convertibles: [SQLWhereClauseConvertible]) throws
+    init?(joining convertibles: [any SQLWhereClauseConvertible]) throws
     {
         let clauses = try convertibles.map { try $0.toSQL() }
         try self.init(joining: clauses)
     }
 }
 
-public nonisolated protocol SQLWhereClauseConvertible
-{
-    func toSQL() throws -> SQLWhereClause
-}
-
-extension SQLWhereClause: SQLWhereClauseConvertible
-{
-    public func toSQL() throws -> SQLWhereClause
-    {
-        self
-    }
-}

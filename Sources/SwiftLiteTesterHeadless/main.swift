@@ -49,6 +49,9 @@ print(cars.count)
 let carWithName = try await db.find(Car.self, where: #Predicate<Car> { $0.name == "test" })
 print("Car with name `test`", carWithName)
 
+let carWithDefaultEngine = try await db.find(Car.self, where: .field(\Car.engine, equals: defaultEngine))
+print("Car with default engine", carWithName)
+
 let id1 = cars[0].id
 let id2 = cars[1].id
 let id3 = cars[2].id
