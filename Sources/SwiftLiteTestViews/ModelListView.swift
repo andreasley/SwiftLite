@@ -59,5 +59,8 @@ struct ModelListView<T: Listable>: View
     func filterByName(_ name: String)
     {
         $snapshots.filter = try? #Predicate<T> { $0.name.contains(name) }.toSQL()
+        
+        // Alternative:
+        // $snapshots.filter = SQLWhereClause(field: "name", like: name)
     }
 }
