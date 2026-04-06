@@ -4,6 +4,7 @@ nonisolated public final class ReadAssociatedData: @unchecked Sendable
 {
     enum Error: Swift.Error {
         case notFound
+        case recursionDetected
     }
 
     @TaskLocal static var current: ReadAssociatedData?
@@ -11,7 +12,8 @@ nonisolated public final class ReadAssociatedData: @unchecked Sendable
     let db: Database
     let isolation: (any Actor)?
     var caches: [ObjectIdentifier: CacheForType] = [:]
-    
+    var fetchedIds = Set<UUID>()
+
     init(db: Database, isolation: isolated (any Actor)? = #isolation)
     {
         self.db = db
@@ -22,6 +24,14 @@ nonisolated public final class ReadAssociatedData: @unchecked Sendable
     {
         guard let current else { throw Error.notFound }
         return current
+    }
+    
+    func checkForRecursion(_ id: UUID) throws
+    {
+        guard !fetchedIds.contains(id) else {
+            throw Error.recursionDetected
+        }
+        fetchedIds.insert(id)
     }
 
     func getCached<T: Fetchable>(_ type: T.Type, id: UUID) -> T?
