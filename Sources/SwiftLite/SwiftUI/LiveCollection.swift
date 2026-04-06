@@ -14,11 +14,11 @@ public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
     public var wrappedValue: [T] { storage.results }
     public var projectedValue: Storage { storage }
     
-    public init(_ type: T.Type = T.self, filter: SQLWhereClauseConvertible? = nil, sortBy: SQLSortClauseConvertible? = nil, initialLimit: Int? = nil)
+    public init(_ type: T.Type = T.self, filter: SQLWhereClauseConvertible? = nil, sortBy: SQLSortClauseConvertible? = nil, limit: Int? = nil)
     {
         self.initialFilter = filter
         self.initialSortBy = sortBy
-        self.initialLimit = initialLimit
+        self.initialLimit = limit
     }
     
     public func update()
