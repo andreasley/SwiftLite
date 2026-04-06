@@ -437,6 +437,11 @@ public actor Database: Observable
 
     public nonisolated(nonsending) func get<T: Fetchable>(_ type: T.Type, id: UUID) async throws -> T?
     {
+        let associatedData = try ReadAssociatedData.getCurrent()
+        if let existingObject = associatedData.getCached(T.self, id: id) {
+            return existingObject
+        }
+        
         let preset = T.Model.Schema.table.defaultSelectStatement.withCondition(.byId(id), limit: 1)
         return try await objects(type: T.self, sqlStatement: preset.sqlStatement).first
     }
