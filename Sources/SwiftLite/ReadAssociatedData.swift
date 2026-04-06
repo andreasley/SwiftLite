@@ -11,7 +11,7 @@ nonisolated public final class ReadAssociatedData: @unchecked Sendable
 
     let db: Database
     let isolation: (any Actor)?
-    var caches: [ObjectIdentifier: CacheForType] = [:]
+    var caches: [TypeKey: CacheForType] = [:]
     var fetchedIds = Set<UUID>()
 
     init(db: Database, isolation: isolated (any Actor)? = #isolation)
@@ -33,6 +33,14 @@ nonisolated public final class ReadAssociatedData: @unchecked Sendable
         }
         fetchedIds.insert(id)
     }
+    
+    func printStatistics()
+    {
+        print("Statistics for last read:")
+        for (type, cache) in caches {
+            print("\(type.name) has \(cache.objects.count) cached objects")
+        }
+    }
 
     func getCached<T: Fetchable>(_ type: T.Type, id: UUID) -> T?
     {
@@ -46,7 +54,7 @@ nonisolated public final class ReadAssociatedData: @unchecked Sendable
     
     func getCacheForType<T: Fetchable>(_ type: T.Type = T.self) -> CacheForType
     {
-        let typeIdentifier = ObjectIdentifier(T.self)
+        let typeIdentifier = TypeKey(T.self)
         if let existingCache = caches[typeIdentifier] {
             return existingCache
         } else {
@@ -73,3 +81,26 @@ nonisolated public final class ReadAssociatedData: @unchecked Sendable
     
 }
 
+extension ReadAssociatedData
+{
+    struct TypeKey: Hashable, CustomStringConvertible
+    {
+        let id: ObjectIdentifier
+        let name: String
+        
+        init<T>(_ type: T.Type) {
+            self.id = ObjectIdentifier(type)
+            self.name = String(reflecting: type)
+        }
+        
+        var description: String { name }
+        
+        static func == (lhs: Self, rhs: Self) -> Bool {
+            lhs.id == rhs.id
+        }
+        
+        func hash(into hasher: inout Hasher) {
+            hasher.combine(id)
+        }
+    }
+}

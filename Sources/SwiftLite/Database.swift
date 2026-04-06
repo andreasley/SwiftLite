@@ -478,6 +478,7 @@ public actor Database: Observable
                 do {
                     results = try await body()
                     try await self.run("COMMIT")
+                    ReadAssociatedData.current?.printStatistics()
                     print("✅ COMMITTED READ TRANSACTION")
                 } catch {
                     try? await self.run("ROLLBACK")
