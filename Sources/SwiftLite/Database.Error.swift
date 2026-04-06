@@ -1,6 +1,6 @@
 import Foundation
 
-extension Database
+public extension Database
 {
     enum Error: LocalizedError, Sendable, Equatable {
         case queryFailed(sqlStatement: SQLStatement, status: SQLiteStatus, errorMessage: String)
@@ -15,7 +15,7 @@ extension Database
         case failedToMigrateSchema
         case unexpectedStatementValuesForRun
 
-        var errorDescription: String? {
+        public var errorDescription: String? {
             return switch self {
             case .queryFailed(let configuration, let status, let errorMessage):
                 "Query `\(configuration.text)` failed: \(status.description) (\(errorMessage))"
