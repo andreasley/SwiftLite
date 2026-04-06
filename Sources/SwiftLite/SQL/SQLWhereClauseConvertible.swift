@@ -18,6 +18,11 @@ public extension SQLWhereClauseConvertible where Self == SQLWhereClause
         SQLWhereClause(field: field, equals: value)
     }
     
+    static func field<T, V>(_ keyPath: KeyPath<T, V>, equals value: V) throws -> SQLWhereClause where V: SQLValueConvertible
+    {
+        guard let propertyPath = keyPath.propertyPath else { throw Database.Error.failedToCreateWhereClause }
+        return SQLWhereClause(field: propertyPath, equals: value)
+    }
     static func field<T>(_ keyPath: PartialKeyPath<T>, equals value: SQLValueConvertible) throws -> SQLWhereClause
     {
         guard let propertyPath = keyPath.propertyPath else { throw Database.Error.failedToCreateWhereClause }
