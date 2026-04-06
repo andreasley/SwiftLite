@@ -8,7 +8,7 @@ public protocol SyncConnector: Actor, Sendable
     var status: SyncConnectorStatus { get }
     var errors: [SyncConnectorError] { get }
     
-    var statusStream: AsyncStream<SyncConnectorStatus> { get }
+    nonisolated var statusStream: AsyncStream<SyncConnectorStatus> { get }
     var databaseName: String { get }
 
     func getDatabaseId() async throws -> UUID?
