@@ -15,6 +15,16 @@ public nonisolated struct SQLWhereClause: SQLExpression
         self.values = [value.convertToSQLValue()]
     }
 
+    public init(field: String, isNull: Bool)
+    {
+        if isNull {
+            self.text = "\(field) IS NULL"
+        } else {
+            self.text = "\(field) IS NOT NULL"
+        }
+        self.values = []
+    }
+
     public init(field: String, like string: String)
     {
         self.text = "\(field) LIKE ?"
