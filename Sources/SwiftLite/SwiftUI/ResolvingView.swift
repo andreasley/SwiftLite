@@ -8,7 +8,7 @@ public struct ResolvingView<S, Content>: View where Content: View, S: ModelSnaps
     @State private var model: S.Model?
     @State private var error: Error?
     
-    public init(snapshot: S, content: @escaping (S.Model) -> Content)
+    public init(snapshot: S, @ViewBuilder content: @escaping (S.Model) -> Content)
     {
         self.snapshot = snapshot
         self.content = content
