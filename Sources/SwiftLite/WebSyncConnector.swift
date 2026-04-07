@@ -117,9 +117,6 @@ public actor WebSyncConnector: SyncConnector
         webSocketTask = session.webSocketTask(with: syncUrl)
         webSocketTask?.resume()
         
-        didConnectCallback?()
-
-
         do {
             let handshake = WebSocketSyncMessage.handshake(databaseName: databaseName, databaseId: databaseId)
             try await send(message: handshake)
@@ -128,6 +125,9 @@ public actor WebSyncConnector: SyncConnector
             Task {
                 await startListeningForIndexIncreaseNotifications()
             }
+
+            // Let the SyncClient know that a connection is established again to (to trigger the first sync after a disconnect)
+            didConnectCallback?()
         } catch {
             addError(error)
             await scheduleReconnect()
