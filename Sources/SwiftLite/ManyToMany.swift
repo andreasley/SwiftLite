@@ -184,8 +184,8 @@ public nonisolated extension ManyToMany
         {
             _metadata._cascadeDeletion()
             
-            if Schema.deletionPolicy == .cascade, let model = element as? Model {
-                model._cascadeDeletion()
+            if Schema.deletionPolicy == .cascade, let elementAsModel = element as? (any SwiftLite.Model) {
+                elementAsModel._cascadeDeletion()
             }
         }
         
