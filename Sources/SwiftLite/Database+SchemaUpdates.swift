@@ -132,7 +132,7 @@ extension Database
             
             for index in indexesToAdd {
                 print("➕ Creating index '\(index.name)'")
-                let createIndexStatement = "CREATE \(index.isUnique ? "UNIQUE " : "")INDEX \"\(index.name)\" ON \"\(table.name)\"(\(index.columns.joined(separator: ", ")))"
+                let createIndexStatement = "CREATE \(index.isUnique ? "UNIQUE " : "")INDEX \"\(index.name)\" ON \"\(table.name)\"(\(index.columns.map({"\"\($0)\""}).joined(separator: ", ")))"
                 try run(createIndexStatement)
                 
                 // Collect index creation for batch logging
@@ -288,7 +288,7 @@ extension Database
         var createIndexStatements = [String]()
         
         for index in table.indexes {
-            let statement = "CREATE \(index.isUnique ? "UNIQUE " : "")INDEX \(index.name) ON \(table.name)(\(index.columns.joined(separator: ", ")));"
+            let statement = "CREATE \(index.isUnique ? "UNIQUE " : "")INDEX \(index.name) ON \(table.name)(\(index.columns.map({"\"\($0)\""}).joined(separator: ", ")));"
             createIndexStatements.append(statement)
         }
         
