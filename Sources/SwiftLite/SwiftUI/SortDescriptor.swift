@@ -30,7 +30,7 @@ public struct SortDescriptor<T>: AnySortDescriptor
         guard let propertyName = components.last else {
             fatalError("Invalid keyPath for SortDescriptor")
         }
-        return SQLSortClause(text: "\(propertyName) \(order.sqlKeyword)")
+        return SQLSortClause(text: "\"\(propertyName)\" \(order.sqlKeyword)")
     }
 }
 
