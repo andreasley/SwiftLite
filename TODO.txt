@@ -10,19 +10,13 @@
 
 - Server: Don't send entries back to the device that just sent it
 
-- Client database needs a unique ID?
-
 - Implement ping/pong for WebSocket
 - Implement repeated retries for sync (both fetch and send)
 
 - Sync status view: Show history, show log, show last sync date
 - Make the devices send a device ID that can be logged alongside log entries
 - Log the current user
-- 
 
-- Reconnect Websocket after connection status change; send entries
-- SyncClient: Try "sendUnsynchronized()" again after the connection status of the Transport changes
-- Unique database ID to detect (in SyncTransport) a serverside full reset or wrong database at the URL
 - Test what happens to logging when saving on quit
 
 - Make more stuff in SyncClient non-throwing, closing the database instead and setting fatalError
@@ -41,6 +35,10 @@
 ================================================
 Backlog
 ================================================
+
+- Find a way to ensure that junction models are deleted if the element end of a many-to-many collection is deleted
+
+- Fetching Snapshots uses the regular query? Could use a smaller one to not have to fetch expensive (large) fields.
 
 - Make Storable conformance configurable, so for example a different save strategy for decimals can be set
 
