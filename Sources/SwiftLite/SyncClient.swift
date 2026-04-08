@@ -845,10 +845,10 @@ public actor SyncClient
                 case SQLITE_NULL:
                     newValue = .null
                 default:
-                    newValue = nil
+                    throw Error.failedToLog("Unsupported column type")
                 }
             } else {
-                newValue = nil
+                newValue = .null
             }
             
             // Read metadata from column index 8
@@ -996,7 +996,7 @@ public actor SyncClient
                     newValue = nil
                 }
             } else {
-                newValue = nil
+                newValue = .null
             }
             
             // Read metadata from column index 8
