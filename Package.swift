@@ -26,7 +26,7 @@ let package = Package(
         ),
     ],
     dependencies: [
-        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "602.0.0"),
+        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "603.0.0"),
         .package(url: "https://github.com/andreasley/SwiftLiteCommon", branch: "main"),
     ],
     targets: [
@@ -38,7 +38,13 @@ let package = Package(
             ]
         ),
 
-        .target(name: "SwiftLite", dependencies: ["SwiftLiteMacros", "SwiftLiteCommon"]),
+        .target(
+            name: "SwiftLite",
+            dependencies: ["SwiftLiteMacros", "SwiftLiteCommon"],
+            swiftSettings: [
+                .unsafeFlags(["-Onone"], .when(configuration: .release))
+            ]
+        ),
         .target(name: "SwiftLiteTestModels", dependencies: ["SwiftLite"]),
         .target(name: "SwiftLiteTestViews", dependencies: ["SwiftLite", "SwiftLiteTestModels"]),
 
