@@ -78,19 +78,28 @@ struct CarDetailView: View
     struct PassengersSection: View
     {
         @Environment(Database.self) private var db
+        @State private var dragEnabled = false
 
         let passengers: RelatedCollection<Passenger>
         
         var body: some View {
             Section {
-                List(passengers) { passenger in
-                    HStack {
-                        PassengerView(passenger: passenger)
-                        Spacer()
-                        Button("Delete") {
-                            passengers.remove(passenger)
+                List {
+                    ForEach(passengers) { passenger in
+                        HStack {
+                            PassengerView(passenger: passenger)
+                                .moveDisabled(true)
+                            Spacer()
+                            Button("Delete") {
+                                passengers.remove(passenger)
+                            }
+                            Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
+                                .onHover { dragEnabled = $0 }
                         }
                     }
+                    .onMove(perform: passengers.move)
+                    .moveDisabled(!dragEnabled)
+                    
                 }
             } footer: {
                 Button("Add passenger") {
