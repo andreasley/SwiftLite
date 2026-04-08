@@ -194,7 +194,12 @@ extension ManyToMany
                 junctions.append(newJunction)
                 collection.items.append(newJunction.element)
             case .updated:
-                // the `index` is the only thing that can change; update sort order
+                guard
+                    let changedJunction = junctions.first(where: { $0.id == changes.objectId }),
+                    let changedField = changes.updatedFields?["index"],
+                    let newIndex = try? Int(sqlValue: changedField)
+                else { return }
+                changedJunction._editableData.index = newIndex
                 junctions.sort { $0.index < $1.index }
                 let sortedElements = junctions.map { $0.element }
                 collection.items = sortedElements
@@ -226,9 +231,20 @@ public nonisolated extension ManyToMany
 
         public var _metadata: ModelMetadata
         
+        let _editableData: EditableData
+
         public let id: UUID
         public var index: Int {
-            didSet { _metadata.logValueChange(field: "index", value: index) }
+            get {
+                _editableData.index
+            }
+            set {
+                guard _editableData.index != newValue else {
+                    return
+                }
+                _editableData.index = newValue
+                _metadata.logValueChange(field: "index", value: newValue)
+            }
         }
         public let parent: UUID
         public let element: Element
@@ -241,9 +257,9 @@ public nonisolated extension ManyToMany
             let element: Element = try await row.get("element")
             
             self._metadata = ModelMetadata(db: db, table: Schema.table.name, id: id, isNew: false)
-            
+            self._editableData = EditableData(index: index)
+
             self.id = id
-            self.index = index
             self.parent = parent
             self.element = element
         }
@@ -251,11 +267,12 @@ public nonisolated extension ManyToMany
         public init(db: Database, parent: UUID, element: Element)
         {
             let id = UUID.v7()
+            let index = Int(Date.now.timeIntervalSince1970*1000)
             
             self._metadata = ModelMetadata(db: db, table: Schema.table.name, id: id, isNew: true)
-            
+            self._editableData = EditableData(index: index)
+
             self.id = id
-            self.index = Int(Date.now.timeIntervalSince1970*1000)
             self.parent = parent
             self.element = element
             
@@ -264,6 +281,16 @@ public nonisolated extension ManyToMany
             self._metadata.logValueChange(field: "index", value: index)
             self._metadata.logValueChange(field: "parent", value: parent)
             self._metadata.logValueChange(field: "element", value: element)
+        }
+
+        @Observable internal nonisolated final class EditableData
+        {
+            var index: Int
+
+            fileprivate init(index: Int)
+            {
+                self.index = index
+            }
         }
 
         public nonisolated(nonsending) func _update(with: ChangedObject) async throws

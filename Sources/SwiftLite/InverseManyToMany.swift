@@ -193,7 +193,12 @@ extension InverseManyToMany
                 junctions.append(newJunction)
                 collection.items.append(newJunction.parent)
             case .updated:
-                // the `index` is the only thing that can change; update sort order
+                guard
+                    let changedJunction = junctions.first(where: { $0.id == changes.objectId }),
+                    let changedField = changes.updatedFields?["index"],
+                    let newIndex = try? Int(sqlValue: changedField)
+                else { return }
+                changedJunction._editableData.index = newIndex
                 junctions.sort { $0.index < $1.index }
                 let sortedElements = junctions.map { $0.parent }
                 collection.items = sortedElements
@@ -225,9 +230,20 @@ public nonisolated extension InverseManyToMany
 
         public var _metadata: ModelMetadata
         
+        let _editableData: EditableData
+
         public let id: UUID
         public var index: Int {
-            didSet { _metadata.logValueChange(field: "index", value: index) }
+            get {
+                _editableData.index
+            }
+            set {
+                guard _editableData.index != newValue else {
+                    return
+                }
+                _editableData.index = newValue
+                _metadata.logValueChange(field: "index", value: newValue)
+            }
         }
         public let parent: Parent.Model.Snapshot
         public let element: UUID
@@ -240,9 +256,9 @@ public nonisolated extension InverseManyToMany
             let element: UUID = try row.get("element")
             
             self._metadata = ModelMetadata(db: db, table: Schema.table.name, id: id, isNew: false)
-            
+            self._editableData = EditableData(index: index)
+
             self.id = id
-            self.index = index
             self.parent = parent
             self.element = element
         }
@@ -250,11 +266,12 @@ public nonisolated extension InverseManyToMany
         public init(db: Database, parent: Parent.Model.Snapshot, element: UUID)
         {
             let id = UUID.v7()
-            
+            let index = Int(Date.now.timeIntervalSince1970*1000)
+
             self._metadata = ModelMetadata(db: db, table: Schema.table.name, id: id, isNew: true)
-            
+            self._editableData = EditableData(index: index)
+
             self.id = id
-            self.index = Int(Date.now.timeIntervalSince1970*1000)
             self.parent = parent
             self.element = element
             
@@ -263,6 +280,16 @@ public nonisolated extension InverseManyToMany
             self._metadata.logValueChange(field: "index", value: index)
             self._metadata.logValueChange(field: "parent", value: parent)
             self._metadata.logValueChange(field: "element", value: element)
+        }
+
+        @Observable internal nonisolated final class EditableData
+        {
+            var index: Int
+
+            fileprivate init(index: Int)
+            {
+                self.index = index
+            }
         }
 
         public nonisolated(nonsending) func _update(with: ChangedObject) async throws
