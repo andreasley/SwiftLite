@@ -377,7 +377,7 @@ public actor Database: Observable
                     continue
                 }
                 
-                try associatedData.checkForRecursion(id)
+                try associatedData.checkForRecursion(T.self, id: id)
                 
                 do {
                     let object = try await T(db: self, row: row)

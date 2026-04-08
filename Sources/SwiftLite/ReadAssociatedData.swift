@@ -12,7 +12,7 @@ nonisolated public final class ReadAssociatedData: @unchecked Sendable
     let db: Database
     let isolation: (any Actor)?
     var caches: [TypeKey: CacheForType] = [:]
-    var fetchedIds = Set<UUID>()
+    var fetchedIds = Set<TypedID>()
 
     init(db: Database, isolation: isolated (any Actor)? = #isolation)
     {
@@ -26,12 +26,13 @@ nonisolated public final class ReadAssociatedData: @unchecked Sendable
         return current
     }
     
-    func checkForRecursion(_ id: UUID) throws
+    func checkForRecursion<T: Fetchable>(_ type: T.Type, id: UUID) throws
     {
-        guard !fetchedIds.contains(id) else {
+        let typedID = TypedID(type: type, id: id)
+        guard !fetchedIds.contains(typedID) else {
             throw Error.recursionDetected
         }
-        fetchedIds.insert(id)
+        fetchedIds.insert(typedID)
     }
     
     func printStatistics()
@@ -100,6 +101,26 @@ extension ReadAssociatedData
         }
         
         func hash(into hasher: inout Hasher) {
+            hasher.combine(id)
+        }
+    }
+    
+    struct TypedID: Hashable
+    {
+        let typeKey: TypeKey
+        let id: UUID
+        
+        init<T>(type: T.Type, id: UUID) {
+            self.typeKey = TypeKey(type)
+            self.id = id
+        }
+        
+        static func == (lhs: Self, rhs: Self) -> Bool {
+            lhs.typeKey == rhs.typeKey && lhs.id == rhs.id
+        }
+        
+        func hash(into hasher: inout Hasher) {
+            hasher.combine(typeKey)
             hasher.combine(id)
         }
     }
