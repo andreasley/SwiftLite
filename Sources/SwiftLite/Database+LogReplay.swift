@@ -149,7 +149,7 @@ extension Database
                     let existingIndexes = try getIndexes(tableName: tableName)
                     if !existingIndexes.contains(where: { $0.name == indexName }) {
                         let uniqueKeyword = isUnique ? "UNIQUE " : ""
-                        let createIndexStatement = "CREATE \(uniqueKeyword)INDEX IF NOT EXISTS \"\(indexName)\" ON \"\(tableName)\"(\(columns.joined(separator: ", ")))"
+                        let createIndexStatement = "CREATE \(uniqueKeyword)INDEX IF NOT EXISTS \"\(indexName)\" ON \"\(tableName)\"(\(columns.map({"\"\($0)\""}).joined(separator: ", ")))"
                         try run(createIndexStatement)
                     } else {
                         print("ℹ️ Index \(indexName) already exists, skipping")
