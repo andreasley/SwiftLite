@@ -192,9 +192,11 @@ extension InverseManyToMany
                 guard let newJunction = try await self.db.get(JunctionModel.self, id: changes.objectId) else { return }
                 junctions.append(newJunction)
                 collection.items.append(newJunction.parent)
-            default:
-                // relations can't change; nested objects subscribe themselves for changes
-                return
+            case .updated:
+                // the `index` is the only thing that can change; update sort order
+                junctions.sort { $0.index < $1.index }
+                let sortedElements = junctions.map { $0.parent }
+                collection.items = sortedElements
             }
         }
     }
