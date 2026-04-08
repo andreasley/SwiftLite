@@ -38,6 +38,7 @@ public nonisolated final class ModelMetadata: DatabaseEntityMetadata, WithTracke
     var objectChangedNotificationToken: DeregisteringNotificationToken?
     
     var autosaveTask: Task<Void, Never>? = nil
+    var nextAutosave: ContinuousClock.Instant?
     
     public var _hasPendingChanges: Bool {
         changedValues.hasChanges || objectStatus.hasChanges
