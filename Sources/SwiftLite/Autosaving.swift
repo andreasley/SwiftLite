@@ -28,7 +28,6 @@ public extension AutosavingModel
     // This works by tracking changes throughout the whole graph and autosaves after the specified amount of time.
     func _beginAutosaving(delayBeforeSaving: Duration)
     {
-        print("_beginAutosaving")
         guard !_metadata.isAutosaving else { return }
         _metadata.isAutosaving = true
 
