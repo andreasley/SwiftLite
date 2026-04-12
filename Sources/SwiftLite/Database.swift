@@ -51,6 +51,8 @@ public actor Database: Observable
     public internal(set) var isClosed = false
     
     private let localStatus: Mutex<LocalDatabaseStatus> = .init(.ok)
+    
+    public let storage: StorageType
     public nonisolated var status: LocalDatabaseStatus {
         localStatus.withLock { $0 }
     }
@@ -67,6 +69,8 @@ public actor Database: Observable
     
     public init(storage: StorageType, sync: SyncType = .disabled, cacheSizeLimit: CacheSize? = nil) async throws
     {
+        self.storage = storage
+        
         var flags = [SQLITE_OPEN_READWRITE, SQLITE_OPEN_CREATE, SQLITE_OPEN_FULLMUTEX]
         var databaseFileUrl: URL?
 
