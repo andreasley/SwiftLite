@@ -43,7 +43,7 @@ public actor Database: Observable
         case pages(Int)
     }
 
-    public let connectionHandle: OpaquePointer
+    internal let connectionHandle: OpaquePointer
     internal var notificationProxies = [ActorNotificationProxy]()
 
     let gate = TransactionGate()
