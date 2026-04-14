@@ -892,21 +892,21 @@ public actor SyncClient
         let sql = """
         UPDATE operation_log
         SET applied_locally = 1
-        WHERE id IN (
-            SELECT id
-            FROM (
-                SELECT id,
-                       applied_locally,
-                       ROW_NUMBER() OVER (
-                           PARTITION BY table_name, object_id, column_name
-                           ORDER BY timestamp DESC, synchronized_index DESC
-                       ) as rn
-                FROM operation_log
-                WHERE operation_type = 'field_updated'
-            )
-            WHERE rn > 1
-              AND applied_locally = 0
-        )
+        WHERE operation_type = 'field_updated'
+          AND applied_locally = 0
+          AND id NOT IN (
+              SELECT id
+              FROM (
+                  SELECT id,
+                         ROW_NUMBER() OVER (
+                             PARTITION BY table_name, object_id, column_name
+                             ORDER BY timestamp DESC, synchronized_index DESC
+                         ) as rn
+                  FROM operation_log
+                  WHERE operation_type = 'field_updated'
+              )
+              WHERE rn = 1
+          )
         """
         
         var statement: OpaquePointer?
