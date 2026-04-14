@@ -889,24 +889,41 @@ public actor SyncClient
         // There's no point in ever applying field update values for a specific table/object/column if there's already a more recent value.
         // Mark all such outdated values as "applied_locally = 1". These won't be applied to the local database. This works fine, even if they were part of a transaction, as all fields are nullable and foreign key checks are disabled while replaying (so setting a reference in a later transaction instead isn't an issue when replaying).
         
+        // The SQL statement first deduplicates among unapplied rows and then discards any unapplied row that's older than an already-applied row (because there could be a local log entry that's more recent than anything received)
+        
         let sql = """
+        UPDATE operation_log
+        SET applied_locally = 1
+        WHERE id IN (
+            SELECT id
+            FROM (
+                SELECT id,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY table_name, object_id, column_name
+                           ORDER BY timestamp DESC, synchronized_index DESC
+                       ) as rn
+                FROM operation_log
+                WHERE operation_type = 'field_updated'
+                  AND applied_locally = 0
+            )
+            WHERE rn > 1
+        );
+        
         UPDATE operation_log
         SET applied_locally = 1
         WHERE operation_type = 'field_updated'
           AND applied_locally = 0
-          AND id NOT IN (
-              SELECT id
-              FROM (
-                  SELECT id,
-                         ROW_NUMBER() OVER (
-                             PARTITION BY table_name, object_id, column_name
-                             ORDER BY timestamp DESC, synchronized_index DESC
-                         ) as rn
-                  FROM operation_log
-                  WHERE operation_type = 'field_updated'
-              )
-              WHERE rn = 1
-          )
+          AND EXISTS (
+              SELECT 1
+              FROM operation_log AS newer
+              WHERE newer.table_name = operation_log.table_name
+                AND newer.object_id = operation_log.object_id
+                AND newer.column_name = operation_log.column_name
+                AND newer.applied_locally = 1
+                AND (newer.timestamp > operation_log.timestamp
+                     OR (newer.timestamp = operation_log.timestamp
+                         AND newer.synchronized_index > operation_log.synchronized_index))
+          );
         """
         
         var statement: OpaquePointer?
