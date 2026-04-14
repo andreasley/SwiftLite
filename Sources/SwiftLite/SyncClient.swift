@@ -427,7 +427,7 @@ public actor SyncClient
         
         // Create configuration table
         let createConfigTableSQL = """
-        CREATE TABLE configuration (
+        CREATE TABLE IF NOT EXISTS configuration (
             key TEXT PRIMARY KEY NOT NULL,
             value ANY
         ) STRICT;
