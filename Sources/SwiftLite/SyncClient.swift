@@ -149,10 +149,10 @@ public actor SyncClient
             throw Error.failedToOpen(SQLiteStatus(openStatus))
         }
         
-        let persistedConfiguration = PersistedConfiguration(tableName: "configuration", connectionHandle: pointer)
+        try Self.initializeSchema(connectionHandle: pointer)
 
+        let persistedConfiguration = PersistedConfiguration(tableName: "configuration", connectionHandle: pointer)
         if shouldCreateDatabase {
-            try Self.initializeSchema(connectionHandle: pointer)
             try persistedConfiguration.setDefaultValues()
         }
         
@@ -392,7 +392,7 @@ public actor SyncClient
     private static func initializeSchema(connectionHandle: OpaquePointer?) throws
     {
         let createTableSQL = """
-        CREATE TABLE operation_log (
+        CREATE TABLE IF NOT EXISTS operation_log (
             id TEXT PRIMARY KEY NOT NULL,
             timestamp REAL NOT NULL,
             transaction_id TEXT NOT NULL,
