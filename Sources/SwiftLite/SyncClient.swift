@@ -413,6 +413,7 @@ public actor SyncClient
             "CREATE INDEX IF NOT EXISTS idx_transaction_id ON operation_log(transaction_id);",
             "CREATE INDEX IF NOT EXISTS idx_operation_type ON operation_log(operation_type);",
             "CREATE INDEX IF NOT EXISTS idx_table_name ON operation_log(table_name);",
+            "CREATE INDEX IF NOT EXISTS idx_column_name ON operation_log(column_name);",
             "CREATE INDEX IF NOT EXISTS idx_object_id ON operation_log(object_id);",
             "CREATE INDEX IF NOT EXISTS idx_synchronized_index ON operation_log(synchronized_index);",
             "CREATE INDEX IF NOT EXISTS idx_applied_locally ON operation_log(applied_locally);"
