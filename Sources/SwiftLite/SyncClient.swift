@@ -896,15 +896,16 @@ public actor SyncClient
             SELECT id
             FROM (
                 SELECT id,
+                       applied_locally,
                        ROW_NUMBER() OVER (
-                           PARTITION BY table_name, object_id, column_name 
+                           PARTITION BY table_name, object_id, column_name
                            ORDER BY timestamp DESC, synchronized_index DESC
                        ) as rn
                 FROM operation_log
                 WHERE operation_type = 'field_updated'
-                  AND applied_locally = 0
             )
             WHERE rn > 1
+              AND applied_locally = 0
         )
         """
         
