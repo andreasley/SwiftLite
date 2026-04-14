@@ -891,7 +891,9 @@ public actor SyncClient
         
         // The SQL statement first deduplicates among unapplied rows and then discards any unapplied row that's older than an already-applied row (because there could be a local log entry that's more recent than anything received)
         
-        let sql = """
+        let connection = SQLiteDatabase(databaseHandle: connectionHandle)
+        
+        let step1 = """
         UPDATE operation_log
         SET applied_locally = 1
         WHERE id IN (
@@ -908,7 +910,14 @@ public actor SyncClient
             )
             WHERE rn > 1
         );
+        """
         
+        let deduplicatedRows = try connection.run(sql: step1)
+        if deduplicatedRows > 0 {
+            print("Deduplicated \(deduplicatedRows) outdated field update(s) as applied")
+        }
+
+        let step2 = """
         UPDATE operation_log
         SET applied_locally = 1
         WHERE operation_type = 'field_updated'
@@ -925,25 +934,10 @@ public actor SyncClient
                          AND newer.synchronized_index > operation_log.synchronized_index))
           );
         """
-        
-        var statement: OpaquePointer?
-        let prepareResult = sqlite3_prepare_v2(connectionHandle, sql, -1, &statement, nil)
-        defer { sqlite3_finalize(statement) }
-        
-        guard let statement, prepareResult == SQLiteStatus.ok else {
-            let errmsg = String(cString: sqlite3_errmsg(connectionHandle))
-            throw Error.failedToLog("Failed to mark outdated field updates: \(errmsg)")
-        }
-        
-        let stepResult = sqlite3_step(statement)
-        guard stepResult == SQLITE_DONE else {
-            let errmsg = String(cString: sqlite3_errmsg(connectionHandle))
-            throw Error.failedToLog("Failed to execute mark outdated field updates: \(errmsg)")
-        }
-        
-        let changedRows = sqlite3_changes(connectionHandle)
-        if changedRows > 0 {
-            print("Marked \(changedRows) outdated field update(s) as applied")
+
+        let outdatedRows = try connection.run(sql: step2)
+        if outdatedRows > 0 {
+            print("Marked \(outdatedRows) outdated field update(s) as applied")
         }
     }
 
