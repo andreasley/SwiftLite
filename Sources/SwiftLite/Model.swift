@@ -27,7 +27,7 @@ public nonisolated extension Model
         try await WriteAssociatedData.$current.withValue(associatedData, operation: _save)
     }
     
-    nonisolated(nonsending) private func _save() async throws
+    private nonisolated(nonsending) func _save() async throws
     {
         let associatedData = try WriteAssociatedData.getCurrent()
         var success = false
@@ -40,7 +40,7 @@ public nonisolated extension Model
         }
         success = true
     }
-
+    
     nonisolated(nonsending) func delete() async throws
     {
         _cascadeDeletion()
