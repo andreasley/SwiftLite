@@ -260,6 +260,12 @@ public actor SyncClient
             isSyncing = true
             // repeatedly sync small batches to not block the insertion of new log entries
             
+            // The client may have been unreachable when the server sent the notification about the increased highest index.
+            // Since this function is called after reconnecting, just fetch the current highest index again here to ensure the pendingRemoteCount is up-to-date.
+            if let newHighestRemoteIndex = await self.connector.getHighestRemoteIndex() {
+                self.setHighestRemoteIndex(newHighestRemoteIndex)
+            }
+
             let totalCount = self.pendingLocalCount + (self.pendingRemoteCount ?? 0)
             let progress = Progress(totalUnitCount: totalCount)
             self.currentSyncProgress = progress
