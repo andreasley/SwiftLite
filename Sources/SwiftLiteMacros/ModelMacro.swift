@@ -994,7 +994,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro
         """)
         
         // _beginSaving
-        var beginSavingCalls = ["try await _metadata._beginSaving(changeset: changeset)"]
+        var beginSavingCalls = ["try _metadata._beginSaving(changeset: changeset)"]
         for prop in propertyInfo.related {
             if prop.isLet {
                 // Non-editable properties are direct properties

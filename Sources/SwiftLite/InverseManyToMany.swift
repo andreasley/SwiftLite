@@ -325,7 +325,7 @@ public nonisolated extension InverseManyToMany
 
         public nonisolated(nonsending) func _beginSaving(changeset: Changeset) async throws
         {
-            try await _metadata._beginSaving(changeset: changeset)
+            try _metadata._beginSaving(changeset: changeset)
             try await parent._beginSaving(changeset: changeset)
         }
         

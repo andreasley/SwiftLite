@@ -97,7 +97,7 @@ public nonisolated final class ModelMetadata: DatabaseEntityMetadata, WithTracke
         return ChangedObject(table: table, objectId: id, status: status, updatedFields: changes, transactionId: transactionId)
     }
     
-    public nonisolated(nonsending) func _beginSaving(changeset: Changeset) async throws
+    public func _beginSaving(changeset: Changeset) throws
     {
         let associatedData = try WriteAssociatedData.getCurrent()
         guard associatedData.db == self.db else { throw ModelSavingError.wrongDatabase }

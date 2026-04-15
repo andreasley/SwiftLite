@@ -1,4 +1,4 @@
-public nonisolated protocol WithModelLifecycleFunctions
+public protocol WithModelLifecycleFunctions
 {
     func afterInit()
     nonisolated(nonsending) func beforeSave() async throws
