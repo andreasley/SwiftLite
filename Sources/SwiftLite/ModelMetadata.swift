@@ -102,6 +102,7 @@ public nonisolated final class ModelMetadata: DatabaseEntityMetadata, WithTracke
         let associatedData = try WriteAssociatedData.getCurrent()
         guard associatedData.db == self.db else { throw ModelSavingError.wrongDatabase }
 
+        print("_beginSaving", associatedData.transactionId)
         guard currentWriteAssociatedData == nil else { throw ModelSavingError.alreadySaving }
         currentWriteAssociatedData = associatedData
         try changeset.append(collectForSaving(transactionId: associatedData.transactionId))
@@ -109,7 +110,10 @@ public nonisolated final class ModelMetadata: DatabaseEntityMetadata, WithTracke
     
     public func _endSaving(success: Bool, transactionId: UUID)
     {
-        guard currentWriteAssociatedData?.transactionId == transactionId else { return } // can this even happen?
+        print("_endSaving", transactionId)
+        guard currentWriteAssociatedData?.transactionId == transactionId else {
+            return // can this even happen?
+        }
         currentWriteAssociatedData = nil
         changedValues.didProcessChangeset(success: success, transactionId: transactionId)
         if success {
