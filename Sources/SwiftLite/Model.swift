@@ -24,10 +24,12 @@ public nonisolated extension Model
         guard _hasPendingChanges else { return }
         
         let associatedData = WriteAssociatedData(db: _metadata.db)
-        try await WriteAssociatedData.$current.withValue(associatedData, operation: _save)
+        try await WriteAssociatedData.$current.withValue(associatedData) {
+            try await _save()
+        }
     }
     
-    private nonisolated(nonsending) func _save() async throws
+    private func _save(isolation: isolated (any Actor)? = #isolation) async throws
     {
         let associatedData = try WriteAssociatedData.getCurrent()
         var success = false
@@ -40,7 +42,7 @@ public nonisolated extension Model
         }
         success = true
     }
-    
+
     nonisolated(nonsending) func delete() async throws
     {
         _cascadeDeletion()
