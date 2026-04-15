@@ -1,6 +1,6 @@
 import Foundation
 
-public nonisolated struct DatabaseObjectReference<T>: ObjectReference, Hashable where T: SwiftLite.Model
+public struct DatabaseObjectReference<T>: ObjectReference, Hashable where T: SwiftLite.Model
 {
     public typealias Model = T
     

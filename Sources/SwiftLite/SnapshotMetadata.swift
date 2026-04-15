@@ -1,6 +1,6 @@
 import Foundation
 
-public nonisolated struct SnapshotMetadata<T: ModelSnapshot>: Sendable, DatabaseEntityMetadata
+public struct SnapshotMetadata<T: ModelSnapshot>: Sendable, DatabaseEntityMetadata
 {
     public let id: UUID
     public let db: Database

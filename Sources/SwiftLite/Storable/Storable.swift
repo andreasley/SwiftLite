@@ -7,7 +7,7 @@ public enum StorageConversionError: Swift.Error {
     case valueOutsideConvertibleRange
 }
 
-public nonisolated protocol Storable<StorageValue>: SQLValueConvertible
+public protocol Storable<StorageValue>: SQLValueConvertible
 {
     associatedtype StorageValue
     static var fallbackValue: Self? { get }
@@ -17,7 +17,7 @@ public nonisolated protocol Storable<StorageValue>: SQLValueConvertible
     var storageValue: StorageValue { get }
 }
 
-public nonisolated extension Storable
+public extension Storable
 {
     static var fallbackValue: Self? { nil }
 
@@ -27,7 +27,7 @@ public nonisolated extension Storable
     }
 }
 
-public nonisolated extension Storable where StorageValue == Int64
+public extension Storable where StorageValue == Int64
 {
     static var storageClass: StorageClass { .integer }
 
@@ -43,7 +43,7 @@ public nonisolated extension Storable where StorageValue == Int64
     }
 }
 
-public nonisolated extension Storable where StorageValue == String
+public extension Storable where StorageValue == String
 {
     static var storageClass: StorageClass { .text }
 
@@ -59,7 +59,7 @@ public nonisolated extension Storable where StorageValue == String
     }
 }
 
-public nonisolated extension Storable where StorageValue == Data
+public extension Storable where StorageValue == Data
 {
     static var storageClass: StorageClass { .blob }
 
@@ -75,7 +75,7 @@ public nonisolated extension Storable where StorageValue == Data
     }
 }
 
-public nonisolated extension Storable where StorageValue == Double
+public extension Storable where StorageValue == Double
 {
     static var storageClass: StorageClass { .real }
 

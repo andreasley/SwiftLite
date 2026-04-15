@@ -1,9 +1,9 @@
-public nonisolated struct SQLSortClause
+public struct SQLSortClause
 {
     public let text: String
 }
 
-public nonisolated extension SQLSortClause
+public extension SQLSortClause
 {
     init?(joining clauses: [SQLSortClause])
     {
@@ -18,7 +18,7 @@ public nonisolated extension SQLSortClause
     }
 }
 
-public nonisolated protocol SQLSortClauseConvertible
+public protocol SQLSortClauseConvertible
 {
     func toSQL() -> SQLSortClause?
 }

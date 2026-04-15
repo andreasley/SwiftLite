@@ -1,4 +1,4 @@
-public nonisolated enum DeletionPolicy: Equatable, Sendable {
+public enum DeletionPolicy: Equatable, Sendable {
     case cascade
     case ignore
 }

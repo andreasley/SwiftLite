@@ -34,7 +34,7 @@ public struct SortDescriptor<T>: AnySortDescriptor
     }
 }
 
-public nonisolated protocol AnySortDescriptor: SQLSortClauseConvertible {}
+public protocol AnySortDescriptor: SQLSortClauseConvertible {}
 
 extension Array: SQLSortClauseConvertible where Element == any AnySortDescriptor
 {

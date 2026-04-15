@@ -1,4 +1,4 @@
-public nonisolated class Changeset
+public class Changeset
 {
     private(set) var changes = [ChangedObject]()
     var needsSaving: Bool { !changes.isEmpty }

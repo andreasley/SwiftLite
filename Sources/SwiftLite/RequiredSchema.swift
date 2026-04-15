@@ -1,4 +1,4 @@
-public nonisolated enum RequiredSchema
+public enum RequiredSchema
 {
     // TODO: Decide if `check` should be added (e.g. to enfore that columns for BOOL values have `CHECK (is_active IN (0, 1))`)
     

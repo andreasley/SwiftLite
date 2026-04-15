@@ -1,4 +1,4 @@
-public nonisolated enum SQLStatementPreset
+public enum SQLStatementPreset
 {
     public struct Select: SQLStatementProvider
     {

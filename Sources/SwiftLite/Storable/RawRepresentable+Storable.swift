@@ -1,4 +1,4 @@
-public nonisolated extension RawRepresentable where RawValue: Storable
+public extension RawRepresentable where RawValue: Storable
 {
     typealias StorageValue = RawValue.StorageValue
     

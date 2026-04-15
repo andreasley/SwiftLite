@@ -1,11 +1,11 @@
-public nonisolated protocol DatabaseObjectReferenceConvertible<Model>
+public protocol DatabaseObjectReferenceConvertible<Model>
 {
     associatedtype Model: SwiftLite.Model
     
     func getObjectReference() -> DatabaseObjectReference<Model>
 }
 
-public nonisolated extension DatabaseObjectReferenceConvertible
+public extension DatabaseObjectReferenceConvertible
 {
     static func byId<T>(_ id: T.ID, db: Database) -> DatabaseObjectReference<T>
     {

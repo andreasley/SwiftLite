@@ -1,4 +1,4 @@
-public nonisolated struct SQLStatement: Equatable, Hashable, Sendable
+public struct SQLStatement: Equatable, Hashable, Sendable
 {
     let text: String
     let values: [SQLValue]?

@@ -1,7 +1,7 @@
 import SQLite3
 import Foundation
 
-public nonisolated extension Database
+public extension Database
 {
     struct Row: Sendable
     {

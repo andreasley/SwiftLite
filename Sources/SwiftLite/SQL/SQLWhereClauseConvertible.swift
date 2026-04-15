@@ -1,4 +1,4 @@
-public nonisolated protocol SQLWhereClauseConvertible
+public protocol SQLWhereClauseConvertible
 {
     func toSQL() throws -> SQLWhereClause
 }

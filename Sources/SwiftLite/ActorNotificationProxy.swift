@@ -1,4 +1,4 @@
-public nonisolated protocol ActorNotificationProxy
+public protocol ActorNotificationProxy
 {
     func onChange(changeset: FrozenChangeset)
 }

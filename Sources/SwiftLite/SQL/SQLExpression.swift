@@ -1,12 +1,12 @@
 import Foundation
 
-public nonisolated protocol SQLExpression: Hashable, Equatable, Sendable
+public protocol SQLExpression: Hashable, Equatable, Sendable
 {
     var text: String { get }
     var values: [SQLValue] { get }
 }
 
-public nonisolated extension SQLExpression where Self == SQLWhereClause
+public extension SQLExpression where Self == SQLWhereClause
 {
     static func byId(_ id: UUID) -> SQLWhereClause
     {

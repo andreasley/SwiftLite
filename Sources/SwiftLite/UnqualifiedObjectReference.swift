@@ -6,7 +6,7 @@ public protocol UnqualifiedObjectReference<Model>
     var id: Model.ID { get }
 }
 
-public nonisolated extension UnqualifiedObjectReference
+public extension UnqualifiedObjectReference
 {
     static func global(id: Model.ID) -> any UnqualifiedObjectReference<Model>
     {

@@ -1,4 +1,4 @@
-public nonisolated struct SQLWhereClause: SQLExpression
+public struct SQLWhereClause: SQLExpression
 {
     public let text: String
     public let values: [SQLValue]
@@ -38,12 +38,12 @@ public nonisolated struct SQLWhereClause: SQLExpression
     }
 }
 
-public nonisolated extension SQLWhereClause
+public extension SQLWhereClause
 {
     static let returnNoResults = SQLWhereClause(text: "0", values: [])
 }
 
-public nonisolated extension SQLWhereClause
+public extension SQLWhereClause
 {
     init?(joining clauses: [SQLWhereClause]) throws
     {

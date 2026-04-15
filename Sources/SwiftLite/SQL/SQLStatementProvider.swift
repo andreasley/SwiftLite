@@ -1,4 +1,4 @@
-public nonisolated protocol SQLStatementProvider: Equatable, Hashable, Sendable
+public protocol SQLStatementProvider: Equatable, Hashable, Sendable
 {
     var sqlStatement: SQLStatement { get }
 }

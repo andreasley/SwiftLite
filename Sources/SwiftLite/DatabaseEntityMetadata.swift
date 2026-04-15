@@ -1,6 +1,6 @@
 import Foundation
 
-public nonisolated protocol DatabaseEntityMetadata
+public protocol DatabaseEntityMetadata
 {
     var db: Database { get }
     var id: UUID { get }

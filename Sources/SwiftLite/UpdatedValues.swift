@@ -2,7 +2,7 @@ import Foundation
 
 // Used to record changes to editable objects before saving
 @Observable
-public nonisolated class UpdatedValues
+public class UpdatedValues
 {
     typealias FieldName = String
     
@@ -23,7 +23,7 @@ public nonisolated class UpdatedValues
         changes[field] != nil
     }
     
-    public nonisolated class Change
+    public class Change
     {
         let field: String
         let value: SQLValue
