@@ -327,7 +327,7 @@ public nonisolated extension ManyToMany
 
         public nonisolated(nonsending) func _beginSaving(changeset: Changeset) async throws
         {
-            try _metadata._beginSaving(changeset: changeset)
+            try _metadata._beginSaving()
             try await element._beginSaving(changeset: changeset)
         }
         

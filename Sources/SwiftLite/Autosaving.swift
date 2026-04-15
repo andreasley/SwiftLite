@@ -16,7 +16,7 @@ public extension Autosaving
 public protocol AutosavingModel: AnyObject, Autosaving
 {
     var _metadata: ModelMetadata { get }
-    nonisolated(nonsending) func save() async throws
+    func save(isolation: isolated (any Actor)?) async throws
 }
 
 @MainActor
@@ -52,7 +52,7 @@ public extension AutosavingModel
             while nextAutosave > .now {
                 try? await Task.sleep(until: nextAutosave, tolerance: .seconds(1))
             }
-            try? await self?.save()
+            try? await self?.save(isolation: MainActor.shared)
         }
     }
 }

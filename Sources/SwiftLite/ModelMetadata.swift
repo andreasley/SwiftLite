@@ -32,7 +32,7 @@ public nonisolated final class ModelMetadata: DatabaseEntityMetadata, WithTracke
     public var lastRead: Date?
     var lastWrite: Date? = nil
     var lastSavingTransactionId: UUID? = nil
-    var currentWriteAssociatedData: WriteAssociatedData? = nil
+    var currentSaveTransactions: Set<UUID> = []
     
     @ObservationIgnored
     var objectChangedNotificationToken: DeregisteringNotificationToken?
@@ -79,7 +79,7 @@ public nonisolated final class ModelMetadata: DatabaseEntityMetadata, WithTracke
         return true
     }
     
-    private func collectForSaving(transactionId: UUID) throws -> ChangedObject?
+    private func collectForSaving(transactionId: UUID, isolation: isolated (any Actor)? = #isolation) throws -> ChangedObject?
     {
         let changes = try changedValues.getChangeset()
         
@@ -97,25 +97,30 @@ public nonisolated final class ModelMetadata: DatabaseEntityMetadata, WithTracke
         return ChangedObject(table: table, objectId: id, status: status, updatedFields: changes, transactionId: transactionId)
     }
     
-    public func _beginSaving(changeset: Changeset) throws
+    public func _beginSaving(isolation: isolated (any Actor)? = #isolation) throws
     {
-        let associatedData = try WriteAssociatedData.getCurrent()
-        guard associatedData.db == self.db else { throw ModelSavingError.wrongDatabase }
+        let savingData = try WriteAssociatedData.getSavingData(isolation: isolation)
+        guard savingData.db == self.db else { throw ModelSavingError.wrongDatabase }
 
-        guard currentWriteAssociatedData == nil else {
-            throw ModelSavingError.alreadySaving
+        guard !currentSaveTransactions.contains(savingData.transactionId) else {
+            // this object was already processed earlier in this save transaction
+            return
         }
-        currentWriteAssociatedData = associatedData
-        try changeset.append(collectForSaving(transactionId: associatedData.transactionId))
+        
+        currentSaveTransactions.insert(savingData.transactionId)
+        try savingData.changeset.append(collectForSaving(transactionId: savingData.transactionId))
     }
     
     public func _endSaving(success: Bool, transactionId: UUID)
     {
-        guard currentWriteAssociatedData?.transactionId == transactionId else {
+        guard currentSaveTransactions.contains(transactionId) else {
             return // can this even happen?
         }
-        currentWriteAssociatedData = nil
+
+        currentSaveTransactions.remove(transactionId)
+        
         changedValues.didProcessChangeset(success: success, transactionId: transactionId)
+
         if success {
             self.lastSavingTransactionId = transactionId
             self.objectStatus = .stored

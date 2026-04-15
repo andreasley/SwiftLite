@@ -2,7 +2,13 @@ public class Changeset
 {
     private(set) var changes = [ChangedObject]()
     var needsSaving: Bool { !changes.isEmpty }
+    let isolation: (any Actor)?
     
+    init(isolation: isolated (any Actor)? = #isolation)
+    {
+        self.isolation = isolation
+    }
+
     public func append(_ object: ChangedObject?)
     {
         guard let object else { return }

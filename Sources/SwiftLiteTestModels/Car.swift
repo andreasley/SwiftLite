@@ -63,7 +63,7 @@ import Foundation
     public var engine: Engine.Snapshot
     
     @Related(onDelete: .cascade)
-    public let interior: Interior?
+    public var interior: Interior?
     
     @RelatedMany(Passenger.self, onDelete: .cascade)
     public var passengers: RelatedCollection<Passenger>
@@ -78,14 +78,20 @@ import Foundation
     @Stored(defaultValue: 0, fallbackValue: 0)
     public var price: Decimal
     
-    public func afterInit() {
+    public func afterInit()
+    {
         print("after init")
     }
     
-    public nonisolated(nonsending) func beforeSave() async throws {
+    public nonisolated(nonsending) func beforeSave() async throws
+    {
         print("before save; could even do async verification and throw to cancel saving")
+        self.interior = Interior(db: _metadata.db, name: "Test \(Int.random(in: 0..<Int.max))")
+        try await self.interior?.save()
     }
-    public func afterSave() {
+
+    public func afterSave()
+    {
         print("after save")
     }
 }

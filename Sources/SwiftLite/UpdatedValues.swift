@@ -40,20 +40,29 @@ public class UpdatedValues
 
 nonisolated extension UpdatedValues
 {
-    public func getChangeset() throws -> [String: SQLValue]?
+    public func getChangeset(isolation: isolated (any Actor)? = #isolation) throws -> [String: SQLValue]?
     {
         guard changes.count > 0 else { return nil }
-        let associatedData = try WriteAssociatedData.getCurrent()
-        changes.forEach { $0.value.transactionId = associatedData.transactionId }
+        let savingData = try WriteAssociatedData.getSavingData(isolation: isolation)
+        changes.forEach {
+            guard $0.value.transactionId == nil else { return }
+            $0.value.transactionId = savingData.transactionId
+        }
         return changes.compactMapValues { $0.value }
     }
     
     public func didProcessChangeset(success: Bool, transactionId: UUID)
     {
         if success {
+            // Remove saved changes from the pending collection
             changes = changes.filter { $0.value.transactionId != transactionId }
         } else {
-            changes.forEach { $0.value.transactionId = nil }
+            // Mark non-saved changes as not in transaction
+            changes.forEach {
+                if $0.value.transactionId == transactionId {
+                    $0.value.transactionId = nil
+                }
+            }
         }
     }
 }

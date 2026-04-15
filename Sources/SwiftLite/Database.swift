@@ -470,7 +470,37 @@ public actor Database: Observable
         guard let object = try await get(T.Model.self, id: id) else { return }
         try await object.delete()
     }
+    
+    nonisolated(nonsending) func withWriteTransaction(_ body: @escaping () async throws -> Void) async throws
+    {
+        if WriteAssociatedData.current != nil {
+            // Nested save call; just ensure that the data to save is being collected and saving is correctly ended
+            try await body()
+        } else {
+            // Initial save call; create temporary storage and process everything
+            let associatedData = WriteAssociatedData(db: self)
 
+            var wasSavedSuccessfully = false
+            
+            do {
+                // Collect the data
+                try await WriteAssociatedData.$current.withValue(associatedData, operation: body)
+
+                // Persist
+                if associatedData.savingData.changeset.needsSaving {
+                    let frozenChangeset = FrozenChangeset(changes: associatedData.savingData.changeset.changes)
+                    try await save(changeset: frozenChangeset)
+                }
+
+                wasSavedSuccessfully = true
+            } catch {
+                wasSavedSuccessfully = false
+            }
+            
+            associatedData.savingData.notifyObjectsAboutResult(success: wasSavedSuccessfully)
+        }
+    }
+    
     nonisolated(nonsending) func withReadTransaction<T: Fetchable>(_ body: @escaping () async throws -> sending [T]) async throws -> [T]
     {
         guard ReadAssociatedData.current == nil else {
@@ -555,6 +585,7 @@ public actor Database: Observable
                 )
             } catch {
                 try? self.run("ROLLBACK")
+                print("🔴 Transaction failed: \(error.localizedDescription)")
                 print("✴️ ROLLED BACK WRITE TRANSACTION")
                 // Failed transaction - don't log anything
                 currentTransactionId = nil

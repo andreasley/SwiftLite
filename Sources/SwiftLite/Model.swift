@@ -17,28 +17,24 @@ public nonisolated protocol Model: AnyObject, Fetchable, Observable, @MainActor 
 
 public nonisolated extension Model
 {
-    nonisolated(nonsending) func save() async throws
+    func save(isolation: isolated (any Actor)? = #isolation) async throws
     {
         self._metadata.autosaveTask?.cancel()
         
         guard _hasPendingChanges else { return }
         
-        let associatedData = WriteAssociatedData(db: _metadata.db)
-        try await WriteAssociatedData.$current.withValue(associatedData, operation: _save)
+        try await _metadata.db.withWriteTransaction {
+            try await self._prepareSaving(isolation: isolation)
+        }
     }
     
-    private nonisolated(nonsending) func _save() async throws
+    func _prepareSaving(isolation: isolated (any Actor)? = #isolation) async throws
     {
-        let associatedData = try WriteAssociatedData.getCurrent()
-        var success = false
-        let changeset = Changeset()
-        try await self._beginSaving(changeset: changeset)
-        defer { self._endSaving(success: success, transactionId: associatedData.transactionId) }
-        if changeset.needsSaving {
-            let frozenChangeset = FrozenChangeset(changes: changeset.changes)
-            try await associatedData.db.save(changeset: frozenChangeset)
+        let savingData = try WriteAssociatedData.getSavingData()
+        try await self._beginSaving(changeset: savingData.changeset)
+        savingData.onSaveCompleted { success in
+            self._endSaving(success: success, transactionId: savingData.transactionId)
         }
-        success = true
     }
     
     nonisolated(nonsending) func delete() async throws
