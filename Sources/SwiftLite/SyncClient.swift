@@ -422,7 +422,8 @@ public actor SyncClient
             "CREATE INDEX IF NOT EXISTS idx_column_name ON operation_log(column_name);",
             "CREATE INDEX IF NOT EXISTS idx_object_id ON operation_log(object_id);",
             "CREATE INDEX IF NOT EXISTS idx_synchronized_index ON operation_log(synchronized_index);",
-            "CREATE INDEX IF NOT EXISTS idx_applied_locally ON operation_log(applied_locally);"
+            "CREATE INDEX IF NOT EXISTS idx_applied_locally ON operation_log(applied_locally);",
+            "CREATE INDEX IF NOT EXISTS idx_oplog_field_ts ON operation_log (table_name, object_id, column_name, timestamp DESC);"
         ]
         
         try execute(createTableSQL, connectionHandle: connectionHandle)
@@ -928,18 +929,16 @@ public actor SyncClient
         UPDATE operation_log
         SET applied_locally = 1
         WHERE operation_type = 'field_updated'
-          AND applied_locally = 0
-          AND EXISTS (
-              SELECT 1
-              FROM operation_log AS newer
-              WHERE newer.table_name = operation_log.table_name
-                AND newer.object_id = operation_log.object_id
-                AND newer.column_name = operation_log.column_name
-                AND newer.applied_locally = 1
-                AND (newer.timestamp > operation_log.timestamp
-                     OR (newer.timestamp = operation_log.timestamp
-                         AND newer.synchronized_index > operation_log.synchronized_index))
-          );
+        AND applied_locally = 0
+        AND EXISTS (
+            SELECT 1
+            FROM operation_log AS newer
+            WHERE newer.table_name = operation_log.table_name
+              AND newer.object_id = operation_log.object_id
+              AND newer.column_name = operation_log.column_name
+              AND newer.applied_locally = 1
+              AND newer.timestamp > operation_log.timestamp
+        );
         """
 
         let outdatedRows = try connection.run(sql: step2)
