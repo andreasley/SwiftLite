@@ -30,7 +30,7 @@ public nonisolated class ManyToMany<Schema: RelationshipModelSchema>: Saveable
     {
         self.db = db
         self.parentId = parentId
-        let junctions = try await db.find(JunctionModel.self, condition: .byParent(parentId), sortBy: SortDescriptor(\JunctionModel.index, order: .ascending))
+        let junctions = try await db.find(JunctionModel.self, condition: .byParent(parentId), sortBy: SortDescriptor("index", order: .ascending))
         self.junctions = junctions
         self.collection = RelatedCollection(items: junctions.map { $0.element })
         

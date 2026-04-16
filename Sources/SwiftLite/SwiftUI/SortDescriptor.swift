@@ -1,6 +1,6 @@
 import Foundation
 
-public struct SortDescriptor<T>: AnySortDescriptor
+public struct SortDescriptor: AnySortDescriptor
 {
     public enum Order {
         case ascending
@@ -14,23 +14,18 @@ public struct SortDescriptor<T>: AnySortDescriptor
         }
     }
     
-    let keyPath: PartialKeyPath<T>
+    let field: String
     let order: Order
     
-    public init(_ keyPath: KeyPath<T, some Any>, order: Order = .ascending)
+    public init(_ field: String, order: Order = .ascending)
     {
-        self.keyPath = keyPath
+        self.field = field
         self.order = order
     }
     
     public func toSQL() -> SQLSortClause?
     {
-        let keyPathString = String(describing: keyPath)
-        let components = keyPathString.components(separatedBy: ".")
-        guard let propertyName = components.last else {
-            fatalError("Invalid keyPath for SortDescriptor")
-        }
-        return SQLSortClause(text: "\"\(propertyName)\" \(order.sqlKeyword)")
+        return SQLSortClause(text: "\"\(field)\" \(order.sqlKeyword)")
     }
 }
 

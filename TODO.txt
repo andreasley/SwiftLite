@@ -1,6 +1,8 @@
 
 - Can Fetchables just @Stored? If so, prevent that.
 
+- Predicates and SortDescriptors using KeyPaths completely break in RELEASE builds, because they can't be converted to Strings like they can in DEBUG builds.
+
 - In sync, check both index and number of items. If they match, there's no need for a client to download the updates it just sent.
 
 - Check if server holds on to gone clients for too long

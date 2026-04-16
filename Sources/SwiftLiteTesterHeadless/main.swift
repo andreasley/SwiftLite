@@ -46,13 +46,13 @@ print(carCount)
 let cars = try await db.get(Car.self)
 print(cars.count)
 
-let carWithName = try await db.find(Car.self, where: #Predicate<Car> { $0.name == "test" })
+let carWithName = try await db.find(Car.self, where: .field("name", equals: "test"))
 print("Cars with name `test`", carWithName)
 
-let carWithDefaultEngine = try await db.find(Car.self, where: .field(\Car.engine, equals: defaultEngine))
+let carWithDefaultEngine = try await db.find(Car.self, where: .field("engine", equals: defaultEngine))
 print("Cars with default engine", carWithName)
 
-let carWithColorBlue = try await db.find(Car.self, where: .field(\Car.color, equals: .blue))
+let carWithColorBlue = try await db.find(Car.self, where: .field("color", equals: Car.Color.blue))
 print("Cars with color blue", carWithName)
 
 let id1 = cars[0].id
@@ -60,7 +60,5 @@ let id2 = cars[1].id
 let id3 = cars[2].id
 
 let ids: [UUID] = [id1, id2, id3]
-let sql =  try (#Predicate<Car> { ids.contains($0.id) }).toSQL()
-print(sql)
-let carsWithIdsIn = try await db.find(Car.self, where: #Predicate<Car> { ids.contains($0.id) })
+let carsWithIdsIn = try await db.find(Car.self, where: .field("id", in: ids))
 print("Car with ID in collection", carsWithIdsIn)

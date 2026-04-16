@@ -29,7 +29,7 @@ public nonisolated class InverseManyToMany<Schema: RelationshipModelSchema>: Sav
     {
         self.db = db
         self.elementId = elementId
-        let junctions = try await db.find(JunctionModel.self, condition: .byElement(elementId), sortBy: SortDescriptor(\JunctionModel.index, order: .ascending))
+        let junctions = try await db.find(JunctionModel.self, condition: .byElement(elementId), sortBy: SortDescriptor("index", order: .ascending))
         self.junctions = junctions
         self.collection = RelatedCollection(items: junctions.map { $0.parent })
 
