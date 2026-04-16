@@ -13,12 +13,12 @@ extension SQLWhereClause: SQLWhereClauseConvertible
 
 public extension SQLWhereClauseConvertible where Self == SQLWhereClause
 {
-    static func field(_ field: String, equals value: SQLValueConvertible) throws -> SQLWhereClause
+    static func field(_ field: String, equals value: SQLValueConvertible) -> SQLWhereClause
     {
         SQLWhereClause(field: field, equals: value)
     }
 
-    static func field(_ field: String, contains substring: String) throws -> SQLWhereClause
+    static func field(_ field: String, contains substring: String) -> SQLWhereClause
     {
         SQLWhereClause(field: field, like: substring)
     }
@@ -28,8 +28,8 @@ public extension SQLWhereClauseConvertible where Self == SQLWhereClause
         SQLWhereClause(field: field, isNull: isNull)
     }
 
-    static func field(_ field: String, in values: [SQLValueConvertible]) throws -> SQLWhereClause
+    static func field(_ field: String, in values: [SQLValueConvertible]) -> SQLWhereClause
     {
-        return SQLWhereClause(field: field, in: values)
+        SQLWhereClause(field: field, in: values)
     }
 }

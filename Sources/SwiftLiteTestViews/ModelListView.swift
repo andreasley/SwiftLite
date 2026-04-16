@@ -58,7 +58,7 @@ struct ModelListView<T: Listable>: View
     
     func filterByName(_ name: String)
     {
-        $snapshots.filter = try? .field("name", contains: name)
+        $snapshots.filter = .field("name", contains: name)
         
         // Alternative:
         // $snapshots.filter = SQLWhereClause(field: "name", like: name)
