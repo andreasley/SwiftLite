@@ -283,9 +283,7 @@ public actor Database: Observable
     {
         var statement: OpaquePointer?
                 
-        #if DEBUG
         print("SQL:", sqlStatement.text, sqlStatement.values?.map { $0.debugDescription } ?? [])
-        #endif
         
         let result = sqlite3_prepare_v2(self.connectionHandle, sqlStatement.text, -1, &statement, nil)
         defer { sqlite3_finalize(statement) }
