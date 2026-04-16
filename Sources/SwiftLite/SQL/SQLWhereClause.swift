@@ -45,7 +45,7 @@ public extension SQLWhereClause
 
 public extension SQLWhereClause
 {
-    init?(joining clauses: [SQLWhereClause]) throws
+    init?(joining clauses: [SQLWhereClause])
     {
         guard !clauses.isEmpty else { return nil }
         if clauses.count == 1 { self = clauses.first!; return }
@@ -56,7 +56,7 @@ public extension SQLWhereClause
     init?(joining convertibles: [any SQLWhereClauseConvertible]) throws
     {
         let clauses = try convertibles.map { try $0.toSQL() }
-        try self.init(joining: clauses)
+        self.init(joining: clauses)
     }
 }
 
