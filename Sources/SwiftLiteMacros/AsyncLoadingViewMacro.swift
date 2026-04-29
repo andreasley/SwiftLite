@@ -291,6 +291,7 @@ public struct AsyncLoadingViewMacro: MemberMacro, ExtensionMacro
                 Group {
                     if items.anyItemHasBeenDeleted {
                         ContentUnavailableView("One of the objects in this view has been deleted", systemImage: "trash")
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else if \(unwrappedConditions) {
                         \(viewName)(\(viewInitProperties))
                     }
