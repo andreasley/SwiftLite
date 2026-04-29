@@ -247,13 +247,13 @@ public actor SyncClient
             await self.setHighestRemoteIndex(updatedHighestRemoteIndex)
             let highestLocalIndex = await self.highestSyncedLocalIndex
             guard updatedHighestRemoteIndex > highestLocalIndex else { return }
-            await self.sync(queneSyncIfAlreadySyncing: false)
+            await self.sync(queueSyncIfAlreadySyncing: false)
         }
 
         await connector.onDidConnectCallback { [weak self] in
             guard let self else { return }
             Task {
-                await sync(queneSyncIfAlreadySyncing: false)
+                await sync(queueSyncIfAlreadySyncing: false)
             }
         }
 
@@ -262,14 +262,15 @@ public actor SyncClient
         }
     }
     
-    public func sync(queneSyncIfAlreadySyncing: Bool = true) async
+    public func sync(queueSyncIfAlreadySyncing: Bool = true) async
     {
-        guard !isSyncing || queneSyncIfAlreadySyncing else {
+        guard !isSyncing || queueSyncIfAlreadySyncing else {
             return
         }
         
         await gate.run {
             isSyncing = true
+            defer { isSyncing = false }
             // repeatedly sync small batches to not block the insertion of new log entries
             
             // The client may have been unreachable when the server sent the notification about the increased highest index.
@@ -310,13 +311,12 @@ public actor SyncClient
             if let newHighestRemoteIndex = await self.connector.getHighestRemoteIndex() {
                 self.setHighestRemoteIndex(newHighestRemoteIndex)
             }
-            
+
             if let pendingRemoteCount, pendingRemoteCount > 0 {
-                Task {
-                    await sync()
+                // Queue another sync
+                Task.detached {
+                    await self.sync()
                 }
-            } else {
-                isSyncing = false
             }
         }
     }
