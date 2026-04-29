@@ -72,11 +72,23 @@ public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
             
             if notificationToken == nil {
                 self.notificationToken = DeregisteringNotificationToken(db: db, table: T.Model.Schema.table.name) { [weak self] changes in
-                    Task {
-                        // Simply refresh the whole list
-                        await self?.load(from: db)
+                    guard let self else { return }
+                    switch changes.status {
+                    case .created:
+                        Task {
+                            // Simply refresh the whole list
+                            // TODO: Optimize
+                            await self.load(from: db)
+                        }
+                    case .deleted:
+                        if let indexOfEntry = self.results.firstIndex(where: { $0.id == changes.objectId }) {
+                            self.results.remove(at: indexOfEntry)
+                        }
+                    case .updated:
+                        if let indexOfEntry = self.results.firstIndex(where: { $0.id == changes.objectId }), let newObject = try await db.get(T.self, id: changes.objectId) {
+                            self.results[indexOfEntry] = newObject
+                        }
                     }
-                    // TODO: Implement per-row updates?
                 }
             }
             
