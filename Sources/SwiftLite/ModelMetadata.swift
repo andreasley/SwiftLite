@@ -25,6 +25,7 @@ public nonisolated final class ModelMetadata: DatabaseEntityMetadata, WithTracke
     
     let changedValues = UpdatedValues()
     public var objectStatus: ObjectStatus
+    var objectStatusSavingTransactionId: UUID? = nil
     
     @ObservationIgnored
     var isAutosaving: Bool
@@ -41,7 +42,7 @@ public nonisolated final class ModelMetadata: DatabaseEntityMetadata, WithTracke
     var nextAutosave: ContinuousClock.Instant?
     
     public var _hasPendingChanges: Bool {
-        changedValues.hasUnsavedChanges || objectStatus.hasUnsavedChanges
+        changedValues.hasUnsavedChanges || (objectStatus.hasUnsavedChanges && objectStatusSavingTransactionId == nil)
     }
     
     public init(db: Database, table: String, id: UUID, isNew: Bool, isAutosaving: Bool = false)
@@ -87,8 +88,10 @@ public nonisolated final class ModelMetadata: DatabaseEntityMetadata, WithTracke
         switch objectStatus {
             case .markedForDeletion:
             status = .deleted
+            objectStatusSavingTransactionId = transactionId
         case .new:
             status = .created
+            objectStatusSavingTransactionId = transactionId
         default:
             guard changes != nil else { return nil }
             status = .updated
@@ -118,7 +121,8 @@ public nonisolated final class ModelMetadata: DatabaseEntityMetadata, WithTracke
         }
 
         currentSaveTransactions.remove(transactionId)
-        
+        objectStatusSavingTransactionId = nil
+
         changedValues.didProcessChangeset(success: success, transactionId: transactionId)
 
         if success {
