@@ -322,7 +322,8 @@ public nonisolated extension ManyToMany
         }
 
         public var _hasPendingChanges: Bool {
-            _metadata._hasPendingChanges || element._hasPendingChanges
+            let hasPendingChanges = _metadata._hasPendingChanges || element._hasPendingChanges
+            return hasPendingChanges
         }
 
         public nonisolated(nonsending) func _beginSaving(changeset: Changeset) async throws

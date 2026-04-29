@@ -320,7 +320,8 @@ public nonisolated extension InverseManyToMany
         }
 
         public var _hasPendingChanges: Bool {
-            _metadata._hasPendingChanges || parent._hasPendingChanges
+            let hasPendingChanges = _metadata._hasPendingChanges || parent._hasPendingChanges
+            return hasPendingChanges
         }
 
         public nonisolated(nonsending) func _beginSaving(changeset: Changeset) async throws

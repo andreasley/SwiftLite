@@ -42,7 +42,8 @@ public nonisolated final class ModelMetadata: DatabaseEntityMetadata, WithTracke
     var nextAutosave: ContinuousClock.Instant?
     
     public var _hasPendingChanges: Bool {
-        changedValues.hasUnsavedChanges || (objectStatus.hasUnsavedChanges && objectStatusSavingTransactionId == nil)
+        let hasPendingChanges = changedValues.hasUnsavedChanges || (objectStatus.hasUnsavedChanges && objectStatusSavingTransactionId == nil)
+        return hasPendingChanges
     }
     
     public init(db: Database, table: String, id: UUID, isNew: Bool, isAutosaving: Bool = false)

@@ -9,7 +9,8 @@ public class UpdatedValues
     private var changes = [FieldName: Change]()
     
     public var hasUnsavedChanges: Bool {
-        changes.count { $0.value.transactionId == nil } > 0
+        let countOfUnsavedChangesNotInSavingTransaction = changes.count { $0.value.transactionId == nil }
+        return countOfUnsavedChangesNotInSavingTransaction > 0
     }
     
     public func log(field: String, value: SQLValueConvertible)
