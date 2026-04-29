@@ -143,8 +143,8 @@ public enum SQLStatementPreset
             let fieldsText = updatedFields.map(\.key).map({"\"\($0)\""}).joined(separator: ",")
             let valuesText = Array(repeating: "?", count: updatedFields.count).joined(separator: ",")
 
-            let constraintFailureModeText = constraintFailureMode == .skip ? "OR IGNORE" : ""
-            let text = "INSERT \(constraintFailureModeText) INTO \(table) (\(fieldsText)) VALUES (\(valuesText))"
+            let constraintFailureModeText = constraintFailureMode == .skip ? "OR IGNORE " : ""
+            let text = "INSERT \(constraintFailureModeText)INTO \(table) (\(fieldsText)) VALUES (\(valuesText))"
             
             self.sqlStatement = SQLStatement(text: text, values: values)
         }
