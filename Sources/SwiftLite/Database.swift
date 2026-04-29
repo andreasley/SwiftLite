@@ -544,6 +544,12 @@ public actor Database: Observable
 
     public func save(changeset: FrozenChangeset) async throws
     {
+        guard !changeset.changes.isEmpty else {
+            // This can happen if two save commands are submitted in very short order
+            print("⏩️ SKIPPING EMPTY WRITE TRANSACTION")
+            return
+        }
+        
         try await gate.run {
             let transactionId = UUID.v7()
             currentTransactionId = transactionId
