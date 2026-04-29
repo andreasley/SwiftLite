@@ -236,6 +236,14 @@ public actor SyncClient
 
         await connector.onHighestRemoteIndexIncrease { [weak self] updatedHighestRemoteIndex in
             guard let self else { return }
+            
+            if let highestRemoteIndex = await self.highestRemoteIndex {
+                guard updatedHighestRemoteIndex > highestRemoteIndex else {
+                    // The sync client already knew about this index; skip further processing
+                    return
+                }
+            }
+
             await self.setHighestRemoteIndex(updatedHighestRemoteIndex)
             let highestLocalIndex = await self.highestSyncedLocalIndex
             guard updatedHighestRemoteIndex > highestLocalIndex else { return }
