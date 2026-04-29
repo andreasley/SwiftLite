@@ -43,13 +43,14 @@ nonisolated extension UpdatedValues
 {
     public func getChangeset(isolation: isolated (any Actor)? = #isolation) throws -> [String: SQLValue]?
     {
-        guard changes.count > 0 else { return nil }
+        let unsavedChanges = changes.filter { $0.value.transactionId == nil }
+        guard unsavedChanges.count > 0 else { return nil }
+        
         let savingData = try WriteAssociatedData.getSavingData(isolation: isolation)
-        changes.forEach {
-            guard $0.value.transactionId == nil else { return }
+        unsavedChanges.forEach {
             $0.value.transactionId = savingData.transactionId
         }
-        return changes.compactMapValues { $0.value }
+        return unsavedChanges.compactMapValues { $0.value }
     }
     
     public func didProcessChangeset(success: Bool, transactionId: UUID)
