@@ -9,7 +9,7 @@ public nonisolated final class ModelMetadata: DatabaseEntityMetadata, WithTracke
         case markedForDeletion // marked for deletion but not saved yet
         case deleted // removed from the database (but object may still exist)
         
-        var hasChanges: Bool {
+        var hasUnsavedChanges: Bool {
             switch self {
             case .new, .markedForDeletion:
                 return true
@@ -41,7 +41,7 @@ public nonisolated final class ModelMetadata: DatabaseEntityMetadata, WithTracke
     var nextAutosave: ContinuousClock.Instant?
     
     public var _hasPendingChanges: Bool {
-        changedValues.hasChanges || objectStatus.hasChanges
+        changedValues.hasUnsavedChanges || objectStatus.hasUnsavedChanges
     }
     
     public init(db: Database, table: String, id: UUID, isNew: Bool, isAutosaving: Bool = false)

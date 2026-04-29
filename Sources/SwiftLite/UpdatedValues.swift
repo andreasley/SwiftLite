@@ -8,8 +8,8 @@ public class UpdatedValues
     
     private var changes = [FieldName: Change]()
     
-    public var hasChanges: Bool {
-        changes.count > 0
+    public var hasUnsavedChanges: Bool {
+        changes.count { $0.value.transactionId == nil } > 0
     }
     
     public func log(field: String, value: SQLValueConvertible)
