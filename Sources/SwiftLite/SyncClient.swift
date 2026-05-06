@@ -411,12 +411,12 @@ public actor SyncClient
     {
         let createTableSQL = """
         CREATE TABLE IF NOT EXISTS operation_log (
-            id TEXT PRIMARY KEY NOT NULL,
+            id TEXT COLLATE NOCASE PRIMARY KEY NOT NULL,
             timestamp REAL NOT NULL,
-            transaction_id TEXT NOT NULL,
-            operation_type TEXT NOT NULL,
+            transaction_id TEXT COLLATE NOCASE NOT NULL,
+            operation_type TEXT COLLATE NOCASE NOT NULL,
             table_name TEXT NOT NULL,
-            object_id TEXT,
+            object_id TEXT COLLATE NOCASE,
             column_name TEXT,
             new_value ANY,
             metadata TEXT,
