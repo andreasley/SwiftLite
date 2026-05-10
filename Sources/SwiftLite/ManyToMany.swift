@@ -37,11 +37,21 @@ public nonisolated class ManyToMany<Schema: RelationshipModelSchema>: Saveable
         setUpCollectionChangeHandlers()
     }
     
+    func getNextIndex() -> Int
+    {
+        let maxIndex = junctions.max(by: { $0.index < $1.index })?.index
+        if let maxIndex {
+            return maxIndex + 100_000
+        } else {
+            return 0
+        }
+    }
+
     func setUpCollectionChangeHandlers()
     {
         self.collection.onAppend = { [weak self] newElement in
             guard let self else { return }
-            let newJunction = JunctionModel(db: self.db, parent: self.parentId, element: newElement)
+            let newJunction = JunctionModel(db: self.db, parent: self.parentId, element: newElement, index: getNextIndex())
             junctions.append(newJunction)
             collection.items.append(newJunction.element)
         }
@@ -266,10 +276,9 @@ public nonisolated extension ManyToMany
             self.element = element
         }
         
-        public init(db: Database, parent: UUID, element: Element)
+        public init(db: Database, parent: UUID, element: Element, index: Int)
         {
             let id = UUID.v7()
-            let index = Int(Date.now.timeIntervalSince1970*1000)
             
             self._metadata = ModelMetadata(db: db, table: Schema.table.name, id: id, isNew: true)
             self._editableData = EditableData(index: index)

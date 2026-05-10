@@ -35,12 +35,22 @@ public nonisolated class InverseManyToMany<Schema: RelationshipModelSchema>: Sav
 
         setUpCollectionChangeHandlers()
     }
+    
+    func getNextIndex() -> Int
+    {
+        let maxIndex = junctions.max(by: { $0.index < $1.index })?.index
+        if let maxIndex {
+            return maxIndex + 100_000
+        } else {
+            return 0
+        }
+    }
 
     func setUpCollectionChangeHandlers()
     {
         self.collection.onAppend = { [weak self] newParent in
             guard let self else { return }
-            let newJunction = JunctionModel(db: self.db, parent: newParent, element: self.elementId)
+            let newJunction = JunctionModel(db: self.db, parent: newParent, element: self.elementId, index: getNextIndex())
             junctions.append(newJunction)
             collection.items.append(newJunction.parent)
         }
@@ -265,10 +275,9 @@ public nonisolated extension InverseManyToMany
             self.element = element
         }
         
-        public init(db: Database, parent: Parent.Model.Snapshot, element: UUID)
+        public init(db: Database, parent: Parent.Model.Snapshot, element: UUID, index: Int)
         {
             let id = UUID.v7()
-            let index = Int(Date.now.timeIntervalSince1970*1000)
 
             self._metadata = ModelMetadata(db: db, table: Schema.table.name, id: id, isNew: true)
             self._editableData = EditableData(index: index)
