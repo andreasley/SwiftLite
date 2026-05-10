@@ -191,7 +191,9 @@ extension InverseManyToMany
                 guard !junctions.contains(where: { $0.id == changes.objectId }) else { return }
                 guard let newJunction = try await self.db.get(JunctionModel.self, id: changes.objectId) else { return }
                 junctions.append(newJunction)
-                collection.items.append(newJunction.parent)
+                junctions.sort { $0.index < $1.index }
+                let sortedElements = junctions.map { $0.parent }
+                collection.items = sortedElements
             case .updated:
                 guard
                     let changedJunction = junctions.first(where: { $0.id == changes.objectId }),
