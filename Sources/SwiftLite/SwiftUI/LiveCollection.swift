@@ -58,7 +58,7 @@ public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
         @ObservationIgnored
         var notificationToken: DeregisteringNotificationToken?
         
-        private func reload()
+        public func reload()
         {
             guard let database else { return }
             Task {
@@ -66,7 +66,7 @@ public struct LiveCollection<T: Fetchable>: @MainActor DynamicProperty
             }
         }
 
-        public func load(from db: Database) async
+        func load(from db: Database) async
         {
             self.database = db
             
