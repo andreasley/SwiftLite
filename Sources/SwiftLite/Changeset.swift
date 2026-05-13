@@ -24,4 +24,9 @@ public class Changeset
 public struct FrozenChangeset: Sendable
 {
     let changes: [ChangedObject]
+    
+    public init(changes: [ChangedObject])
+    {
+        self.changes = changes
+    }
 }
