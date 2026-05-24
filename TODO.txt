@@ -1,5 +1,5 @@
 
-- Can Fetchables just @Stored? If so, prevent that.
+- Can Fetchables be just @Stored? If so, prevent that.
 
 - Predicates and SortDescriptors using KeyPaths completely break in RELEASE builds, because they can't be converted to Strings like they can in DEBUG builds.
 
