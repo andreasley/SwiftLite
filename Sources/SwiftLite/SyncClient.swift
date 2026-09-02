@@ -103,7 +103,11 @@ public actor SyncClient
     private let persistedConfiguration: PersistedConfiguration
     
     public let connector: SyncConnector
-    
+
+    /// Whether this sync database has completed a successful sync at least once in a previous session.
+    /// If true, the local schema and data already exist, so callers don't need to block on an initial sync.
+    public nonisolated let hasSyncedBefore: Bool
+
     public private(set) var highestSyncedLocalIndex: Int64 = 0 { didSet { updateStatus() }}
     public private(set) var highestRemoteIndex: Int64? { didSet { updateStatus() }}
     public private(set) var pendingLocalCount: Int64 = 0 { didSet { updateStatus() }}
@@ -157,8 +161,10 @@ public actor SyncClient
         }
         
         let databaseId: UUID
-        
-        if try persistedConfiguration.didSuccessfullySyncSometime {
+        let hasSyncedBefore = try persistedConfiguration.didSuccessfullySyncSometime
+        self.hasSyncedBefore = hasSyncedBefore
+
+        if hasSyncedBefore {
             // This sync database has been used before. The SyncClient can initialize, regardless of connectivity.
             // However, if there is connectivity and the servers provides a different database ID for the database name, the server-side database has probably been reset. No syncing is possible in this case and the initializer shouldn't complete.
             guard let previousDatabaseId = try persistedConfiguration.getServerDatabaseId() else {
@@ -272,7 +278,14 @@ public actor SyncClient
             isSyncing = true
             defer { isSyncing = false }
             // repeatedly sync small batches to not block the insertion of new log entries
-            
+
+            guard !isClosed else { return }
+            guard await connector.isReady else {
+                // Not connected; don't attempt any requests. A sync is triggered on reconnect anyway, but also retry here in case the connection was re-established without a callback.
+                retrySyncLater()
+                return
+            }
+
             // The client may have been unreachable when the server sent the notification about the increased highest index.
             // Since this function is called after reconnecting, just fetch the current highest index again here to ensure the pendingRemoteCount is up-to-date.
             if let newHighestRemoteIndex = await self.connector.getHighestRemoteIndex() {
@@ -325,6 +338,8 @@ public actor SyncClient
     {
         Task {
             try? await Task.sleep(for: .seconds(5))
+            guard !isClosed else { return }
+            await sync(queueSyncIfAlreadySyncing: false)
         }
     }
     
