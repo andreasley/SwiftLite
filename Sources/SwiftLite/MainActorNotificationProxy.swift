@@ -62,9 +62,17 @@ public class MainActorNotificationProxy: ActorNotificationProxy
     {
         print("Deregistering", token.modelName)
         let modelName = token.modelName
-        guard var observersForModel = observers[modelName] else { return }
-        observersForModel.removeAll { $0.token == token }
-        observers[modelName] = observersForModel
+        guard let previousObservers = observers[modelName] else { return }
+        var remainingObservers = previousObservers
+        remainingObservers.removeAll { $0.token == token }
+
+        // Keep the previous array alive until the dictionary has been updated. Destroying a removed `Observer`
+        // releases the captures of its callback, which may include a `DeregisteringNotificationToken` whose deinit
+        // calls `deregister(token:)` again. If that release happened inside the subscript setter, it would be a
+        // re-entrant access to `observers` ("Simultaneous accesses ... modification requires exclusive access").
+        withExtendedLifetime(previousObservers) {
+            observers[modelName] = remainingObservers
+        }
     }
     
     func register(modelName: ModelName, objectId: UUID? = nil, callback: @escaping OnChangeCallback) -> NotificationToken
