@@ -7,6 +7,11 @@ public struct ModelLifecycleHandler<S: StatusView>: ViewModifier
     @State private var status: LoadingStatus = .initial
     @State private var loadingTask: Task<Void, Never>?
 
+    // Created once in `onAppear`. Do NOT give this a default value or create it in `init`: the modifier struct is
+    // rebuilt on every body evaluation of its parent, and every throwaway instance would unload the live items
+    // from its `deinit`.
+    @State private var discardObserver: DiscardObserver?
+
     let items: LoadableItemsContainer
         
     public func body(content: Content) -> some View
@@ -24,10 +29,20 @@ public struct ModelLifecycleHandler<S: StatusView>: ViewModifier
             }
         }
         .onAppear {
-            startLoading()
+            if discardObserver == nil {
+                let items = self.items
+                discardObserver = DiscardObserver {
+                    items.unload()
+                }
+            }
+            startLoadingIfNeeded()
         }
         .onDisappear {
-            startSavingAllAndUnloading()
+            // `onDisappear` also fires when the view is merely covered (e.g. by a `fullScreenCover` or a pushed view)
+            // and will reappear later. Unloading here would tear down the content – and with it any presentation it
+            // owns. So only save here; unloading is handled by `DiscardObserver` once the view's identity is actually
+            // removed from the hierarchy.
+            startSavingAll()
         }
         .onChange(of: scenePhase) { oldValue, newValue in
             startSavingAll()
@@ -71,9 +86,19 @@ public struct ModelLifecycleHandler<S: StatusView>: ViewModifier
         }
     }
     
-    func startLoading()
+    func startLoadingIfNeeded()
     {
         guard loadingTask == nil else { return }
+
+        // The view reappears after having been covered; its items are still loaded then.
+        // Only (re)load if nothing has been loaded yet or if the previous attempt failed.
+        switch status {
+        case .initial, .loadingError:
+            break
+        default:
+            return
+        }
+
         self.loadingTask = Task {
             do {
                 setStatus(.loading)
@@ -101,24 +126,26 @@ public struct ModelLifecycleHandler<S: StatusView>: ViewModifier
             }
         }
     }
+}
 
-    func startSavingAllAndUnloading()
+/// Lives in the `@State` storage of `ModelLifecycleHandler`.
+///
+/// SwiftUI only releases that storage when the view's identity is removed from the hierarchy – not when the view is
+/// merely covered – which makes `deinit` a reliable "the view is really gone" signal, unlike `onDisappear`.
+private final class DiscardObserver: Sendable
+{
+    private let onDiscard: @MainActor () -> Void
+
+    init(onDiscard: @escaping @MainActor () -> Void)
     {
-        guard items.anyItemHasPendingChanges else {
-            items.unload()
-            return
-        }
+        self.onDiscard = onDiscard
+    }
 
-        Task {
-            do {
-                setStatus(.saving)
-                try await items.save()
-                setStatus(.loaded)
-                items.unload()
-            } catch {
-                setStatus(.savingError(error))
-                // TODO: Escalate this somehow? The view might be hidden now.
-            }
+    deinit
+    {
+        let onDiscard = self.onDiscard
+        Task { @MainActor in
+            onDiscard()
         }
     }
 }

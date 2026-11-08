@@ -40,6 +40,10 @@ public nonisolated final class ModelMetadata: DatabaseEntityMetadata, WithTracke
     
     var autosaveTask: Task<Void, Never>? = nil
     var nextAutosave: ContinuousClock.Instant?
+
+    /// Observes `_hasPendingChanges` of the owning model to trigger autosaves; see `AutosavingModel._beginAutosaving`.
+    @ObservationIgnored
+    var autosaveObservationTask: Task<Void, Never>? = nil
     
     public var _hasPendingChanges: Bool {
         let hasPendingChanges = changedValues.hasUnsavedChanges || (objectStatus.hasUnsavedChanges && objectStatusSavingTransactionId == nil)
@@ -54,6 +58,14 @@ public nonisolated final class ModelMetadata: DatabaseEntityMetadata, WithTracke
         self.objectStatus = isNew ? .new : .stored
         self.isAutosaving = isAutosaving
         self.lastRead = isNew ? nil : .now
+    }
+
+    deinit
+    {
+        // The owning model is gone, so there is nothing left to observe or to save.
+        // Cancelling makes the suspended `for await` in `_beginAutosaving` return instead of lingering forever.
+        autosaveObservationTask?.cancel()
+        autosaveTask?.cancel()
     }
     
     public func logValueChange<V: SQLValueConvertible>(field: String, value: V)

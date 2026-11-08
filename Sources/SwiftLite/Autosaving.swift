@@ -31,13 +31,18 @@ public extension AutosavingModel
         guard !_metadata.isAutosaving else { return }
         _metadata.isAutosaving = true
 
-        Task {
-            for await _ in observe(\._hasPendingChanges) {
-                self._metadata.isAutosaving = false
+        // The observation task must not keep the model alive, so `self` is only captured weakly. The stream itself
+        // only finishes once the object is gone *and* another change is reported, so the task is additionally
+        // cancelled from `ModelMetadata.deinit` to make sure it doesn't linger in `for await` forever.
+        let pendingChanges = observe(\._hasPendingChanges)
+        _metadata.autosaveObservationTask = Task { [weak self] in
+            for await _ in pendingChanges {
+                guard let self else { return }
                 if self._hasPendingChanges {
                     self._scheduleAutosave(delayBeforeSaving: delayBeforeSaving)
                 }
             }
+            self?._metadata.isAutosaving = false
         }
     }
 
